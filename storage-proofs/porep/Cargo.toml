@@ -21,7 +21,7 @@ rayon = "1.0.0"
 serde = { version = "1.0", features = ["derive"]}
 ff = { git = "https://github.com/nilfoundation/ff.git", branch = "1-montgomery-multiplication", package = "fff" }
 bellperson = { git = "https://github.com/nilfoundation/crusty3", version = "0.9.2" }
-paired = { version = "0.20.0", features = ["serde"] }
+paired = { git = "https://github.com/nilfoundation/paired", version = "0.20.0", features = ["serde"] }
 fil-sapling-crypto = "0.6.3"
 log = "0.4.7"
 pretty_assertions = "0.6.1"
