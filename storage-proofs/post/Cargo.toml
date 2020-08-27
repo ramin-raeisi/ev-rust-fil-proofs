@@ -32,6 +32,7 @@ num_cpus = "1.10.1"
 
 [features]
 derive = ["ff/fff_derive"]
+gpu = ["neptune/gpu"]
 
 [dev-dependencies]
 tempfile = "3"
