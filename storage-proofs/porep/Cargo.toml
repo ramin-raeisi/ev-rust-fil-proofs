@@ -41,6 +41,7 @@ criterion = "0.3.2"
 [features]
 default = ["tree_c-serial-tree_r_last"]
 derive = ["ff/fff_derive"]
+gpu = ["neptune/gpu"]
 
 tree_c-serial-tree_r_last = []
 tree_c-parallel-tree_r_last = []
