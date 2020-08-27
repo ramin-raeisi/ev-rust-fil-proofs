@@ -20,15 +20,18 @@ serde = { version = "1.0", features = ["derive"] }
 blake2b_simd = "0.5"
 blake2s_simd = "0.5"
 ff = { git = "https://github.com/nilfoundation/crusty3-ff", branch = "1-montgomery-multiplication", package = "fff" }
-bellperson = { git = "https://github.com/nilfoundation/crusty3-zk", version = "0.9.2" }
+bellperson = { git = "ssh://git@github.com/nilfoundation/crusty3-zk.git", branch = "master" }
 paired = { git = "https://github.com/nilfoundation/crusty3-pairing", version = "0.20.0", features = ["serde"] }
-fil-sapling-crypto = { git = "https://github.com/nilfoundation/crusty3-sapling", version = "0.6.3" }
+fil-sapling-crypto = { git = "https://github.com/nilfoundation/crusty3-sapling", branch = "master" }
 log = "0.4.7"
 hex = "0.4.0"
 generic-array = "0.13.2"
 anyhow = "1.0.23"
 neptune = { git = "https://github.com/nilfoundation/crusty3-neptune", version = "2.0.0", features = ["gpu"] }
 num_cpus = "1.10.1"
+
+[features]
+derive = ["ff/fff_derive"]
 
 [dev-dependencies]
 tempfile = "3"

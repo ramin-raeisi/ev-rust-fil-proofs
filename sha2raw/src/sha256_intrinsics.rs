@@ -8,6 +8,7 @@ use std::arch::x86_64::*;
 
 /// Process a block with the SHA-256 algorithm.
 /// Based on https://github.com/noloader/SHA-Intrinsics/blob/master/sha256-x86.c
+/// Intel SHA extensions using C intrinsics
 #[inline(always)]
 pub unsafe fn compress256(state: &mut [u32; 8], blocks: &[&[u8]]) {
     assert_eq!(blocks.len() % 2, 0);

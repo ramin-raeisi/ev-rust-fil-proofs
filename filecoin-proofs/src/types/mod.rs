@@ -29,7 +29,7 @@ pub use stacked::TemporaryAux;
 pub type ProverId = [u8; 32];
 pub type Ticket = [u8; 32];
 
-pub type Tree = storage_proofs::merkle::OctMerkleTree<DefaultTreeHasher>;
+pub type Tree = storage_proofs::merkle::OctMerkleTree<DefaultTreeHasher>;       // 通用的Merkle树库
 pub type LCTree = storage_proofs::merkle::OctLCMerkleTree<DefaultTreeHasher>;
 
 pub use storage_proofs::porep::stacked::Labels;

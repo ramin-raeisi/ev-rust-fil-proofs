@@ -485,7 +485,7 @@ where
                 &replica_config,
             )?;
 
-        let comm_d = tree_d.root();
+        let comm_d = tree_d.root(); // replicate
         let comm_r = tree_r.root();
 
         Ok((Tau::new(comm_d, comm_r), ProverAux::new(tree_d, tree_r)))

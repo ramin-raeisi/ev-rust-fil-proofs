@@ -33,21 +33,21 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            maximize_caching: true,
+            maximize_caching: true,                     // FIL_PROOFS_MAXIMIZE_CACHING
             pedersen_hash_exp_window_size: 16,
-            use_gpu_column_builder: false,
-            max_gpu_column_batch_size: 400_000,
-            column_write_batch_size: 262_144,
-            use_gpu_tree_builder: false,
-            max_gpu_tree_batch_size: 700_000,
-            rows_to_discard: 2,
-            sdr_parents_cache_size: 2_048,
+            use_gpu_column_builder: false,              // FIL_PROOFS_USE_GPU_COLUMN_BUILDER
+            max_gpu_column_batch_size: 400_000,     // FIL_PROOFS_MAX_GPU_COLUMN_BATCH_SIZE
+            column_write_batch_size: 262_144,       // FIL_PROOFS_COLUMN_WRITE_BATCH_SIZE
+            use_gpu_tree_builder: false,                // FIL_PROOFS_USE_GPU_TREE_BUILDER
+            max_gpu_tree_batch_size: 700_000,       // FIL_PROOFS_MAX_GPU_TREE_BATCH_SIZE
+            rows_to_discard: 2,                         // FIL_PROOFS_ROWS_TO_DISCARD
+            sdr_parents_cache_size: 2_048,              // FIL_PROOFS_SDR_PARENTS_CACHE_SIZE
             window_post_synthesis_num_cpus: num_cpus::get() as u32,
             // `parameter_cache` does not use the cache() mechanism because it is now used
             // for durable, canonical Groth parameters and verifying keys.
             // The name is retained for backwards compatibility.
-            parameter_cache: "/var/tmp/filecoin-proof-parameters/".to_string(),
-            parent_cache: cache("filecoin-parents"),
+            parameter_cache: "/var/tmp/filecoin-proof-parameters/".to_string(), // FIL_PROOFS_PARAMETER_CACHE
+            parent_cache: cache("filecoin-parents"),                            // FIL_PROOFS_PARENT_CACHE
         }
     }
 }

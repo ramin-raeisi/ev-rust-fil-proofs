@@ -150,7 +150,7 @@ where
 
         config.size = Some(data_tree.len());
         let comm_d_root: Fr = data_tree.root().into();
-        let comm_d = commitment_from_fr(comm_d_root);
+        let comm_d = commitment_from_fr(comm_d_root);   // seal_pre_commit_phase1
 
         drop(data_tree);
 
@@ -282,8 +282,8 @@ where
         labels,
         data,
         data_tree,
-        config,
-        replica_path.as_ref().to_path_buf(),
+        config,                                     // tree_c
+        replica_path.as_ref().to_path_buf(),        // tree_r_last
     )?;
 
     let comm_r = commitment_from_fr(tau.comm_r.into());
@@ -353,7 +353,7 @@ pub fn seal_commit_phase1<T: AsRef<Path>, Tree: 'static + MerkleTreeTrait>(
     }?;
 
     let t_aux = {
-        let t_aux_path = cache_path.as_ref().join(CacheKey::TAux.to_string());
+        let t_aux_path = cache_path.as_ref().join(CacheKey::TAux.to_string()); //tree_c
         let t_aux_bytes = std::fs::read(&t_aux_path)
             .with_context(|| format!("could not read file t_aux={:?}", t_aux_path))?;
 
@@ -366,6 +366,7 @@ pub fn seal_commit_phase1<T: AsRef<Path>, Tree: 'static + MerkleTreeTrait>(
 
     // Convert TemporaryAux to TemporaryAuxCache, which instantiates all
     // elements based on the configs stored in TemporaryAux.
+    // Remove the tree generated during P2 from the cache tree_c, tree_r_last
     let t_aux_cache: TemporaryAuxCache<Tree, DefaultPieceHasher> =
         TemporaryAuxCache::new(&t_aux, replica_path.as_ref().to_path_buf())
             .context("failed to restore contents of t_aux")?;
@@ -411,14 +412,14 @@ pub fn seal_commit_phase1<T: AsRef<Path>, Tree: 'static + MerkleTreeTrait>(
         _,
     >>::setup(&compound_setup_params)?;
 
-    let vanilla_proofs = StackedDrg::prove_all_partitions(
+    let vanilla_proofs = StackedDrg::prove_all_partitions( //seal_commit_phase1
         &compound_public_params.vanilla_params,
         &public_inputs,
         &private_inputs,
         StackedCompound::partition_count(&compound_public_params),
     )?;
 
-    let sanity_check = StackedDrg::<Tree, DefaultPieceHasher>::verify_all_partitions(
+    let sanity_check = StackedDrg::<Tree, DefaultPieceHasher>::verify_all_partitions( //TODO: Verification function
         &compound_public_params.vanilla_params,
         &public_inputs,
         &vanilla_proofs,
@@ -715,7 +716,7 @@ pub fn verify_batch_seal<Tree: 'static + MerkleTreeTrait>(
 
     for i in 0..l {
         let comm_r = as_safe_commitment(&comm_r_ins[i], "comm_r")?;
-        let comm_d = as_safe_commitment(&comm_d_ins[i], "comm_d")?;
+        let comm_d = as_safe_commitment(&comm_d_ins[i], "comm_d")?; // verify_batch_seal
 
         let replica_id = generate_replica_id::<Tree::Hasher, _>(
             &prover_ids[i],

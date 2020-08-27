@@ -745,7 +745,7 @@ mod tests {
             create_base_merkle_tree::<DataTree>(None, graph.size(), &staged_sector)
                 .expect("failed to create data tree");
         let comm_d_root: Fr = data_tree.root().into();
-        let comm_d = commitment_from_fr(comm_d_root);
+        let comm_d = commitment_from_fr(comm_d_root);   // build_sector for testing
 
         Ok((comm_d, piece_infos))
     }

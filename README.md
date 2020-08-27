@@ -57,6 +57,8 @@ The instructions below assume you have independently installed `rust-fil-proofs`
 Before building you will need OpenCL to be installed, on Ubuntu this can be achieved with `apt install ocl-icd-opencl-dev`.  Other system dependencies such as 'gcc/clang', 'wall' and 'cmake' are also required.
 
 ```
+> cargo update
+
 > cargo build --release --all
 ```
 

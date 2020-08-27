@@ -188,13 +188,14 @@ fn sha256_digest_block_u32(state: &mut [u32; 8], block: &[u32; 16]) {
     state[7] = state[7].wrapping_add(h);
 }
 
-/// Process a block with the SHA-256 algorithm. (See more...)
+/// Process a block with the SHA-256 algorithm. (See more...) 
 ///
 /// Internally, this uses functions which resemble the new Intel SHA instruction
 /// sets, and so it's data locality properties may improve performance. However,
 /// to benefit the most from this implementation, replace these functions with
 /// x86 intrinsics to get a possible speed boost.
 ///
+/// 
 /// # Implementation
 ///
 /// The `Sha256` algorithm is implemented with functions that resemble the new
