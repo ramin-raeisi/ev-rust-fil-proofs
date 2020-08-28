@@ -598,7 +598,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         let configs = &configs;
                         let batchertype_gpus = &batchertype_gpus;
                         let mut gpu_busy_flag = gpu_busy_flag.clone();
-                        //并行调GPU运算
+                        //Parallel tuning GPU computing
                         s.spawn(move |_| {
 
                             // TODO-Ryan: find_idle_gpu
@@ -953,7 +953,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             info!("[tree_r_last] Use multi GPUs, total_gpu={}, i={}, use_gpu_index={}", _bus_num, i, gpu_index);
                             let mut tree_builder = TreeBuilder::<Tree::Arity>::new(       // GPU constructs Merkle tree neptune
                                                                                           // Some(BatcherType::GPU),
-                                                                                          batchertype_gpus[gpu_index], // TODO: Use multi GPUs    for `generate_tree_r_last`
+                                                                                          batchertype_gpus[gpu_index], // TODO: Use multi GPUs for `generate_tree_r_last`
                                                                                           nodes_count,
                                                                                           max_gpu_tree_batch_size,
                                                                                           tree_r_last_config.rows_to_discard,
@@ -1129,7 +1129,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let _bus_num = batchertype_gpus.len();
             assert!(_bus_num > 0);
-            let batchertype_gpu = batchertype_gpus[_bus_num - 1];  // FIXME-Ryan: //Use the last GPU
+            let batchertype_gpu = batchertype_gpus[_bus_num - 1];  // FIXME-Ryan: Use the last GPU
 
             // let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
             // let _bus_num = all_bus_ids.len();
@@ -1211,7 +1211,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     s.spawn(move |_| {
                         let mut tree_builder = TreeBuilder::<Tree::Arity>::new(       // GPU construction of Merkle tree neptune
                                                                                       // Some(BatcherType::GPU),
-                                                                                      batchertype_gpu,  // FIXME-Ryan: //Use the last GPU    for `generate_tree_r_last`
+                                                                                      batchertype_gpu,  // FIXME-Ryan: Use the last GPU for `generate_tree_r_last`
                                                                                       nodes_count,
                                                                                       max_gpu_tree_batch_size,
                                                                                       tree_r_last_config.rows_to_discard,
@@ -1335,7 +1335,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             &replica_config,
         )
     }
-    // */
+
     // SDR calculation logic
     pub(crate) fn transform_and_replicate_layers(
         graph: &StackedBucketGraph<Tree::Hasher>,
@@ -1545,7 +1545,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     }
 
     // /*
-    //FIXME-Ryan: //tree_r_last(Only one GPU is used internally) Built in parallel with tree_c
+    //FIXME-Ryan: tree_r_last(Only one GPU is used internally) Built in parallel with tree_c
     // The calculation logic of Precommit2 is implemented (tree_c and tree_r_last are parallel) (When there are more than 8 graphics cards, enable this paragraph, and use the last card for tree_r_last (that is, the 9th card))
     #[cfg(feature = "tree_c-parallel-tree_r_last")]
     pub(crate) fn transform_and_replicate_layers_inner(
@@ -1624,7 +1624,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let labels = LabelsCache::<Tree>::new(&label_configs)?;
         let configs = split_config(tree_c_config.clone(), tree_count)?;
 
-        // FIXME-Ryan: //P2内下面2步可并行
+        // FIXME-Ryan: The following 2 steps in P2 can be parallel
         let mut tree_c_root: <Tree::Hasher as Hasher>::Domain = <Tree::Hasher as Hasher>::Domain::default();
         let mut tree_d_root: <G as storage_proofs_core::hasher::types::Hasher>::Domain = <G as storage_proofs_core::hasher::types::Hasher>::Domain::default();
         let mut tree_r_last_root: <Tree::Hasher as Hasher>::Domain = <Tree::Hasher as Hasher>::Domain::default();
@@ -1640,7 +1640,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let tree_d_config = &mut tree_d_config;
             let tree_r_last_config = &tree_r_last_config;
 
-            // 1) [gpu] Column Hash计算
+            // 1)[gpu] Column Hash calculation
             s.spawn(move |_| {
                 info!("[tree_c] building tree_c");
                 *tree_c_root = match layers {
