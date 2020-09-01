@@ -29,7 +29,7 @@ serde = { version = "1.0", features = ["derive"]}
 blake2b_simd = "0.5"
 blake2s_simd = "0.5"
 toml = "0.5"
-ff = { git = "https://github.com/nilfoundation/crusty3-ff.git", branch = "1-montgomery-multiplication", package = "fff" }
+ff = { git = "https://github.com/nilfoundation/crusty3-ff.git", rev = "6c3e204", package = "fff" }
 bellperson = { git = "ssh://git@github.com/nilfoundation/crusty3-zk.git", branch = "master" }
 paired = { git = "https://github.com/nilfoundation/crusty3-pairing", version = "0.20.0", features = ["serde"] }
 fil-sapling-crypto = { git = "https://github.com/nilfoundation/crusty3-sapling", branch = "master" }
