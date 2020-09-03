@@ -28,6 +28,7 @@ pub struct Settings {
     pub window_post_synthesis_num_cpus: u32,
     pub parameter_cache: String,
     pub parent_cache: String,
+    pub use_fil_blst: bool,
 }
 
 impl Default for Settings {
@@ -46,8 +47,9 @@ impl Default for Settings {
             // `parameter_cache` does not use the cache() mechanism because it is now used
             // for durable, canonical Groth parameters and verifying keys.
             // The name is retained for backwards compatibility.
-            parameter_cache: "/var/tmp/filecoin-proof-parameters/".to_string(), // FIL_PROOFS_PARAMETER_CACHE
-            parent_cache: cache("filecoin-parents"),                            // FIL_PROOFS_PARENT_CACHE
+            parameter_cache: "/var/tmp/filecoin-proof-parameters/".to_string(),
+            parent_cache: cache("filecoin-parents"),
+            use_fil_blst: false,
         }
     }
 }
