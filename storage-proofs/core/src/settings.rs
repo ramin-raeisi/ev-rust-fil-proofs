@@ -36,10 +36,10 @@ impl Default for Settings {
         Settings {
             maximize_caching: true,                     // FIL_PROOFS_MAXIMIZE_CACHING
             pedersen_hash_exp_window_size: 16,
-            use_gpu_column_builder: false,              // FIL_PROOFS_USE_GPU_COLUMN_BUILDER
+            use_gpu_column_builder: true,              // FIL_PROOFS_USE_GPU_COLUMN_BUILDER
             max_gpu_column_batch_size: 400_000,     // FIL_PROOFS_MAX_GPU_COLUMN_BATCH_SIZE
             column_write_batch_size: 262_144,       // FIL_PROOFS_COLUMN_WRITE_BATCH_SIZE
-            use_gpu_tree_builder: false,                // FIL_PROOFS_USE_GPU_TREE_BUILDER
+            use_gpu_tree_builder: true,                // FIL_PROOFS_USE_GPU_TREE_BUILDER
             max_gpu_tree_batch_size: 700_000,       // FIL_PROOFS_MAX_GPU_TREE_BATCH_SIZE
             rows_to_discard: 2,                         // FIL_PROOFS_ROWS_TO_DISCARD
             sdr_parents_cache_size: 2_048,              // FIL_PROOFS_SDR_PARENTS_CACHE_SIZE
@@ -49,7 +49,7 @@ impl Default for Settings {
             // The name is retained for backwards compatibility.
             parameter_cache: "/var/tmp/filecoin-proof-parameters/".to_string(),
             parent_cache: cache("filecoin-parents"),
-            use_fil_blst: false,
+            use_fil_blst: true,
         }
     }
 }
