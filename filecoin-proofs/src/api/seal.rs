@@ -122,7 +122,9 @@ where
     info!("building merkle tree for the original data");
     let (config, comm_d) = measure_op(CommD, || -> Result<_> {
         let base_tree_size = get_base_tree_size::<DefaultBinaryTree>(porep_config.sector_size)?;
+        info!("base_tree_size: {}", base_tree_size);
         let base_tree_leafs = get_base_tree_leafs::<DefaultBinaryTree>(base_tree_size)?;
+        info!("base_tree_leafs: {}", base_tree_leafs);
         ensure!(
             compound_public_params.vanilla_params.graph.size() == base_tree_leafs,
             "graph size and leaf size don't match"
