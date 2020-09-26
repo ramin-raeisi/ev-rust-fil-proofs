@@ -16,7 +16,6 @@ const PREFIX: &str = "FIL_PROOFS";
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    pub maximize_caching: bool,
     pub verify_cache: bool,
     pub verify_production_params: bool,
     pub pedersen_hash_exp_window_size: u32,
@@ -31,6 +30,7 @@ pub struct Settings {
     pub parameter_cache: String,
     pub parent_cache: String,
     pub use_fil_blst: bool,
+    pub use_multicore_sdr: bool,
 }
 
 impl Default for Settings {
@@ -54,6 +54,7 @@ impl Default for Settings {
             parameter_cache: "/var/tmp/filecoin-proof-parameters/".to_string(),
             parent_cache: cache("filecoin-parents"),
             use_fil_blst: true,
+            use_multicore_sdr: true,
         }
     }
 }
