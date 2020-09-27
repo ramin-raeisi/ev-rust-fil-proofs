@@ -356,7 +356,8 @@ fn create_layer_labels(
                     // round 7 is only first parent
                     memset(&mut buf[96..128], 0); // Zero out upper half of last block
                     buf[96] = 0x80; // Padding
-                    buf[126] = 0x27; // Length (0x2700 = 9984 bits -> 1248 bytes)
+                    buf[126] = 0x27;
+                    // Length (0x2700 = 9984 bits -> 1248 bytes)
                     compress256!(cur_node_ptr, &buf[64..], 1);
                 } else {
                     // Two rounds of all parents
@@ -375,7 +376,8 @@ fn create_layer_labels(
                     // Final round is only nine parents
                     memset(&mut buf[352..384], 0); // Zero out upper half of last block
                     buf[352] = 0x80; // Padding
-                    buf[382] = 0x27; // Length (0x2700 = 9984 bits -> 1248 bytes)
+                    buf[382] = 0x27;
+                    // Length (0x2700 = 9984 bits -> 1248 bytes)
                     compress256!(cur_node_ptr, &buf[64..], 5);
                 }
 
@@ -394,7 +396,7 @@ fn create_layer_labels(
             runner.join().unwrap().unwrap();
         }
     })
-    .unwrap();
+        .unwrap();
 
     Ok(())
 }
@@ -410,7 +412,7 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
     info!("create labels");
 
     let layer_states = super::prepare_layers::<Tree>(graph, &config, layers);
-    
+
     // For now, we require it due to changes in encodings structure.
     let mut labels: Vec<DiskStore<<Tree::Hasher as Hasher>::Domain>> = Vec::with_capacity(layers);
 
@@ -419,7 +421,7 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
     let cache_window_nodes = settings::SETTINGS
         .lock()
         .expect("sdr_parents_cache_window_nodes settings lock failure")
-        .sdr_parents_cache_window_nodes as usize;
+        .sdr_parents_cache_size as usize;
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
@@ -627,7 +629,7 @@ mod tests {
                 0xbc864a95454eba0c,
                 0x094cf219d72cad06,
             ]))
-            .unwrap(),
+                .unwrap(),
         );
 
         test_create_labels_aux(
@@ -641,7 +643,7 @@ mod tests {
                 0xf438a1131f907206,
                 0x084f42888ca2342c,
             ]))
-            .unwrap(),
+                .unwrap(),
         );
     }
 
@@ -668,13 +670,13 @@ mod tests {
             EXP_DEGREE,
             porep_id,
         )
-        .unwrap();
+            .unwrap();
         let cache = graph.parent_cache().unwrap();
 
         let labels = create_labels_for_decoding::<LCTree<PoseidonHasher, U8, U0, U2>, _>(
             &graph, &cache, layers, replica_id, config,
         )
-        .unwrap();
+            .unwrap();
 
         let final_labels = labels.labels_for_last_layer().unwrap();
         let last_label = final_labels.read_at(final_labels.len() - 1).unwrap();

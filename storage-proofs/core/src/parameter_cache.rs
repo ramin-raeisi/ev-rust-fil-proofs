@@ -208,9 +208,9 @@ pub struct CacheEntryMetadata {
 }
 
 pub trait CacheableParameters<C, P>
-where
-    C: Circuit<Bls12>,
-    P: ParameterSetMetadata,
+    where
+        C: Circuit<Bls12>,
+        P: ParameterSetMetadata,
 {
     fn cache_prefix() -> String;
 
@@ -369,7 +369,7 @@ pub fn read_cached_params(cache_entry_path: &PathBuf) -> Result<groth16::MappedP
                         return Err(Error::InvalidParameters(
                             cache_entry_path.display().to_string(),
                         )
-                        .into());
+                            .into());
                     }
 
                     VERIFIED_PARAMETERS
@@ -379,7 +379,7 @@ pub fn read_cached_params(cache_entry_path: &PathBuf) -> Result<groth16::MappedP
                 }
             }
             None => {
-                return Err(Error::InvalidParameters(cache_entry_path.display().to_string()).into())
+                return Err(Error::InvalidParameters(cache_entry_path.display().to_string()).into());
             }
         }
     }

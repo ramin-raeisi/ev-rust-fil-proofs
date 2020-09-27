@@ -11,7 +11,7 @@ pub type OrderedSectorSet = BTreeSet<SectorId>;
 
 /// Identifier for a single sector.
 #[derive(
-    Default, Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash, Serialize, Deserialize,
+Default, Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash, Serialize, Deserialize,
 )]
 pub struct SectorId(u64);
 

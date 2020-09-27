@@ -315,7 +315,7 @@ impl HashFunction<PoseidonDomain> for PoseidonFunction {
                     num::AllocatedNum::alloc(cs.namespace(|| format!("padding {}", i)), || {
                         Ok(Fr::zero())
                     })
-                    .expect("alloc failure");
+                        .expect("alloc failure");
             }
             let cs = cs.namespace(|| format!("hash md {}", hash_num));
             hash =
@@ -337,8 +337,8 @@ impl HashFunction<PoseidonDomain> for PoseidonFunction {
         a: &num::AllocatedNum<Bls12>,
         b: &num::AllocatedNum<Bls12>,
     ) -> std::result::Result<num::AllocatedNum<Bls12>, SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>,
+        where
+            CS: ConstraintSystem<Bls12>,
     {
         let preimage = vec![a.clone(), b.clone()];
         poseidon_hash::<CS, Bls12, typenum::U2>(cs, preimage, typenum::U2::PARAMETERS())
@@ -370,7 +370,7 @@ impl LightAlgorithm<PoseidonDomain> for PoseidonFunction {
             <Bls12 as ff::ScalarEngine>::Fr::from_repr(left.0).expect("from_repr failure"),
             <Bls12 as ff::ScalarEngine>::Fr::from_repr(right.0).expect("from_repr failure"),
         ])
-        .into()
+            .into()
     }
 
     fn multi_node(&mut self, parts: &[PoseidonDomain], _height: usize) -> PoseidonDomain {
@@ -383,7 +383,7 @@ impl LightAlgorithm<PoseidonDomain> for PoseidonFunction {
                     })
                     .collect::<Vec<_>>(),
             )
-            .into(),
+                .into(),
             arity => panic!("unsupported arity {}", arity),
         }
     }
@@ -565,6 +565,7 @@ mod tests {
             ]))
         );
     }
+
     #[test]
     fn test_hash_md_circuit() {
         // let arity = PoseidonMDArity::to_usize();

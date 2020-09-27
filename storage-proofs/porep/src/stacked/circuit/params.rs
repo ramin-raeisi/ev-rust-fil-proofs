@@ -257,8 +257,8 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
 }
 
 impl<Tree: MerkleTreeTrait, G: Hasher> From<VanillaProof<Tree, G>> for Proof<Tree, G>
-where
-    Tree::Hasher: 'static,
+    where
+        Tree::Hasher: 'static,
 {
     fn from(vanilla_proof: VanillaProof<Tree, G>) -> Self {
         let VanillaProof {
@@ -296,11 +296,11 @@ fn enforce_inclusion<H, U, V, W, CS: ConstraintSystem<Bls12>>(
     root: &num::AllocatedNum<Bls12>,
     leaf: &num::AllocatedNum<Bls12>,
 ) -> Result<(), SynthesisError>
-where
-    H: 'static + Hasher,
-    U: 'static + PoseidonArity,
-    V: 'static + PoseidonArity,
-    W: 'static + PoseidonArity,
+    where
+        H: 'static + Hasher,
+        U: 'static + PoseidonArity,
+        V: 'static + PoseidonArity,
+        W: 'static + PoseidonArity,
 {
     let root = Root::from_allocated::<CS>(root.clone());
     let leaf = Root::from_allocated::<CS>(leaf.clone());

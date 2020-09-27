@@ -151,9 +151,9 @@ impl CacheData {
 
 impl ParentCache {
     pub fn new<H, G>(len: u32, cache_entries: u32, graph: &StackedGraph<H, G>) -> Result<Self>
-    where
-        H: Hasher,
-        G: Graph<H> + ParameterSetMetadata + Send + Sync,
+        where
+            H: Hasher,
+            G: Graph<H> + ParameterSetMetadata + Send + Sync,
     {
         let path = cache_path(cache_entries, graph);
         if path.exists() {
@@ -173,9 +173,9 @@ impl ParentCache {
         graph: &StackedGraph<H, G>,
         path: PathBuf,
     ) -> Result<Self>
-    where
-        H: Hasher,
-        G: Graph<H> + ParameterSetMetadata + Send + Sync,
+        where
+            H: Hasher,
+            G: Graph<H> + ParameterSetMetadata + Send + Sync,
     {
         // Check if current entry is part of the official manifest.
         // If not, we're dealing with some kind of test sector.
@@ -260,9 +260,9 @@ impl ParentCache {
         graph: &StackedGraph<H, G>,
         path: PathBuf,
     ) -> Result<Self>
-    where
-        H: Hasher,
-        G: Graph<H> + ParameterSetMetadata + Send + Sync,
+        where
+            H: Hasher,
+            G: Graph<H> + ParameterSetMetadata + Send + Sync,
     {
         info!("parent cache: generating {}", path.display());
         let mut digest_hex: String = "".to_string();
@@ -386,9 +386,9 @@ fn get_parent_cache_data(path: &PathBuf) -> Option<&ParentCacheData> {
 }
 
 fn cache_path<H, G>(cache_entries: u32, graph: &StackedGraph<H, G>) -> PathBuf
-where
-    H: Hasher,
-    G: Graph<H> + ParameterSetMetadata + Send + Sync,
+    where
+        H: Hasher,
+        G: Graph<H> + ParameterSetMetadata + Send + Sync,
 {
     let mut hasher = Sha256::default();
 
@@ -422,7 +422,7 @@ mod tests {
             EXP_DEGREE,
             [0u8; 32],
         )
-        .expect("new_stacked failure");
+            .expect("new_stacked failure");
 
         let mut cache = ParentCache::new(nodes, nodes, &graph).expect("parent cache new failure");
 
@@ -446,7 +446,7 @@ mod tests {
             EXP_DEGREE,
             [0u8; 32],
         )
-        .expect("new_stacked failure");
+            .expect("new_stacked failure");
 
         let mut half_cache =
             ParentCache::new(nodes / 2, nodes, &graph).expect("parent cache new failure");

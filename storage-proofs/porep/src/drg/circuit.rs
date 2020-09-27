@@ -70,8 +70,8 @@ impl<'a, H: 'static + Hasher> DrgPoRepCircuit<'a, H> {
         replica_id: Option<Fr>,
         private: bool,
     ) -> Result<(), SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>,
+        where
+            CS: ConstraintSystem<Bls12>,
     {
         DrgPoRepCircuit::<H> {
             replica_nodes,
@@ -86,7 +86,7 @@ impl<'a, H: 'static + Hasher> DrgPoRepCircuit<'a, H> {
             private,
             _h: Default::default(),
         }
-        .synthesize(&mut cs)
+            .synthesize(&mut cs)
     }
 }
 
@@ -257,9 +257,9 @@ fn kdf<E, CS>(
     window_index: Option<uint64::UInt64>,
     node: Option<uint64::UInt64>,
 ) -> Result<num::AllocatedNum<E>, SynthesisError>
-where
-    E: JubjubEngine,
-    CS: ConstraintSystem<E>,
+    where
+        E: JubjubEngine,
+        CS: ConstraintSystem<E>,
 {
     // ciphertexts will become a buffer of the layout
     // id | node | encodedParentNode1 | encodedParentNode1 | ...
@@ -302,7 +302,6 @@ where
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     use bellperson::util_cs::test_cs::TestConstraintSystem;
@@ -360,7 +359,7 @@ mod tests {
             bytes_into_fr(
                 data_at_node(&mmapped_data, challenge).expect("failed to read original data"),
             )
-            .unwrap(),
+                .unwrap(),
         );
 
         let sp = drg::SetupParams {
@@ -384,7 +383,7 @@ mod tests {
             config,
             replica_path,
         )
-        .expect("failed to replicate");
+            .expect("failed to replicate");
 
         let pub_inputs = drg::PublicInputs {
             replica_id: Some(replica_id.into()),
@@ -459,7 +458,7 @@ mod tests {
             replica_id,
             false,
         )
-        .expect("failed to synthesize circuit");
+            .expect("failed to synthesize circuit");
 
         if !cs.is_satisfied() {
             println!(
@@ -480,16 +479,16 @@ mod tests {
         );
 
         let generated_inputs =
-                <DrgPoRepCompound<_, _> as compound_proof::CompoundProof<_, _>>::generate_public_inputs(
-                    &pub_inputs,
-                    &pp,
-                    None,
-                )
+            <DrgPoRepCompound<_, _> as compound_proof::CompoundProof<_, _>>::generate_public_inputs(
+                &pub_inputs,
+                &pp,
+                None,
+            )
                 .unwrap();
         let expected_inputs = cs.get_inputs();
 
         for ((input, label), generated_input) in
-            expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+        expected_inputs.iter().skip(1).zip(generated_inputs.iter())
         {
             assert_eq!(input, generated_input, "{}", label);
         }
@@ -526,7 +525,7 @@ mod tests {
             Some(Fr::random(rng)),
             false,
         )
-        .expect("failed to synthesize circuit");
+            .expect("failed to synthesize circuit");
 
         assert_eq!(cs.num_inputs(), 18, "wrong number of inputs");
         assert_eq!(cs.num_constraints(), 391_404, "wrong number of constraints");

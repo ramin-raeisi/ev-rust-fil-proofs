@@ -28,9 +28,9 @@ pub(crate) const DEGREE: usize = BASE_DEGREE + EXP_DEGREE;
 
 #[derive(Clone)]
 pub struct StackedGraph<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + 'static,
+    where
+        H: Hasher,
+        G: Graph<H> + 'static,
 {
     expansion_degree: usize,
     base_graph: G,
@@ -41,9 +41,9 @@ where
 }
 
 impl<H, G> std::fmt::Debug for StackedGraph<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + 'static,
+    where
+        H: Hasher,
+        G: Graph<H> + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StackedGraph")
@@ -88,9 +88,9 @@ pub fn derive_feistel_keys(porep_id: [u8; 32]) -> [u64; 4] {
 }
 
 impl<H, G> StackedGraph<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + ParameterSetMetadata + Sync + Send,
+    where
+        H: Hasher,
+        G: Graph<H> + ParameterSetMetadata + Sync + Send,
 {
     pub fn new(
         base_graph: Option<G>,
@@ -260,9 +260,9 @@ where
 }
 
 impl<H, G> ParameterSetMetadata for StackedGraph<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + ParameterSetMetadata,
+    where
+        H: Hasher,
+        G: Graph<H> + ParameterSetMetadata,
 {
     fn identifier(&self) -> String {
         self.id.clone()
@@ -274,9 +274,9 @@ where
 }
 
 impl<H, G> Graph<H> for StackedGraph<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + ParameterSetMetadata + Sync + Send,
+    where
+        H: Hasher,
+        G: Graph<H> + ParameterSetMetadata + Sync + Send,
 {
     type Key = Vec<u8>;
 
@@ -328,9 +328,9 @@ where
 }
 
 impl<'a, H, G> StackedGraph<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + ParameterSetMetadata + Sync + Send,
+    where
+        H: Hasher,
+        G: Graph<H> + ParameterSetMetadata + Sync + Send,
 {
     /// Assign one parent to `node` using a Chung's construction with a reversible
     /// permutation function from a Feistel cipher (controlled by `invert_permutation`).
@@ -414,9 +414,9 @@ where
 }
 
 impl<H, G> PartialEq for StackedGraph<H, G>
-where
-    H: Hasher,
-    G: Graph<H>,
+    where
+        H: Hasher,
+        G: Graph<H>,
 {
     fn eq(&self, other: &StackedGraph<H, G>) -> bool {
         self.base_graph == other.base_graph && self.expansion_degree == other.expansion_degree
@@ -424,11 +424,10 @@ where
 }
 
 impl<H, G> Eq for StackedGraph<H, G>
-where
-    H: Hasher,
-    G: Graph<H>,
-{
-}
+    where
+        H: Hasher,
+        G: Graph<H>,
+{}
 
 #[cfg(test)]
 mod tests {

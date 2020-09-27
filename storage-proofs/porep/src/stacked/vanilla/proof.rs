@@ -46,7 +46,7 @@ use crate::PoRep;
 use super::{
     challenges::LayerChallenges,
     column::Column,
-    create_label, create_label_exp,
+    create_label,
     EncodingProof,
     graph::StackedBucketGraph,
     hash::hash_single_column,

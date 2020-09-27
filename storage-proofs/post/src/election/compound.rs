@@ -20,14 +20,14 @@ use storage_proofs_core::{
 use crate::election::{self, ElectionPoSt, ElectionPoStCircuit};
 
 pub struct ElectionPoStCompound<Tree>
-where
-    Tree: MerkleTreeTrait,
+    where
+        Tree: MerkleTreeTrait,
 {
     _t: PhantomData<Tree>,
 }
 
 impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait> CacheableParameters<C, P>
-    for ElectionPoStCompound<Tree>
+for ElectionPoStCompound<Tree>
 {
     fn cache_prefix() -> String {
         format!("proof-of-spacetime-election-{}", Tree::display())
@@ -35,9 +35,9 @@ impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait> Cacheabl
 }
 
 impl<'a, Tree> CompoundProof<'a, ElectionPoSt<'a, Tree>, ElectionPoStCircuit<Tree>>
-    for ElectionPoStCompound<Tree>
-where
-    Tree: 'static + MerkleTreeTrait,
+for ElectionPoStCompound<Tree>
+    where
+        Tree: 'static + MerkleTreeTrait,
 {
     fn generate_public_inputs(
         pub_inputs: &<ElectionPoSt<'a, Tree> as ProofScheme<'a>>::PublicInputs,
@@ -232,7 +232,7 @@ mod tests {
             prover_id,
             randomness,
         )
-        .unwrap();
+            .unwrap();
 
         let candidate = &candidates[0];
         let tree = trees.remove(&candidate.sector_id).unwrap();
@@ -309,7 +309,7 @@ mod tests {
             &priv_inputs,
             &blank_groth_params,
         )
-        .expect("failed while proving");
+            .expect("failed while proving");
 
         let verified =
             ElectionPoStCompound::verify(&pub_params, &pub_inputs, &proof, &NoRequirements)

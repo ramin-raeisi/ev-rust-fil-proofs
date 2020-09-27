@@ -19,14 +19,14 @@ use super::circuit::Sector;
 use crate::fallback::{self, FallbackPoSt, FallbackPoStCircuit};
 
 pub struct FallbackPoStCompound<Tree>
-where
-    Tree: MerkleTreeTrait,
+    where
+        Tree: MerkleTreeTrait,
 {
     _t: PhantomData<Tree>,
 }
 
 impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait> CacheableParameters<C, P>
-    for FallbackPoStCompound<Tree>
+for FallbackPoStCompound<Tree>
 {
     fn cache_prefix() -> String {
         format!("proof-of-spacetime-fallback-{}", Tree::display())
@@ -34,8 +34,8 @@ impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait> Cacheabl
 }
 
 impl<'a, Tree: 'static + MerkleTreeTrait>
-    CompoundProof<'a, FallbackPoSt<'a, Tree>, FallbackPoStCircuit<Tree>>
-    for FallbackPoStCompound<Tree>
+CompoundProof<'a, FallbackPoSt<'a, Tree>, FallbackPoStCircuit<Tree>>
+for FallbackPoStCompound<Tree>
 {
     fn generate_public_inputs(
         pub_inputs: &<FallbackPoSt<'a, Tree> as ProofScheme<'a>>::PublicInputs,
@@ -344,7 +344,7 @@ mod tests {
             &priv_inputs,
             &blank_groth_params,
         )
-        .expect("failed while proving");
+            .expect("failed while proving");
 
         let verified = FallbackPoStCompound::verify(
             &pub_params,
@@ -354,7 +354,7 @@ mod tests {
                 minimum_challenge_count: total_sector_count * challenge_count,
             },
         )
-        .expect("failed while verifying");
+            .expect("failed while verifying");
 
         assert!(verified);
     }

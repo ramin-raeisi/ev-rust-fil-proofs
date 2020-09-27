@@ -319,8 +319,8 @@ pub fn pick<E: Engine, CS: ConstraintSystem<E>>(
     a: &AllocatedNum<E>,
     b: &AllocatedNum<E>,
 ) -> Result<AllocatedNum<E>, SynthesisError>
-where
-    CS: ConstraintSystem<E>,
+    where
+        CS: ConstraintSystem<E>,
 {
     let c = AllocatedNum::alloc(cs.namespace(|| "pick result"), || {
         if condition
@@ -374,7 +374,7 @@ mod tests {
                                 Ok(elt)
                             },
                         )
-                        .unwrap()
+                            .unwrap()
                     })
                     .collect();
 
@@ -385,7 +385,7 @@ mod tests {
                                 let bit = ((index >> i) & 1) == 1;
                                 Some(bit)
                             })
-                            .unwrap(),
+                                .unwrap(),
                         )
                     })
                     .collect::<Vec<_>>();
@@ -425,7 +425,7 @@ mod tests {
                                 Ok(elt)
                             },
                         )
-                        .unwrap()
+                            .unwrap()
                     })
                     .collect();
 
@@ -434,7 +434,7 @@ mod tests {
                         let elt_to_insert = <Fr as Field>::random(rng);
                         Ok(elt_to_insert)
                     })
-                    .unwrap();
+                        .unwrap();
 
                 let index_bits = (0..log_size)
                     .map(|i| {
@@ -443,7 +443,7 @@ mod tests {
                                 let bit = ((index >> i) & 1) == 1;
                                 Some(bit)
                             })
-                            .unwrap(),
+                                .unwrap(),
                         )
                     })
                     .collect::<Vec<_>>();
@@ -457,12 +457,12 @@ mod tests {
                     index_bits.as_slice(),
                     &elements.as_slice(),
                 )
-                .unwrap();
+                    .unwrap();
 
                 assert!(cs.is_satisfied());
 
                 let extracted = inserted.remove(index);
-                assert_eq!(to_insert.get_value(), extracted.get_value(),);
+                assert_eq!(to_insert.get_value(), extracted.get_value(), );
 
                 for i in 0..size - 1 {
                     let a = elements[i].get_value();

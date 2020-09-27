@@ -78,11 +78,13 @@ impl PoseidonArity for U16 {
         &*POSEIDON_CONSTANTS_16
     }
 }
+
 impl PoseidonArity for U24 {
     fn PARAMETERS() -> &'static PoseidonConstants<Bls12, Self> {
         &*POSEIDON_CONSTANTS_24
     }
 }
+
 impl PoseidonArity for U36 {
     fn PARAMETERS() -> &'static PoseidonConstants<Bls12, Self> {
         &*POSEIDON_CONSTANTS_36
@@ -90,22 +92,22 @@ impl PoseidonArity for U36 {
 }
 
 pub trait Domain:
-    Ord
-    + Copy
-    + Clone
-    + AsRef<[u8]>
-    + Default
-    + ::std::fmt::Debug
-    + Eq
-    + Send
-    + Sync
-    + From<Fr>
-    + From<FrRepr>
-    + Into<Fr>
-    + Serialize
-    + DeserializeOwned
-    + Element
-    + std::hash::Hash
+Ord
++ Copy
++ Clone
++ AsRef<[u8]>
++ Default
++ ::std::fmt::Debug
++ Eq
++ Send
++ Sync
++ From<Fr>
++ From<FrRepr>
++ Into<Fr>
++ Serialize
++ DeserializeOwned
++ Element
++ std::hash::Hash
 {
     fn into_bytes(&self) -> Vec<u8>;
     fn try_from_bytes(raw: &[u8]) -> Result<Self>;
@@ -116,7 +118,7 @@ pub trait Domain:
 }
 
 pub trait HashFunction<T: Domain>:
-    Clone + ::std::fmt::Debug + Send + Sync + LightAlgorithm<T>
+Clone + ::std::fmt::Debug + Send + Sync + LightAlgorithm<T>
 {
     fn hash(data: &[u8]) -> T;
     fn hash2(a: &T, b: &T) -> T;
@@ -186,8 +188,8 @@ pub trait HashFunction<T: Domain>:
         a: &num::AllocatedNum<Bls12>,
         b: &num::AllocatedNum<Bls12>,
     ) -> std::result::Result<num::AllocatedNum<Bls12>, SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>;
+        where
+            CS: ConstraintSystem<Bls12>;
 }
 
 pub trait Hasher: Clone + ::std::fmt::Debug + Eq + Default + Send + Sync {

@@ -255,7 +255,7 @@ mod tests {
         let expected_inputs = cs.get_inputs();
 
         for ((input, label), generated_input) in
-            expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+        expected_inputs.iter().skip(1).zip(generated_inputs.iter())
         {
             assert_eq!(input, generated_input, "{}", label);
         }

@@ -74,8 +74,8 @@ pub struct PrivateInputs<'a, Tree: 'a + MerkleTreeTrait> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proof<P: MerkleProofTrait> {
     #[serde(bound(
-        serialize = "MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>: Serialize",
-        deserialize = "MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>: serde::de::DeserializeOwned"
+    serialize = "MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>: Serialize",
+    deserialize = "MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>: serde::de::DeserializeOwned"
     ))]
     inclusion_proofs: Vec<MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>>,
     pub comm_cs: Vec<<P::Hasher as Hasher>::Domain>,
@@ -107,8 +107,8 @@ impl<P: MerkleProofTrait> Proof<P> {
 
 #[derive(Debug, Clone)]
 pub struct RationalPoSt<'a, Tree>
-where
-    Tree: 'a + MerkleTreeTrait,
+    where
+        Tree: 'a + MerkleTreeTrait,
 {
     _t: PhantomData<&'a Tree>,
 }
@@ -309,8 +309,8 @@ mod tests {
     };
 
     fn test_rational_post<Tree: MerkleTreeTrait>()
-    where
-        Tree::Store: 'static,
+        where
+            Tree::Store: 'static,
     {
         let rng = &mut XorShiftRng::from_seed(crate::TEST_SEED);
 

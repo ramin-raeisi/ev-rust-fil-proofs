@@ -36,7 +36,6 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            maximize_caching: true,                     // FIL_PROOFS_MAXIMIZE_CACHING
             verify_cache: false,
             verify_production_params: false,
             pedersen_hash_exp_window_size: 16,

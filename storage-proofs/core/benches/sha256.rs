@@ -49,7 +49,7 @@ fn sha256_benchmark(c: &mut Criterion) {
             },
             params,
         )
-        .throughput(|bytes| Throughput::Bytes(*bytes as u64)),
+            .throughput(|bytes| Throughput::Bytes(*bytes as u64)),
     );
 }
 
@@ -71,7 +71,7 @@ fn sha256_raw_benchmark(c: &mut Criterion) {
             },
             params,
         )
-        .throughput(|bytes| Throughput::Bytes(*bytes as u64)),
+            .throughput(|bytes| Throughput::Bytes(*bytes as u64)),
     );
 }
 
@@ -91,7 +91,7 @@ fn sha256_circuit_benchmark(c: &mut Criterion) {
                     },
                     &mut rng1,
                 )
-                .unwrap();
+                    .unwrap();
 
                 let mut rng = thread_rng();
                 let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
@@ -104,29 +104,29 @@ fn sha256_circuit_benchmark(c: &mut Criterion) {
                         &groth_params,
                         &mut rng,
                     )
-                    .unwrap();
+                        .unwrap();
 
                     black_box(proof)
                 });
             },
             params,
         )
-        .with_function("synthesize", move |b, bytes| {
-            let mut rng = thread_rng();
-            let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
+            .with_function("synthesize", move |b, bytes| {
+                let mut rng = thread_rng();
+                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
 
-            b.iter(|| {
-                let mut cs = BenchCS::<Bls12>::new();
-                Sha256Example {
-                    data: data.as_slice(),
-                }
-                .synthesize(&mut cs)
-                .unwrap();
+                b.iter(|| {
+                    let mut cs = BenchCS::<Bls12>::new();
+                    Sha256Example {
+                        data: data.as_slice(),
+                    }
+                        .synthesize(&mut cs)
+                        .unwrap();
 
-                black_box(cs)
-            });
-        })
-        .sample_size(20),
+                    black_box(cs)
+                });
+            })
+            .sample_size(20),
     );
 }
 

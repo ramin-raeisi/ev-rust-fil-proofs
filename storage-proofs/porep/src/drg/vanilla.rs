@@ -85,9 +85,9 @@ pub struct DrgParams {
 
 #[derive(Debug, Clone)]
 pub struct PublicParams<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + ParameterSetMetadata,
+    where
+        H: Hasher,
+        G: Graph<H> + ParameterSetMetadata,
 {
     pub graph: G,
     pub private: bool,
@@ -97,9 +97,9 @@ where
 }
 
 impl<H, G> PublicParams<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + ParameterSetMetadata,
+    where
+        H: Hasher,
+        G: Graph<H> + ParameterSetMetadata,
 {
     pub fn new(graph: G, private: bool, challenges_count: usize) -> Self {
         PublicParams {
@@ -112,9 +112,9 @@ where
 }
 
 impl<H, G> ParameterSetMetadata for PublicParams<H, G>
-where
-    H: Hasher,
-    G: Graph<H> + ParameterSetMetadata,
+    where
+        H: Hasher,
+        G: Graph<H> + ParameterSetMetadata,
 {
     fn identifier(&self) -> String {
         format!(
@@ -131,8 +131,8 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataProof<H: Hasher, U: PoseidonArity> {
     #[serde(bound(
-        serialize = "MerkleProof<H, U>: Serialize",
-        deserialize = "MerkleProof<H, U>: Deserialize<'de>"
+    serialize = "MerkleProof<H, U>: Serialize",
+    deserialize = "MerkleProof<H, U>: Deserialize<'de>"
     ))]
     pub proof: MerkleProof<H, U>,
     pub data: H::Domain,
@@ -158,28 +158,28 @@ pub type ReplicaParents<H> = Vec<(u32, DataProof<H, typenum::U2>)>;
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Proof<H: Hasher> {
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     pub data_root: H::Domain,
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     pub replica_root: H::Domain,
     #[serde(bound(
-        serialize = "DataProof<H, typenum::U2>: Serialize",
-        deserialize = "DataProof<H, typenum::U2>: Deserialize<'de>"
+    serialize = "DataProof<H, typenum::U2>: Serialize",
+    deserialize = "DataProof<H, typenum::U2>: Deserialize<'de>"
     ))]
     pub replica_nodes: Vec<DataProof<H, typenum::U2>>,
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     pub replica_parents: Vec<ReplicaParents<H>>,
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     pub nodes: Vec<DataProof<H, typenum::U2>>,
 }
@@ -224,18 +224,18 @@ impl<'a, H: Hasher> From<&'a Proof<H>> for Proof<H> {
 
 #[derive(Default)]
 pub struct DrgPoRep<'a, H, G>
-where
-    H: 'a + Hasher,
-    G: 'a + Graph<H>,
+    where
+        H: 'a + Hasher,
+        G: 'a + Graph<H>,
 {
     _h: PhantomData<&'a H>,
     _g: PhantomData<G>,
 }
 
 impl<'a, H, G> ProofScheme<'a> for DrgPoRep<'a, H, G>
-where
-    H: 'static + Hasher,
-    G: 'a + Graph<H> + ParameterSetMetadata,
+    where
+        H: 'static + Hasher,
+        G: 'a + Graph<H> + ParameterSetMetadata,
 {
     type PublicParams = PublicParams<H, G>;
     type SetupParams = SetupParams;
@@ -423,10 +423,10 @@ where
 }
 
 impl<'a, H, G> PoRep<'a, H, H> for DrgPoRep<'a, H, G>
-where
-    H: 'static + Hasher,
-    G::Key: AsRef<<H as Hasher>::Domain>,
-    G: 'a + Graph<H> + ParameterSetMetadata + Sync + Send,
+    where
+        H: 'static + Hasher,
+        G::Key: AsRef<<H as Hasher>::Domain>,
+        G: 'a + Graph<H> + ParameterSetMetadata + Sync + Send,
 {
     type Tau = Tau<<H as Hasher>::Domain>;
     type ProverAux = ProverAux<H>;
@@ -517,10 +517,10 @@ pub fn decode<'a, H, G>(
     data: &'a [u8],
     exp_parents_data: Option<&'a [u8]>,
 ) -> Result<Vec<u8>>
-where
-    H: Hasher,
-    G::Key: AsRef<H::Domain>,
-    G: Graph<H> + Sync,
+    where
+        H: Hasher,
+        G::Key: AsRef<H::Domain>,
+        G: Graph<H> + Sync,
 {
     // TODO: proper error handling
     let result = (0..graph.size())
@@ -542,10 +542,10 @@ pub fn decode_block<'a, H, G>(
     exp_parents_data: Option<&'a [u8]>,
     v: usize,
 ) -> Result<<H as Hasher>::Domain>
-where
-    H: Hasher,
-    G::Key: AsRef<H::Domain>,
-    G: Graph<H>,
+    where
+        H: Hasher,
+        G::Key: AsRef<H::Domain>,
+        G: Graph<H>,
 {
     let mut parents = vec![0; graph.degree()];
     graph.parents(v, &mut parents)?;
@@ -562,8 +562,8 @@ pub fn decode_domain_block<H: Hasher>(
     node_data: H::Domain,
     parents: &[u32],
 ) -> Result<H::Domain>
-where
-    H: Hasher,
+    where
+        H: Hasher,
 {
     let key = create_key_from_tree::<H, _>(replica_id, node, parents, tree)?;
 
@@ -667,7 +667,7 @@ mod tests {
             config.clone(),
             replica_path,
         )
-        .expect("replication failed");
+            .expect("replication failed");
 
         let mut copied = vec![0; data.len()];
         copied.copy_from_slice(&mmapped_data);
@@ -679,9 +679,9 @@ mod tests {
             mmapped_data.as_mut(),
             Some(config),
         )
-        .unwrap_or_else(|e| {
-            panic!("Failed to extract data from `DrgPoRep`: {}", e);
-        });
+            .unwrap_or_else(|e| {
+                panic!("Failed to extract data from `DrgPoRep`: {}", e);
+            });
 
         assert_eq!(data, decoded_data.as_slice(), "failed to extract data");
 
@@ -746,7 +746,7 @@ mod tests {
             config.clone(),
             replica_path,
         )
-        .expect("replication failed");
+            .expect("replication failed");
 
         let mut copied = vec![0; data.len()];
         copied.copy_from_slice(&mmapped_data);
@@ -838,7 +838,7 @@ mod tests {
                 config,
                 replica_path.clone(),
             )
-            .expect("replication failed");
+                .expect("replication failed");
 
             let mut copied = vec![0; data.len()];
             copied.copy_from_slice(&mmapped_data);
@@ -943,7 +943,7 @@ mod tests {
                     &pub_inputs_with_wrong_challenge_for_proof,
                     &proof,
                 )
-                .expect("Verification failed");
+                    .expect("Verification failed");
                 assert!(
                     !verified,
                     "wrongly verified proof which does not match challenge in public input"

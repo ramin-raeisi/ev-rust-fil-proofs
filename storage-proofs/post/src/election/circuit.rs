@@ -240,7 +240,7 @@ mod tests {
             prover_id,
             randomness,
         )
-        .unwrap();
+            .unwrap();
 
         let candidate = &candidates[0];
         let tree = trees.remove(&candidate.sector_id).unwrap();
@@ -323,7 +323,7 @@ mod tests {
         let expected_inputs = cs.get_inputs();
 
         for ((input, label), generated_input) in
-            expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+        expected_inputs.iter().skip(1).zip(generated_inputs.iter())
         {
             assert_eq!(input, generated_input, "{}", label);
         }

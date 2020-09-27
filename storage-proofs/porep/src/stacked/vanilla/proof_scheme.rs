@@ -17,7 +17,7 @@ use super::{
 };
 
 impl<'a, 'c, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> ProofScheme<'a>
-    for StackedDrg<'c, Tree, G>
+for StackedDrg<'c, Tree, G>
 {
     type PublicParams = PublicParams<Tree>;
     type SetupParams = SetupParams;

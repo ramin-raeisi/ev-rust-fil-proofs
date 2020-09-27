@@ -11,13 +11,13 @@ use crate::proof::{NoRequirements, ProofScheme};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataProof<Proof: MerkleProofTrait> {
     #[serde(bound(
-        serialize = "<Proof::Hasher as Hasher>::Domain: Serialize",
-        deserialize = "<Proof::Hasher as Hasher>::Domain: Deserialize<'de>"
+    serialize = "<Proof::Hasher as Hasher>::Domain: Serialize",
+    deserialize = "<Proof::Hasher as Hasher>::Domain: Deserialize<'de>"
     ))]
     pub proof: Proof,
     #[serde(bound(
-        serialize = "<Proof::Hasher as Hasher>::Domain: Serialize",
-        deserialize = "<Proof::Hasher as Hasher>::Domain: Deserialize<'de>"
+    serialize = "<Proof::Hasher as Hasher>::Domain: Serialize",
+    deserialize = "<Proof::Hasher as Hasher>::Domain: Deserialize<'de>"
     ))]
     pub data: <Proof::Hasher as Hasher>::Domain,
 }
@@ -186,7 +186,7 @@ mod tests {
         let leaf = <Tree::Hasher as Hasher>::Domain::try_from_bytes(
             data_at_node(data.as_slice(), pub_inputs.challenge).unwrap(),
         )
-        .unwrap();
+            .unwrap();
 
         let priv_inputs = PrivateInputs::new(leaf, &tree);
 
@@ -200,7 +200,7 @@ mod tests {
     }
 
     type TestTree<H, U> =
-        MerkleTreeWrapper<H, DiskStore<<H as Hasher>::Domain>, U, typenum::U0, typenum::U0>;
+    MerkleTreeWrapper<H, DiskStore<<H as Hasher>::Domain>, U, typenum::U0, typenum::U0>;
 
     #[test]
     fn merklepor_pedersen_binary() {
@@ -278,7 +278,7 @@ mod tests {
         let leaf = <Tree::Hasher as Hasher>::Domain::try_from_bytes(
             data_at_node(data.as_slice(), pub_inputs.challenge).unwrap(),
         )
-        .unwrap();
+            .unwrap();
 
         let priv_inputs = PrivateInputs::<Tree>::new(leaf, &tree);
 
@@ -364,7 +364,7 @@ mod tests {
         let leaf = <Tree::Hasher as Hasher>::Domain::try_from_bytes(
             data_at_node(data.as_slice(), pub_inputs.challenge).unwrap(),
         )
-        .unwrap();
+            .unwrap();
 
         let priv_inputs = PrivateInputs::<Tree>::new(leaf, &tree);
 

@@ -10,8 +10,8 @@ pub fn pedersen_md_no_padding<CS>(
     mut cs: CS,
     data: &[Boolean],
 ) -> Result<num::AllocatedNum<Bls12>, SynthesisError>
-where
-    CS: ConstraintSystem<Bls12>,
+    where
+        CS: ConstraintSystem<Bls12>,
 {
     assert!(
         data.len() >= 2 * PEDERSEN_BLOCK_SIZE,
@@ -57,8 +57,8 @@ pub fn pedersen_compression_num<CS: ConstraintSystem<Bls12>>(
         &bits,
         &*JJ_PARAMS,
     )?
-    .get_x()
-    .clone())
+        .get_x()
+        .clone())
 }
 
 pub fn pedersen_compression<CS: ConstraintSystem<Bls12>>(

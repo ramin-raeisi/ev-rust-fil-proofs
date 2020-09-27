@@ -96,8 +96,8 @@ pub fn create_tree<Tree: MerkleTreeTrait>(
         <Tree as MerkleTreeTrait>::TopTreeArity,
     >,
 >
-where
-    Tree::Store: 'static,
+    where
+        Tree::Store: 'static,
 {
     use std::any::Any;
 
@@ -391,8 +391,8 @@ fn generate_base_tree<R: rand::Rng, Tree: MerkleTreeTrait>(
     nodes: usize,
     temp_path: Option<PathBuf>,
 ) -> (Vec<u8>, ResTree<Tree>)
-where
-    Tree::Store: 'static,
+    where
+        Tree::Store: 'static,
 {
     let elements = (0..nodes)
         .map(|_| <Tree::Hasher as Hasher>::Domain::random(rng))
@@ -459,8 +459,8 @@ fn generate_sub_tree<R: rand::Rng, Tree: MerkleTreeTrait>(
     nodes: usize,
     temp_path: Option<PathBuf>,
 ) -> (Vec<u8>, ResTree<Tree>)
-where
-    Tree::Store: 'static,
+    where
+        Tree::Store: 'static,
 {
     let base_tree_count = Tree::SubTreeArity::to_usize();
     let base_tree_size = nodes / base_tree_count;
@@ -488,8 +488,8 @@ pub fn generate_tree<Tree: MerkleTreeTrait, R: rand::Rng>(
     nodes: usize,
     temp_path: Option<PathBuf>,
 ) -> (Vec<u8>, ResTree<Tree>)
-where
-    Tree::Store: 'static,
+    where
+        Tree::Store: 'static,
 {
     let sub_tree_arity = Tree::SubTreeArity::to_usize();
     let top_tree_arity = Tree::TopTreeArity::to_usize();

@@ -111,10 +111,10 @@ impl<T: FromByteSlice> CacheReader<T> {
                 .lock()
                 .map(file)
         }
-        .and_then(|mut parents| {
-            parents.mlock()?;
-            Ok(parents)
-        }) {
+            .and_then(|mut parents| {
+                parents.mlock()?;
+                Ok(parents)
+            }) {
             Ok(parents) => Ok(parents),
             Err(err) => {
                 // fallback to not locked if permissions are not available
@@ -212,7 +212,7 @@ impl<T: FromByteSlice> CacheReader<T> {
             self.window_size as usize,
             &self.file,
         )
-        .unwrap();
+            .unwrap();
 
         unsafe {
             self.get_mut_bufs()[replace_idx] = new_buf;

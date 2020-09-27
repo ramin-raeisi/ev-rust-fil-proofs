@@ -171,8 +171,10 @@ mod tests {
 
     // Some sample n-values which are not powers of four and also don't coincidentally happen to
     // encode/decode correctly.
-    const BAD_NS: &[Index] = &[5, 6, 8, 12, 17]; //
-                                                 //
+    const BAD_NS: &[Index] = &[5, 6, 8, 12, 17];
+
+    //
+    //
     fn encode_decode(n: Index, expect_success: bool) {
         let mut failed = false;
         let precomputed = precompute(n);

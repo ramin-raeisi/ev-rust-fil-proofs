@@ -18,7 +18,7 @@ pub mod single;
 
 /// Prepares the necessary `StoreConfig`s with which the layers are stored.
 /// Also checks for already existing layers and marks them as such.
-pub fn prepare_layers<Tree:  'static + MerkleTreeTrait>(
+pub fn prepare_layers<Tree: 'static + MerkleTreeTrait>(
     graph: &StackedBucketGraph<Tree::Hasher>,
     config: &StoreConfig,
     layers: usize,
@@ -83,7 +83,7 @@ pub fn remove_tmp_layer(config: &StoreConfig) {
 }
 
 /// Checks if the given layer is already written and of the right size.
-pub fn is_layer_written<Tree:  'static + MerkleTreeTrait>(
+pub fn is_layer_written<Tree: 'static + MerkleTreeTrait>(
     graph: &StackedBucketGraph<Tree::Hasher>,
     config: &StoreConfig,
 ) -> Result<bool> {

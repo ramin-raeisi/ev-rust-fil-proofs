@@ -8,13 +8,13 @@ use super::column::Column;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnProof<Proof: MerkleProofTrait> {
     #[serde(bound(
-        serialize = "Column<Proof::Hasher>: Serialize",
-        deserialize = "Column<Proof::Hasher>: Deserialize<'de>"
+    serialize = "Column<Proof::Hasher>: Serialize",
+    deserialize = "Column<Proof::Hasher>: Deserialize<'de>"
     ))]
     pub(crate) column: Column<Proof::Hasher>,
     #[serde(bound(
-        serialize = "Proof: Serialize",
-        deserialize = "Proof: serde::de::DeserializeOwned"
+    serialize = "Proof: Serialize",
+    deserialize = "Proof: serde::de::DeserializeOwned"
     ))]
     pub(crate) inclusion_proof: Proof,
 }

@@ -14,7 +14,7 @@ use crate::hasher::{Hasher, PoseidonArity};
 
 /// Trait to abstract over the concept of Merkle Proof.
 pub trait MerkleProofTrait:
-    Clone + Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Sync + Send
+Clone + Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Sync + Send
 {
     type Hasher: Hasher;
     type Arity: 'static + PoseidonArity;
@@ -131,6 +131,7 @@ pub fn compound_path_length<A: Unsigned, B: Unsigned, C: Unsigned>(leaves: usize
 
     len
 }
+
 pub fn compound_tree_height<A: Unsigned, B: Unsigned, C: Unsigned>(leaves: usize) -> usize {
     // base layer
     let a = graph_height::<A>(leaves) - 1;
@@ -172,8 +173,8 @@ macro_rules! forward_method {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct InclusionPath<H: Hasher, Arity: PoseidonArity> {
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     path: Vec<PathElement<H, Arity>>,
 }
@@ -222,8 +223,8 @@ impl<H: Hasher, Arity: PoseidonArity> InclusionPath<H, Arity> {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PathElement<H: Hasher, Arity: PoseidonArity> {
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     hashes: Vec<H::Domain>,
     index: usize,
@@ -240,18 +241,18 @@ pub struct MerkleProof<
     TopTreeArity: PoseidonArity = U0,
 > {
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     data: ProofData<H, BaseArity, SubTreeArity, TopTreeArity>,
 }
 
 impl<
-        H: Hasher,
-        Arity: 'static + PoseidonArity,
-        SubTreeArity: 'static + PoseidonArity,
-        TopTreeArity: 'static + PoseidonArity,
-    > MerkleProofTrait for MerkleProof<H, Arity, SubTreeArity, TopTreeArity>
+    H: Hasher,
+    Arity: 'static + PoseidonArity,
+    SubTreeArity: 'static + PoseidonArity,
+    TopTreeArity: 'static + PoseidonArity,
+> MerkleProofTrait for MerkleProof<H, Arity, SubTreeArity, TopTreeArity>
 {
     type Hasher = H;
     type Arity = Arity;
@@ -324,18 +325,18 @@ enum ProofData<
     TopTreeArity: PoseidonArity,
 > {
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     Single(SingleProof<H, BaseArity>),
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     Sub(SubProof<H, BaseArity, SubTreeArity>),
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     Top(TopProof<H, BaseArity, SubTreeArity, TopTreeArity>),
 }
@@ -344,20 +345,20 @@ enum ProofData<
 struct SingleProof<H: Hasher, Arity: PoseidonArity> {
     /// Root of the merkle tree.
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     root: H::Domain,
     /// The original leaf data for this prof.
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     leaf: H::Domain,
     /// The path from leaf to root.
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     path: InclusionPath<H, Arity>,
 }
@@ -371,31 +372,31 @@ impl<H: Hasher, Arity: PoseidonArity> SingleProof<H, Arity> {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct SubProof<H: Hasher, BaseArity: PoseidonArity, SubTreeArity: PoseidonArity> {
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     base_proof: InclusionPath<H, BaseArity>,
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     sub_proof: InclusionPath<H, SubTreeArity>,
     /// Root of the merkle tree.
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     root: H::Domain,
     /// The original leaf data for this prof.
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     leaf: H::Domain,
 }
 
 impl<H: Hasher, BaseArity: PoseidonArity, SubTreeArity: PoseidonArity>
-    SubProof<H, BaseArity, SubTreeArity>
+SubProof<H, BaseArity, SubTreeArity>
 {
     pub fn new(
         base_proof: InclusionPath<H, BaseArity>,
@@ -420,40 +421,40 @@ struct TopProof<
     TopTreeArity: PoseidonArity,
 > {
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     base_proof: InclusionPath<H, BaseArity>,
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     sub_proof: InclusionPath<H, SubTreeArity>,
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     top_proof: InclusionPath<H, TopTreeArity>,
     /// Root of the merkle tree.
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     root: H::Domain,
     /// The original leaf data for this prof.
     #[serde(bound(
-        serialize = "H::Domain: Serialize",
-        deserialize = "H::Domain: Deserialize<'de>"
+    serialize = "H::Domain: Serialize",
+    deserialize = "H::Domain: Deserialize<'de>"
     ))]
     leaf: H::Domain,
 }
 
 impl<
-        H: Hasher,
-        BaseArity: PoseidonArity,
-        SubTreeArity: PoseidonArity,
-        TopTreeArity: PoseidonArity,
-    > TopProof<H, BaseArity, SubTreeArity, TopTreeArity>
+    H: Hasher,
+    BaseArity: PoseidonArity,
+    SubTreeArity: PoseidonArity,
+    TopTreeArity: PoseidonArity,
+> TopProof<H, BaseArity, SubTreeArity, TopTreeArity>
 {
     pub fn new(
         base_proof: InclusionPath<H, BaseArity>,
@@ -473,11 +474,11 @@ impl<
 }
 
 impl<
-        H: Hasher,
-        BaseArity: PoseidonArity,
-        SubTreeArity: PoseidonArity,
-        TopTreeArity: PoseidonArity,
-    > MerkleProof<H, BaseArity, SubTreeArity, TopTreeArity>
+    H: Hasher,
+    BaseArity: PoseidonArity,
+    SubTreeArity: PoseidonArity,
+    TopTreeArity: PoseidonArity,
+> MerkleProof<H, BaseArity, SubTreeArity, TopTreeArity>
 {
     pub fn new(n: usize) -> Self {
         let root = Default::default();
@@ -567,7 +568,7 @@ impl<H: Hasher, Arity: 'static + PoseidonArity> SingleProof<H, Arity> {
 }
 
 impl<H: Hasher, Arity: 'static + PoseidonArity, SubTreeArity: 'static + PoseidonArity>
-    SubProof<H, Arity, SubTreeArity>
+SubProof<H, Arity, SubTreeArity>
 {
     fn try_from_proof(p: proof::Proof<<H as Hasher>::Domain, Arity>) -> Result<Self> {
         ensure!(
@@ -629,11 +630,11 @@ impl<H: Hasher, Arity: 'static + PoseidonArity, SubTreeArity: 'static + Poseidon
 }
 
 impl<
-        H: Hasher,
-        Arity: 'static + PoseidonArity,
-        SubTreeArity: 'static + PoseidonArity,
-        TopTreeArity: 'static + PoseidonArity,
-    > TopProof<H, Arity, SubTreeArity, TopTreeArity>
+    H: Hasher,
+    Arity: 'static + PoseidonArity,
+    SubTreeArity: 'static + PoseidonArity,
+    TopTreeArity: 'static + PoseidonArity,
+> TopProof<H, Arity, SubTreeArity, TopTreeArity>
 {
     fn try_from_proof(p: proof::Proof<<H as Hasher>::Domain, Arity>) -> Result<Self> {
         ensure!(

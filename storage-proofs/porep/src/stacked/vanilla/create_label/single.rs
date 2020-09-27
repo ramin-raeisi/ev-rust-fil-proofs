@@ -25,7 +25,7 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
     info!("generate labels");
 
     let layer_states = super::prepare_layers::<Tree>(graph, &config, layers);
-    
+
     // For now, we require it due to changes in encodings structure.
     let mut labels: Vec<DiskStore<<Tree::Hasher as Hasher>::Domain>> = Vec::with_capacity(layers);
 
@@ -78,7 +78,7 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
         super::write_layer(&layer_labels, layer_config).context("failed to store labels")?;
         let layer_store: DiskStore<<Tree::Hasher as Hasher>::Domain> =
             DiskStore::new_from_disk(graph.size(), Tree::Arity::to_usize(), &layer_config)?;
-        
+
         info!(
             "  generated layer {} store with id {}",
             layer, layer_config.id

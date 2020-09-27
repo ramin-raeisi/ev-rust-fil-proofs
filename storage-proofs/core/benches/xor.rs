@@ -73,7 +73,7 @@ fn xor_circuit_benchmark(c: &mut Criterion) {
         },
         &mut rng1,
     )
-    .unwrap();
+        .unwrap();
 
     let params = vec![32];
 
@@ -95,31 +95,31 @@ fn xor_circuit_benchmark(c: &mut Criterion) {
                         &groth_params,
                         &mut rng,
                     )
-                    .unwrap();
+                        .unwrap();
 
                     black_box(proof)
                 });
             },
             params,
         )
-        .with_function("synthesize", move |b, bytes| {
-            let mut rng = thread_rng();
-            let key: Vec<Option<bool>> = (0..32 * 8).map(|_| Some(rng.gen())).collect();
-            let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
+            .with_function("synthesize", move |b, bytes| {
+                let mut rng = thread_rng();
+                let key: Vec<Option<bool>> = (0..32 * 8).map(|_| Some(rng.gen())).collect();
+                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
 
-            b.iter(|| {
-                let mut cs = BenchCS::<Bls12>::new();
-                XorExample {
-                    key: key.as_slice(),
-                    data: data.as_slice(),
-                }
-                .synthesize(&mut cs)
-                .unwrap();
+                b.iter(|| {
+                    let mut cs = BenchCS::<Bls12>::new();
+                    XorExample {
+                        key: key.as_slice(),
+                        data: data.as_slice(),
+                    }
+                        .synthesize(&mut cs)
+                        .unwrap();
 
-                black_box(cs)
-            });
-        })
-        .sample_size(20),
+                    black_box(cs)
+                });
+            })
+            .sample_size(20),
     );
 }
 

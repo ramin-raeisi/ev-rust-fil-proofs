@@ -214,6 +214,7 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
         Ok(())
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,7 +363,7 @@ mod tests {
             &priv_inputs,
             partitions,
         )
-        .expect("proving failed");
+            .expect("proving failed");
         assert_eq!(proofs.len(), partitions);
 
         let is_valid =
@@ -423,11 +424,11 @@ mod tests {
                 &pub_params,
                 Some(j),
             )
-            .expect("generate_public_inputs failure");
+                .expect("generate_public_inputs failure");
             let expected_inputs = cs.get_inputs();
 
             for ((input, label), generated_input) in
-                expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+            expected_inputs.iter().skip(1).zip(generated_inputs.iter())
             {
                 assert_eq!(input, generated_input, "{}", label);
             }

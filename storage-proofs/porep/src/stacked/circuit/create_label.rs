@@ -14,9 +14,9 @@ pub fn create_label_circuit<E, CS>(
     layer_index: uint32::UInt32,
     node: uint64::UInt64,
 ) -> Result<num::AllocatedNum<E>, SynthesisError>
-where
-    E: JubjubEngine,
-    CS: ConstraintSystem<E>,
+    where
+        E: JubjubEngine,
+        CS: ConstraintSystem<E>,
 {
     assert!(replica_id.len() >= 32, "replica id is too small");
     assert!(replica_id.len() <= 256, "replica id is too large");
@@ -98,7 +98,7 @@ mod tests {
             EXP_DEGREE,
             porep_id,
         )
-        .unwrap();
+            .unwrap();
 
         let id_fr = Fr::random(rng);
         let id: Vec<u8> = fr_into_bytes(&id_fr);
@@ -159,7 +159,7 @@ mod tests {
             layer_alloc,
             node_alloc,
         )
-        .expect("key derivation function failed");
+            .expect("key derivation function failed");
 
         assert!(cs.is_satisfied(), "constraints not satisfied");
         assert_eq!(cs.num_constraints(), 532_025);
@@ -174,7 +174,7 @@ mod tests {
             layer,
             node,
         )
-        .unwrap();
+            .unwrap();
 
         let expected_raw = data_at_node(&l1, node).unwrap();
         let expected = bytes_into_fr(expected_raw).unwrap();

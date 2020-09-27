@@ -22,10 +22,10 @@ pub trait MerkleTreeTrait: Send + Sync + std::fmt::Debug {
     type Hasher: 'static + Hasher;
     type Store: Store<<Self::Hasher as Hasher>::Domain>;
     type Proof: MerkleProofTrait<
-        Hasher = Self::Hasher,
-        Arity = Self::Arity,
-        SubTreeArity = Self::SubTreeArity,
-        TopTreeArity = Self::TopTreeArity,
+        Hasher=Self::Hasher,
+        Arity=Self::Arity,
+        SubTreeArity=Self::SubTreeArity,
+        TopTreeArity=Self::TopTreeArity,
     >;
 
     /// Print a unique name for this configuration.
@@ -61,12 +61,12 @@ pub struct MerkleTreeWrapper<
 }
 
 impl<
-        H: 'static + Hasher,
-        S: Store<<H as Hasher>::Domain>,
-        U: 'static + PoseidonArity,
-        V: 'static + PoseidonArity,
-        W: 'static + PoseidonArity,
-    > MerkleTreeTrait for MerkleTreeWrapper<H, S, U, V, W>
+    H: 'static + Hasher,
+    S: Store<<H as Hasher>::Domain>,
+    U: 'static + PoseidonArity,
+    V: 'static + PoseidonArity,
+    W: 'static + PoseidonArity,
+> MerkleTreeTrait for MerkleTreeWrapper<H, S, U, V, W>
 {
     type Arity = U;
     type SubTreeArity = V;
@@ -132,13 +132,13 @@ impl<
 }
 
 impl<
-        H: Hasher,
-        S: Store<<H as Hasher>::Domain>,
-        U: PoseidonArity,
-        V: PoseidonArity,
-        W: PoseidonArity,
-    > From<merkle::MerkleTree<<H as Hasher>::Domain, <H as Hasher>::Function, S, U, V, W>>
-    for MerkleTreeWrapper<H, S, U, V, W>
+    H: Hasher,
+    S: Store<<H as Hasher>::Domain>,
+    U: PoseidonArity,
+    V: PoseidonArity,
+    W: PoseidonArity,
+> From<merkle::MerkleTree<<H as Hasher>::Domain, <H as Hasher>::Function, S, U, V, W>>
+for MerkleTreeWrapper<H, S, U, V, W>
 {
     fn from(
         tree: merkle::MerkleTree<<H as Hasher>::Domain, <H as Hasher>::Function, S, U, V, W>,
@@ -151,19 +151,19 @@ impl<
 }
 
 impl<
-        H: Hasher,
-        S: Store<<H as Hasher>::Domain>,
-        U: PoseidonArity,
-        V: PoseidonArity,
-        W: PoseidonArity,
-    > MerkleTreeWrapper<H, S, U, V, W>
+    H: Hasher,
+    S: Store<<H as Hasher>::Domain>,
+    U: PoseidonArity,
+    V: PoseidonArity,
+    W: PoseidonArity,
+> MerkleTreeWrapper<H, S, U, V, W>
 {
-    pub fn new<I: IntoIterator<Item = H::Domain>>(data: I) -> Result<Self> {
+    pub fn new<I: IntoIterator<Item=H::Domain>>(data: I) -> Result<Self> {
         let tree = merkle::MerkleTree::new(data)?;
         Ok(tree.into())
     }
 
-    pub fn new_with_config<I: IntoIterator<Item = H::Domain>>(
+    pub fn new_with_config<I: IntoIterator<Item=H::Domain>>(
         data: I,
         config: StoreConfig,
     ) -> Result<Self> {
@@ -171,7 +171,7 @@ impl<
         Ok(tree.into())
     }
 
-    pub fn from_data_with_config<O: Hashable<H::Function>, I: IntoIterator<Item = O>>(
+    pub fn from_data_with_config<O: Hashable<H::Function>, I: IntoIterator<Item=O>>(
         data: I,
         config: StoreConfig,
     ) -> Result<Self> {
@@ -226,7 +226,7 @@ impl<
         leafs: usize,
     ) -> Result<MerkleTreeWrapper<H, S, U, V, U0>> {
         let tree = merkle::MerkleTree::<
-                <H as Hasher>::Domain, <H as Hasher>::Function, S, U, V, U0
+            <H as Hasher>::Domain, <H as Hasher>::Function, S, U, V, U0
         >::from_slices(tree_data, leafs)?;
         Ok(tree.into())
     }
@@ -265,7 +265,7 @@ impl<
         Ok(tree.into())
     }
 
-    pub fn try_from_iter<I: IntoIterator<Item = Result<H::Domain>>>(into: I) -> Result<Self> {
+    pub fn try_from_iter<I: IntoIterator<Item=Result<H::Domain>>>(into: I) -> Result<Self> {
         let tree = merkle::MerkleTree::try_from_iter(into)?;
         Ok(tree.into())
     }
@@ -283,7 +283,7 @@ impl<
         Ok(tree.into())
     }
 
-    pub fn try_from_iter_with_config<I: IntoIterator<Item = Result<H::Domain>>>(
+    pub fn try_from_iter_with_config<I: IntoIterator<Item=Result<H::Domain>>>(
         into: I,
         config: StoreConfig,
     ) -> Result<Self> {
@@ -292,18 +292,18 @@ impl<
     }
 
     pub fn from_par_iter<I>(par_iter: I) -> Result<Self>
-    where
-        I: IntoParallelIterator<Item = H::Domain>,
-        I::Iter: IndexedParallelIterator,
+        where
+            I: IntoParallelIterator<Item=H::Domain>,
+            I::Iter: IndexedParallelIterator,
     {
         let tree = merkle::MerkleTree::from_par_iter(par_iter)?;
         Ok(tree.into())
     }
 
     pub fn from_par_iter_with_config<I>(par_iter: I, config: StoreConfig) -> Result<Self>
-    where
-        I: IntoParallelIterator<Item = H::Domain>,
-        I::Iter: IndexedParallelIterator,
+        where
+            I: IntoParallelIterator<Item=H::Domain>,
+            I::Iter: IndexedParallelIterator,
     {
         let tree = merkle::MerkleTree::from_par_iter_with_config(par_iter, config)?;
         Ok(tree.into())
@@ -311,12 +311,12 @@ impl<
 }
 
 impl<
-        H: Hasher,
-        S: Store<<H as Hasher>::Domain>,
-        BaseArity: PoseidonArity,
-        SubTreeArity: PoseidonArity,
-        TopTreeArity: PoseidonArity,
-    > std::fmt::Debug for MerkleTreeWrapper<H, S, BaseArity, SubTreeArity, TopTreeArity>
+    H: Hasher,
+    S: Store<<H as Hasher>::Domain>,
+    BaseArity: PoseidonArity,
+    SubTreeArity: PoseidonArity,
+    TopTreeArity: PoseidonArity,
+> std::fmt::Debug for MerkleTreeWrapper<H, S, BaseArity, SubTreeArity, TopTreeArity>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MerkleTreeWrapper")
@@ -327,15 +327,15 @@ impl<
 }
 
 impl<
-        H: Hasher,
-        S: Store<<H as Hasher>::Domain>,
-        BaseArity: PoseidonArity,
-        SubTreeArity: PoseidonArity,
-        TopTreeArity: PoseidonArity,
-    > std::ops::Deref for MerkleTreeWrapper<H, S, BaseArity, SubTreeArity, TopTreeArity>
+    H: Hasher,
+    S: Store<<H as Hasher>::Domain>,
+    BaseArity: PoseidonArity,
+    SubTreeArity: PoseidonArity,
+    TopTreeArity: PoseidonArity,
+> std::ops::Deref for MerkleTreeWrapper<H, S, BaseArity, SubTreeArity, TopTreeArity>
 {
     type Target =
-        merkle::MerkleTree<H::Domain, H::Function, S, BaseArity, SubTreeArity, TopTreeArity>;
+    merkle::MerkleTree<H::Domain, H::Function, S, BaseArity, SubTreeArity, TopTreeArity>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -343,12 +343,12 @@ impl<
 }
 
 impl<
-        H: Hasher,
-        S: Store<<H as Hasher>::Domain>,
-        BaseArity: PoseidonArity,
-        SubTreeArity: PoseidonArity,
-        TopTreeArity: PoseidonArity,
-    > std::ops::DerefMut for MerkleTreeWrapper<H, S, BaseArity, SubTreeArity, TopTreeArity>
+    H: Hasher,
+    S: Store<<H as Hasher>::Domain>,
+    BaseArity: PoseidonArity,
+    SubTreeArity: PoseidonArity,
+    TopTreeArity: PoseidonArity,
+> std::ops::DerefMut for MerkleTreeWrapper<H, S, BaseArity, SubTreeArity, TopTreeArity>
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner

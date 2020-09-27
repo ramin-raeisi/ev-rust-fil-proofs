@@ -38,18 +38,18 @@ impl UInt64 {
     }
 
     pub fn pack_into_input<E, CS>(&self, cs: CS) -> Result<(), SynthesisError>
-    where
-        E: Engine,
-        CS: ConstraintSystem<E>,
+        where
+            E: Engine,
+            CS: ConstraintSystem<E>,
     {
         pack_into_inputs(cs, &self.bits)
     }
 
     /// Allocate a `UInt64` in the constraint system
     pub fn alloc<E, CS>(mut cs: CS, value: Option<u64>) -> Result<Self, SynthesisError>
-    where
-        E: Engine,
-        CS: ConstraintSystem<E>,
+        where
+            E: Engine,
+            CS: ConstraintSystem<E>,
     {
         let values = match value {
             Some(mut val) => {

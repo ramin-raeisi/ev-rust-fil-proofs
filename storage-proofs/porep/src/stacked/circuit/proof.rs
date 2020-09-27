@@ -56,8 +56,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedCircuit<'a
         comm_c: Option<<Tree::Hasher as Hasher>::Domain>,
         proofs: Vec<Proof<Tree, G>>,
     ) -> Result<(), SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>,
+        where
+            CS: ConstraintSystem<Bls12>,
     {
         let circuit = StackedCircuit::<'a, Tree, G> {
             public_params,
@@ -173,7 +173,7 @@ pub struct StackedCompound<Tree: MerkleTreeTrait, G: Hasher> {
 }
 
 impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait, G: Hasher>
-    CacheableParameters<C, P> for StackedCompound<Tree, G>
+CacheableParameters<C, P> for StackedCompound<Tree, G>
 {
     fn cache_prefix() -> String {
         format!(
@@ -185,8 +185,8 @@ impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait, G: Hashe
 }
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher>
-    CompoundProof<'a, StackedDrg<'a, Tree, G>, StackedCircuit<'a, Tree, G>>
-    for StackedCompound<Tree, G>
+CompoundProof<'a, StackedDrg<'a, Tree, G>, StackedCircuit<'a, Tree, G>>
+for StackedCompound<Tree, G>
 {
     fn generate_public_inputs(
         pub_in: &<StackedDrg<Tree, G> as ProofScheme>::PublicInputs,
@@ -438,7 +438,7 @@ mod tests {
             config,
             replica_path.clone(),
         )
-        .expect("replication failed");
+            .expect("replication failed");
 
         let mut copied = vec![0; data.len()];
         copied.copy_from_slice(&mmapped_data);
@@ -469,7 +469,7 @@ mod tests {
             &priv_inputs,
             1,
         )
-        .expect("failed to generate partition proofs");
+            .expect("failed to generate partition proofs");
 
         let proofs_are_valid =
             StackedDrg::<Tree, Sha256Hasher>::verify_all_partitions(&pp, &pub_inputs, &proofs)
@@ -517,11 +517,11 @@ mod tests {
             StackedDrg<Tree, Sha256Hasher>,
             _,
         >>::generate_public_inputs(&pub_inputs, &pp, None)
-        .expect("failed to generate public inputs");
+            .expect("failed to generate public inputs");
         let expected_inputs = cs.get_inputs();
 
         for ((input, label), generated_input) in
-            expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+        expected_inputs.iter().skip(1).zip(generated_inputs.iter())
         {
             assert_eq!(input, generated_input, "{}", label);
         }
@@ -610,7 +610,7 @@ mod tests {
             config,
             replica_path.clone(),
         )
-        .expect("replication failed");
+            .expect("replication failed");
 
         let mut copied = vec![0; data.len()];
         copied.copy_from_slice(&mmapped_data);
@@ -686,7 +686,7 @@ mod tests {
             StackedDrg<Tree, Sha256Hasher>,
             _,
         >>::groth_params(Some(rng), &public_params.vanilla_params)
-        .expect("failed to generate groth params");
+            .expect("failed to generate groth params");
 
         // Discard cached MTs that are no longer needed.
         TemporaryAux::<Tree, Sha256Hasher>::clear_temp(t_aux_orig).expect("t_aux delete failed");
@@ -697,7 +697,7 @@ mod tests {
             &private_inputs,
             &blank_groth_params,
         )
-        .expect("failed while proving");
+            .expect("failed while proving");
 
         let verified = StackedCompound::verify(
             &public_params,
@@ -707,7 +707,7 @@ mod tests {
                 minimum_challenges: 1,
             },
         )
-        .expect("failed while verifying");
+            .expect("failed while verifying");
 
         assert!(verified);
 

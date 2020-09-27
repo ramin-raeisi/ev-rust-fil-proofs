@@ -20,14 +20,14 @@ use storage_proofs_core::{
 use super::{RationalPoSt, RationalPoStCircuit};
 
 pub struct RationalPoStCompound<Tree>
-where
-    Tree: MerkleTreeTrait,
+    where
+        Tree: MerkleTreeTrait,
 {
     _t: PhantomData<Tree>,
 }
 
 impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait> CacheableParameters<C, P>
-    for RationalPoStCompound<Tree>
+for RationalPoStCompound<Tree>
 {
     fn cache_prefix() -> String {
         format!("proof-of-spacetime-rational-{}", Tree::display())
@@ -35,10 +35,10 @@ impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait> Cacheabl
 }
 
 impl<'a, Tree: 'static + MerkleTreeTrait>
-    CompoundProof<'a, RationalPoSt<'a, Tree>, RationalPoStCircuit<Tree>>
-    for RationalPoStCompound<Tree>
-where
-    Tree: 'static + MerkleTreeTrait,
+CompoundProof<'a, RationalPoSt<'a, Tree>, RationalPoStCircuit<Tree>>
+for RationalPoStCompound<Tree>
+    where
+        Tree: 'static + MerkleTreeTrait,
 {
     fn generate_public_inputs(
         pub_in: &<RationalPoSt<'a, Tree> as ProofScheme<'a>>::PublicInputs,
@@ -169,7 +169,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait> RationalPoStCircuit<Tree> {
             paths,
             _t: PhantomData,
         }
-        .synthesize(cs)
+            .synthesize(cs)
     }
 }
 

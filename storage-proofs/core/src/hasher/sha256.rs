@@ -264,8 +264,8 @@ impl HashFunction<Sha256Domain> for Sha256Function {
         a_num: &num::AllocatedNum<Bls12>,
         b_num: &num::AllocatedNum<Bls12>,
     ) -> std::result::Result<num::AllocatedNum<Bls12>, SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>,
+        where
+            CS: ConstraintSystem<Bls12>,
     {
         // Allocate as booleans
         let a = a_num.to_bits_le(cs.namespace(|| "a_bits"))?;
@@ -392,7 +392,7 @@ mod tests {
             &right_bits,
             height,
         )
-        .expect("key derivation function failed");
+            .expect("key derivation function failed");
 
         assert!(cs.is_satisfied(), "constraints not satisfied");
         assert_eq!(cs.num_constraints(), 45_387);

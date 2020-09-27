@@ -101,8 +101,8 @@ impl fmt::Debug for Candidate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proof<P: MerkleProofTrait> {
     #[serde(bound(
-        serialize = "MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>: Serialize",
-        deserialize = "MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>: serde::de::DeserializeOwned"
+    serialize = "MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>: Serialize",
+    deserialize = "MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>: serde::de::DeserializeOwned"
     ))]
     inclusion_proofs: Vec<MerkleProof<P::Hasher, P::Arity, P::SubTreeArity, P::TopTreeArity>>,
     pub ticket: [u8; 32],
@@ -139,8 +139,8 @@ impl<P: MerkleProofTrait> Proof<P> {
 
 #[derive(Debug, Clone)]
 pub struct ElectionPoSt<'a, Tree>
-where
-    Tree: 'a + MerkleTreeTrait,
+    where
+        Tree: 'a + MerkleTreeTrait,
 {
     _t: PhantomData<&'a Tree>,
 }
@@ -212,7 +212,7 @@ fn generate_candidate<Tree: MerkleTreeTrait>(
         let val: Fr = measure_op(Operation::PostReadChallengedRange, || {
             tree.read_at(challenge as usize)
         })?
-        .into();
+            .into();
         data.push(val.into());
     }
 
@@ -225,7 +225,7 @@ fn generate_candidate<Tree: MerkleTreeTrait>(
     let partial_ticket: Fr = measure_op(Operation::PostPartialTicketHash, || {
         PoseidonFunction::hash_md(&data)
     })
-    .into();
+        .into();
 
     // ticket = sha256(partial_ticket)
     let ticket = finalize_ticket(&partial_ticket);
@@ -372,7 +372,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait> ProofScheme<'a> for ElectionPoSt<'a, T
                         pub_inputs.sector_challenge_index,
                         n as u64,
                     )
-                    .expect("generate leaf challenge failure");
+                        .expect("generate leaf challenge failure");
                     (0..pub_params.challenged_nodes)
                         .into_par_iter()
                         .map(move |i| {

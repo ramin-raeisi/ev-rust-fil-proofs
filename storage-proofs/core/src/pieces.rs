@@ -59,7 +59,7 @@ pub fn generate_piece_commitment_bytes_from_source<H: Hasher>(
         source.read_exact(&mut buf)?;
         <H::Domain as Domain>::try_from_bytes(&buf).context("invalid Fr element")
     }))
-    .context("failed to build tree")?;
+        .context("failed to build tree")?;
 
     let mut comm_p_bytes = [0; NODE_SIZE];
     let comm_p = tree.root();
@@ -137,9 +137,9 @@ mod tests {
         assert!(
             generate_piece_commitment_bytes_from_source::<PedersenHasher>(
                 &mut not_enough_bytes_slice,
-                7
+                7,
             )
-            .is_err(),
+                .is_err(),
             "insufficient bytes should error out"
         );
 

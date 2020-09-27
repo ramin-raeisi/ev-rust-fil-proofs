@@ -110,7 +110,7 @@ fn pedersen_circuit_benchmark(c: &mut Criterion) {
         PedersenExample { data: &[None; 256] },
         &mut rng1,
     )
-    .unwrap();
+        .unwrap();
 
     let params = vec![32];
 
@@ -130,29 +130,29 @@ fn pedersen_circuit_benchmark(c: &mut Criterion) {
                         &groth_params,
                         &mut rng,
                     )
-                    .unwrap();
+                        .unwrap();
 
                     black_box(proof)
                 });
             },
             params,
         )
-        .with_function("synthesize", move |b, bytes| {
-            let mut rng = thread_rng();
-            let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
+            .with_function("synthesize", move |b, bytes| {
+                let mut rng = thread_rng();
+                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
 
-            b.iter(|| {
-                let mut cs = BenchCS::<Bls12>::new();
-                PedersenExample {
-                    data: data.as_slice(),
-                }
-                .synthesize(&mut cs)
-                .unwrap();
+                b.iter(|| {
+                    let mut cs = BenchCS::<Bls12>::new();
+                    PedersenExample {
+                        data: data.as_slice(),
+                    }
+                        .synthesize(&mut cs)
+                        .unwrap();
 
-                black_box(cs)
-            });
-        })
-        .sample_size(20),
+                    black_box(cs)
+                });
+            })
+            .sample_size(20),
     );
 }
 
@@ -162,7 +162,7 @@ fn pedersen_md_circuit_benchmark(c: &mut Criterion) {
         PedersenMdExample { data: &[None; 256] },
         &mut rng1,
     )
-    .unwrap();
+        .unwrap();
 
     let params = vec![64];
 
@@ -182,29 +182,29 @@ fn pedersen_md_circuit_benchmark(c: &mut Criterion) {
                         &groth_params,
                         &mut rng,
                     )
-                    .unwrap();
+                        .unwrap();
 
                     black_box(proof)
                 });
             },
             params,
         )
-        .with_function("synthesize", move |b, bytes| {
-            let mut rng = thread_rng();
-            let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
+            .with_function("synthesize", move |b, bytes| {
+                let mut rng = thread_rng();
+                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
 
-            b.iter(|| {
-                let mut cs = BenchCS::<Bls12>::new();
-                PedersenMdExample {
-                    data: data.as_slice(),
-                }
-                .synthesize(&mut cs)
-                .unwrap();
+                b.iter(|| {
+                    let mut cs = BenchCS::<Bls12>::new();
+                    PedersenMdExample {
+                        data: data.as_slice(),
+                    }
+                        .synthesize(&mut cs)
+                        .unwrap();
 
-                black_box(cs)
-            });
-        })
-        .sample_size(20),
+                    black_box(cs)
+                });
+            })
+            .sample_size(20),
     );
 }
 

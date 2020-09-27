@@ -25,7 +25,7 @@ pub fn pedersen(data: &[u8]) -> Fr {
     pedersen_bits(Bits::new(data))
 }
 
-pub fn pedersen_bits<'a, S: Iterator<Item = &'a [u8]>>(data: Bits<&'a [u8], S>) -> Fr {
+pub fn pedersen_bits<'a, S: Iterator<Item=&'a [u8]>>(data: Bits<&'a [u8], S>) -> Fr {
     let digest = pedersen_hash(data);
     digest.into_xy().0
 }
@@ -35,7 +35,7 @@ pub fn pedersen_md_no_padding(data: &[u8]) -> Fr {
     pedersen_md_no_padding_bits(Bits::new(data))
 }
 
-pub fn pedersen_md_no_padding_bits<T: AsRef<[u8]>, S: Iterator<Item = T>>(
+pub fn pedersen_md_no_padding_bits<T: AsRef<[u8]>, S: Iterator<Item=T>>(
     mut data: Bits<T, S>,
 ) -> Fr {
     let mut cur = Vec::with_capacity(PEDERSEN_BLOCK_SIZE);
@@ -60,8 +60,8 @@ pub fn pedersen_md_no_padding_bits<T: AsRef<[u8]>, S: Iterator<Item = T>>(
 }
 
 fn pedersen_compression_bits<T>(bits: T) -> FrRepr
-where
-    T: IntoIterator<Item = bool>,
+    where
+        T: IntoIterator<Item=bool>,
 {
     let digest = pedersen_hash(bits);
     digest.into_xy().0.into()
@@ -121,7 +121,7 @@ impl Hasher {
 
 /// Creates an iterator over the byte slices in little endian format.
 #[derive(Debug, Clone)]
-pub struct Bits<K: AsRef<[u8]>, S: Iterator<Item = K>> {
+pub struct Bits<K: AsRef<[u8]>, S: Iterator<Item=K>> {
     /// The individual parts that make up the data that is being iterated over.
     parts: ManyOrSingle<K, S>,
     /// How many bytes we are into the `current_part`
@@ -139,8 +139,8 @@ pub struct Bits<K: AsRef<[u8]>, S: Iterator<Item = K>> {
 /// Abstraction over either an iterator or a single element.
 #[derive(Debug, Clone)]
 enum ManyOrSingle<T, S = <Vec<T> as IntoIterator>::IntoIter>
-where
-    S: Iterator<Item = T>,
+    where
+        S: Iterator<Item=T>,
 {
     Many(S),
     Single(Option<T>),
@@ -159,7 +159,7 @@ impl<T: AsRef<[u8]>> Bits<T, <Vec<T> as IntoIterator>::IntoIter> {
     }
 }
 
-impl<T: AsRef<[u8]>, S: Iterator<Item = T>> Bits<T, S> {
+impl<T: AsRef<[u8]>, S: Iterator<Item=T>> Bits<T, S> {
     pub fn new_many(parts: S) -> Self {
         Bits {
             parts: ManyOrSingle::Many(parts),
@@ -220,23 +220,22 @@ impl<T: AsRef<[u8]>, S: Iterator<Item = T>> Bits<T, S> {
 }
 
 #[derive(Debug)]
-struct BitsTake<'a, T: AsRef<[u8]>, S: Iterator<Item = T>> {
+struct BitsTake<'a, T: AsRef<[u8]>, S: Iterator<Item=T>> {
     iter: &'a mut Bits<T, S>,
     take: usize,
 }
 
-impl<'a, T: AsRef<[u8]>, S: Iterator<Item = T>> BitsTake<'a, T, S> {
+impl<'a, T: AsRef<[u8]>, S: Iterator<Item=T>> BitsTake<'a, T, S> {
     pub fn new(iter: &'a mut Bits<T, S>, take: usize) -> Self {
         BitsTake { iter, take }
     }
 }
 
-impl<'a, T: AsRef<[u8]>, S: Iterator<Item = T> + std::iter::FusedIterator> std::iter::FusedIterator
-    for BitsTake<'a, T, S>
-{
-}
+impl<'a, T: AsRef<[u8]>, S: Iterator<Item=T> + std::iter::FusedIterator> std::iter::FusedIterator
+for BitsTake<'a, T, S>
+{}
 
-impl<'a, T: AsRef<[u8]>, S: Iterator<Item = T>> Iterator for BitsTake<'a, T, S> {
+impl<'a, T: AsRef<[u8]>, S: Iterator<Item=T>> Iterator for BitsTake<'a, T, S> {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -249,12 +248,11 @@ impl<'a, T: AsRef<[u8]>, S: Iterator<Item = T>> Iterator for BitsTake<'a, T, S> 
     }
 }
 
-impl<T: AsRef<[u8]>, S: Iterator<Item = T> + std::iter::FusedIterator> std::iter::FusedIterator
-    for Bits<T, S>
-{
-}
+impl<T: AsRef<[u8]>, S: Iterator<Item=T> + std::iter::FusedIterator> std::iter::FusedIterator
+for Bits<T, S>
+{}
 
-impl<T: AsRef<[u8]>, S: Iterator<Item = T>> Iterator for Bits<T, S> {
+impl<T: AsRef<[u8]>, S: Iterator<Item=T>> Iterator for Bits<T, S> {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -372,9 +370,9 @@ mod tests {
             bits_iter.ref_take(8).collect::<Vec<bool>>(),
             bits_iter.ref_take(bits.len() - 16).collect::<Vec<bool>>(),
         ]
-        .into_iter()
-        .flatten()
-        .collect();
+            .into_iter()
+            .flatten()
+            .collect();
 
         assert_eq!(bits, bits_collected);
     }

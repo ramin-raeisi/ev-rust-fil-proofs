@@ -73,29 +73,29 @@ fn blake2s_circuit_benchmark(c: &mut Criterion) {
                         &groth_params,
                         &mut rng,
                     )
-                    .unwrap();
+                        .unwrap();
 
                     black_box(proof)
                 });
             },
             params,
         )
-        .with_function("synthesize", move |b, bytes| {
-            let mut rng = thread_rng();
-            let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
-            b.iter(|| {
-                let mut cs = BenchCS::<Bls12>::new();
+            .with_function("synthesize", move |b, bytes| {
+                let mut rng = thread_rng();
+                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
+                b.iter(|| {
+                    let mut cs = BenchCS::<Bls12>::new();
 
-                Blake2sExample {
-                    data: data.as_slice(),
-                }
-                .synthesize(&mut cs)
-                .unwrap();
+                    Blake2sExample {
+                        data: data.as_slice(),
+                    }
+                        .synthesize(&mut cs)
+                        .unwrap();
 
-                black_box(cs)
-            });
-        })
-        .sample_size(20),
+                    black_box(cs)
+                });
+            })
+            .sample_size(20),
     );
 }
 

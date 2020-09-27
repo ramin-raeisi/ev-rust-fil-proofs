@@ -50,11 +50,11 @@ pub struct AuthPath<
 }
 
 impl<
-        H: Hasher,
-        U: 'static + PoseidonArity,
-        V: 'static + PoseidonArity,
-        W: 'static + PoseidonArity,
-    > From<Vec<(Vec<Option<Fr>>, Option<usize>)>> for AuthPath<H, U, V, W>
+    H: Hasher,
+    U: 'static + PoseidonArity,
+    V: 'static + PoseidonArity,
+    W: 'static + PoseidonArity,
+> From<Vec<(Vec<Option<Fr>>, Option<usize>)>> for AuthPath<H, U, V, W>
 {
     fn from(mut base_opts: Vec<(Vec<Option<Fr>>, Option<usize>)>) -> Self {
         let has_top = W::to_usize() > 0;
@@ -254,7 +254,7 @@ pub fn challenge_into_auth_path_bits(challenge: usize, leaves: usize) -> Vec<boo
 }
 
 impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait> CacheableParameters<C, P>
-    for PoRCompound<Tree>
+for PoRCompound<Tree>
 {
     fn cache_prefix() -> String {
         format!("proof-of-retrievability-{}", Tree::display())
@@ -263,7 +263,7 @@ impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait> Cacheabl
 
 // can only implment for Bls12 because por is not generic over the engine.
 impl<'a, Tree: 'static + MerkleTreeTrait> CompoundProof<'a, PoR<Tree>, PoRCircuit<Tree>>
-    for PoRCompound<Tree>
+for PoRCompound<Tree>
 {
     fn circuit<'b>(
         public_inputs: &<PoR<Tree> as ProofScheme<'a>>::PublicInputs,
@@ -424,8 +424,8 @@ impl<'a, Tree: MerkleTreeTrait> PoRCircuit<Tree> {
         root: Root<Bls12>,
         private: bool,
     ) -> Result<(), SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>,
+        where
+            CS: ConstraintSystem<Bls12>,
     {
         let por = Self {
             value,
@@ -468,10 +468,10 @@ mod tests {
     use bellperson::util_cs::test_cs::TestConstraintSystem;
 
     type TestTree<H, A> =
-        MerkleTreeWrapper<H, VecStore<<H as Hasher>::Domain>, A, typenum::U0, typenum::U0>;
+    MerkleTreeWrapper<H, VecStore<<H as Hasher>::Domain>, A, typenum::U0, typenum::U0>;
 
     type TestTree2<H, A, B> =
-        MerkleTreeWrapper<H, VecStore<<H as Hasher>::Domain>, A, B, typenum::U0>;
+    MerkleTreeWrapper<H, VecStore<<H as Hasher>::Domain>, A, B, typenum::U0>;
 
     type TestTree3<H, A, B, C> = MerkleTreeWrapper<H, VecStore<<H as Hasher>::Domain>, A, B, C>;
 
@@ -512,8 +512,8 @@ mod tests {
                 data_at_node(data.as_slice(), public_inputs.challenge)
                     .expect("bytes_into_fr failure"),
             )
-            .expect("failed to create Fr from node data")
-            .into(),
+                .expect("failed to create Fr from node data")
+                .into(),
             &tree,
         );
 
@@ -638,6 +638,7 @@ mod tests {
         // This is the shape we want for 32GiB sectors.
         test_por_circuit::<TestTree2<PoseidonHasher, typenum::U8, typenum::U8>>(3, 1_593);
     }
+
     #[test]
     fn test_por_circuit_poseidon_top_8_8_2() {
         // This is the shape we want for 64GiB secotrs.
@@ -727,12 +728,12 @@ mod tests {
                 &pub_params,
                 None,
             )
-            .expect("generate_public_inputs failure");
+                .expect("generate_public_inputs failure");
 
             let expected_inputs = cs.get_inputs();
 
             for ((input, label), generated_input) in
-                expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+            expected_inputs.iter().skip(1).zip(generated_inputs.iter())
             {
                 assert_eq!(input, generated_input, "{}", label);
             }
@@ -780,8 +781,7 @@ mod tests {
     #[ignore] // Slow test – run only when compiled for release.
     #[test]
     fn test_private_por_compound_poseidon_top_8_4_2() {
-        private_por_test_compound::<TestTree3<PoseidonHasher, typenum::U8, typenum::U4, typenum::U2>>(
-        );
+        private_por_test_compound::<TestTree3<PoseidonHasher, typenum::U8, typenum::U4, typenum::U2>>();
     }
 
     #[ignore] // Slow test – run only when compiled for release.
@@ -793,15 +793,13 @@ mod tests {
     #[ignore] // Slow test – run only when compiled for release.
     #[test]
     fn test_private_por_compound_poseidon_top_8_8_2() {
-        private_por_test_compound::<TestTree3<PoseidonHasher, typenum::U8, typenum::U8, typenum::U2>>(
-        );
+        private_por_test_compound::<TestTree3<PoseidonHasher, typenum::U8, typenum::U8, typenum::U2>>();
     }
 
     #[ignore] // Slow test – run only when compiled for release.
     #[test]
     fn test_private_por_compound_poseidon_top_8_2_4() {
-        private_por_test_compound::<TestTree3<PoseidonHasher, typenum::U8, typenum::U2, typenum::U4>>(
-        );
+        private_por_test_compound::<TestTree3<PoseidonHasher, typenum::U8, typenum::U2, typenum::U4>>();
     }
 
     fn private_por_test_compound<Tree: 'static + MerkleTreeTrait>() {
@@ -835,8 +833,8 @@ mod tests {
                     data_at_node(data.as_slice(), public_inputs.challenge)
                         .expect("data_at_node failure"),
                 )
-                .expect("failed to create Fr from node data")
-                .into(),
+                    .expect("failed to create Fr from node data")
+                    .into(),
                 &tree,
             );
 
@@ -889,7 +887,7 @@ mod tests {
                 Some(rng),
                 &public_params.vanilla_params,
             )
-            .expect("failed to generate groth params");
+                .expect("failed to generate groth params");
 
             let proof = PoRCompound::prove(
                 &public_params,
@@ -897,7 +895,7 @@ mod tests {
                 &private_inputs,
                 &blank_groth_params,
             )
-            .expect("failed while proving");
+                .expect("failed while proving");
 
             let verified =
                 PoRCompound::verify(&public_params, &public_inputs, &proof, &NoRequirements)
@@ -962,8 +960,8 @@ mod tests {
                     data_at_node(data.as_slice(), pub_inputs.challenge)
                         .expect("data_at_node failure"),
                 )
-                .expect("bytes_into_fr failure")
-                .into(),
+                    .expect("bytes_into_fr failure")
+                    .into(),
                 &tree,
             );
 

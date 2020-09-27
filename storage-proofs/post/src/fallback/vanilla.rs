@@ -97,8 +97,8 @@ pub struct PrivateInputs<'a, Tree: MerkleTreeTrait> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proof<P: MerkleProofTrait> {
     #[serde(bound(
-        serialize = "SectorProof<P>: Serialize",
-        deserialize = "SectorProof<P>: Deserialize<'de>"
+    serialize = "SectorProof<P>: Serialize",
+    deserialize = "SectorProof<P>: Deserialize<'de>"
     ))]
     pub sectors: Vec<SectorProof<P>>,
 }
@@ -106,11 +106,11 @@ pub struct Proof<P: MerkleProofTrait> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SectorProof<Proof: MerkleProofTrait> {
     #[serde(bound(
-        serialize = "MerkleProof<Proof::Hasher, Proof::Arity, Proof::SubTreeArity, Proof::TopTreeArity>: Serialize",
-        deserialize = "MerkleProof<Proof::Hasher, Proof::Arity, Proof::SubTreeArity, Proof::TopTreeArity>: serde::de::DeserializeOwned"
+    serialize = "MerkleProof<Proof::Hasher, Proof::Arity, Proof::SubTreeArity, Proof::TopTreeArity>: Serialize",
+    deserialize = "MerkleProof<Proof::Hasher, Proof::Arity, Proof::SubTreeArity, Proof::TopTreeArity>: serde::de::DeserializeOwned"
     ))]
     pub inclusion_proofs:
-        Vec<MerkleProof<Proof::Hasher, Proof::Arity, Proof::SubTreeArity, Proof::TopTreeArity>>,
+    Vec<MerkleProof<Proof::Hasher, Proof::Arity, Proof::SubTreeArity, Proof::TopTreeArity>>,
     pub comm_c: <Proof::Hasher as Hasher>::Domain,
     pub comm_r_last: <Proof::Hasher as Hasher>::Domain,
 }
@@ -159,8 +159,8 @@ impl<P: MerkleProofTrait> SectorProof<P> {
 
 #[derive(Debug, Clone)]
 pub struct FallbackPoSt<'a, Tree>
-where
-    Tree: 'a + MerkleTreeTrait,
+    where
+        Tree: 'a + MerkleTreeTrait,
 {
     _t: PhantomData<&'a Tree>,
 }
@@ -650,7 +650,7 @@ mod tests {
             &priv_inputs,
             partitions,
         )
-        .expect("proving failed");
+            .expect("proving failed");
 
         let is_valid =
             FallbackPoSt::<Tree>::verify_all_partitions(&pub_params, &pub_inputs, &proof)

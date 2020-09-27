@@ -9,8 +9,8 @@ pub fn hash_single_column<CS>(
     cs: CS,
     column: &[num::AllocatedNum<Bls12>],
 ) -> Result<num::AllocatedNum<Bls12>, SynthesisError>
-where
-    CS: ConstraintSystem<Bls12>,
+    where
+        CS: ConstraintSystem<Bls12>,
 {
     match column.len() {
         2 => poseidon_hash::<CS, Bls12, typenum::U2>(
@@ -66,7 +66,7 @@ mod tests {
                 &a_num,
                 &b_num,
             )
-            .expect("hash2 function failed");
+                .expect("hash2 function failed");
 
             assert!(cs.is_satisfied(), "constraints not satisfied");
             assert_eq!(cs.num_constraints(), 1_371);

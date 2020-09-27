@@ -43,8 +43,8 @@ pub struct SetupParams {
 
 #[derive(Debug)]
 pub struct PublicParams<Tree>
-where
-    Tree: 'static + MerkleTreeTrait,
+    where
+        Tree: 'static + MerkleTreeTrait,
 {
     pub graph: StackedBucketGraph<Tree::Hasher>,
     pub layer_challenges: LayerChallenges,
@@ -52,8 +52,8 @@ where
 }
 
 impl<Tree> Clone for PublicParams<Tree>
-where
-    Tree: MerkleTreeTrait,
+    where
+        Tree: MerkleTreeTrait,
 {
     fn clone(&self) -> Self {
         Self {
@@ -65,8 +65,8 @@ where
 }
 
 impl<Tree> PublicParams<Tree>
-where
-    Tree: MerkleTreeTrait,
+    where
+        Tree: MerkleTreeTrait,
 {
     pub fn new(graph: StackedBucketGraph<Tree::Hasher>, layer_challenges: LayerChallenges) -> Self {
         PublicParams {
@@ -78,8 +78,8 @@ where
 }
 
 impl<Tree> ParameterSetMetadata for PublicParams<Tree>
-where
-    Tree: MerkleTreeTrait,
+    where
+        Tree: MerkleTreeTrait,
 {
     fn identifier(&self) -> String {
         format!(
@@ -96,8 +96,8 @@ where
 }
 
 impl<'a, Tree> From<&'a PublicParams<Tree>> for PublicParams<Tree>
-where
-    Tree: MerkleTreeTrait,
+    where
+        Tree: MerkleTreeTrait,
 {
     fn from(other: &PublicParams<Tree>) -> PublicParams<Tree> {
         PublicParams::new(other.graph.clone(), other.layer_challenges.clone())
@@ -135,32 +135,32 @@ pub struct PrivateInputs<Tree: MerkleTreeTrait, G: Hasher> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Proof<Tree: MerkleTreeTrait, G: Hasher> {
     #[serde(bound(
-        serialize = "MerkleProof<G, typenum::U2>: Serialize",
-        deserialize = "MerkleProof<G, typenum::U2>: Deserialize<'de>"
+    serialize = "MerkleProof<G, typenum::U2>: Serialize",
+    deserialize = "MerkleProof<G, typenum::U2>: Deserialize<'de>"
     ))]
     pub comm_d_proofs: MerkleProof<G, typenum::U2>,
     #[serde(bound(
-        serialize = "MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>: Serialize",
-        deserialize = "MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>: Deserialize<'de>"
+    serialize = "MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>: Serialize",
+    deserialize = "MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>: Deserialize<'de>"
     ))]
     pub comm_r_last_proof:
-        MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,
+    MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,
     #[serde(bound(
-        serialize = "ReplicaColumnProof<MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,>: Serialize",
-        deserialize = "ReplicaColumnProof<MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>: Deserialize<'de>"
+    serialize = "ReplicaColumnProof<MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,>: Serialize",
+    deserialize = "ReplicaColumnProof<MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>: Deserialize<'de>"
     ))]
     pub replica_column_proofs: ReplicaColumnProof<
         MerkleProof<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,
     >,
     #[serde(bound(
-        serialize = "LabelingProof<Tree::Hasher>: Serialize",
-        deserialize = "LabelingProof<Tree::Hasher>: Deserialize<'de>"
+    serialize = "LabelingProof<Tree::Hasher>: Serialize",
+    deserialize = "LabelingProof<Tree::Hasher>: Deserialize<'de>"
     ))]
     /// Indexed by layer in 1..layers.
     pub labeling_proofs: Vec<LabelingProof<Tree::Hasher>>,
     #[serde(bound(
-        serialize = "EncodingProof<Tree::Hasher>: Serialize",
-        deserialize = "EncodingProof<Tree::Hasher>: Deserialize<'de>"
+    serialize = "EncodingProof<Tree::Hasher>: Serialize",
+    deserialize = "EncodingProof<Tree::Hasher>: Deserialize<'de>"
     ))]
     pub encoding_proof: EncodingProof<Tree::Hasher>,
 }
@@ -215,7 +215,8 @@ impl<Tree: MerkleTreeTrait, G: Hasher> Proof<Tree, G> {
         let mut parents = vec![0; graph.degree()];
         graph
             .parents(challenge, &mut parents)
-            .expect("graph parents failure"); // FIXME: error handling
+            .expect("graph parents failure");
+        // FIXME: error handling
         check!(self.replica_column_proofs.verify(challenge, &parents));
 
         check!(self.verify_final_replica_layer(challenge));
@@ -241,7 +242,7 @@ impl<Tree: MerkleTreeTrait, G: Hasher> Proof<Tree, G> {
     ) -> bool {
         // Verify Labels Layer 1..layers
         for layer in 1..=layer_challenges.layers() {
-            trace!("verify labeling (layer: {})", layer,);
+            trace!("verify labeling (layer: {})", layer, );
 
             check!(self.labeling_proofs.get(layer - 1).is_some());
             let labeling_proof = &self
@@ -252,7 +253,8 @@ impl<Tree: MerkleTreeTrait, G: Hasher> Proof<Tree, G> {
                 .replica_column_proofs
                 .c_x
                 .get_node_at_layer(layer)
-                .expect("get_node_at_layer failure"); // FIXME: error handling
+                .expect("get_node_at_layer failure");
+            // FIXME: error handling
             check!(labeling_proof.verify(replica_id, labeled_node));
         }
 
@@ -271,18 +273,18 @@ impl<Tree: MerkleTreeTrait, G: Hasher> Proof<Tree, G> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplicaColumnProof<Proof: MerkleProofTrait> {
     #[serde(bound(
-        serialize = "ColumnProof<Proof>: Serialize",
-        deserialize = "ColumnProof<Proof>: Deserialize<'de>"
+    serialize = "ColumnProof<Proof>: Serialize",
+    deserialize = "ColumnProof<Proof>: Deserialize<'de>"
     ))]
     pub c_x: ColumnProof<Proof>,
     #[serde(bound(
-        serialize = "ColumnProof<Proof>: Serialize",
-        deserialize = "ColumnProof<Proof>: Deserialize<'de>"
+    serialize = "ColumnProof<Proof>: Serialize",
+    deserialize = "ColumnProof<Proof>: Deserialize<'de>"
     ))]
     pub drg_parents: Vec<ColumnProof<Proof>>,
     #[serde(bound(
-        serialize = "ColumnProof<Proof>: Serialize",
-        deserialize = "ColumnProof<Proof>: Deserialize<'de>"
+    serialize = "ColumnProof<Proof>: Serialize",
+    deserialize = "ColumnProof<Proof>: Deserialize<'de>"
     ))]
     pub exp_parents: Vec<ColumnProof<Proof>>,
 }
@@ -336,8 +338,8 @@ pub struct PersistentAux<D> {
 pub struct TemporaryAux<Tree: MerkleTreeTrait, G: Hasher> {
     /// The encoded nodes for 1..layers.
     #[serde(bound(
-        serialize = "StoreConfig: Serialize",
-        deserialize = "StoreConfig: Deserialize<'de>"
+    serialize = "StoreConfig: Serialize",
+    deserialize = "StoreConfig: Deserialize<'de>"
     ))]
     pub labels: Labels<Tree>,
     pub tree_d_config: StoreConfig,
@@ -401,7 +403,7 @@ impl<Tree: MerkleTreeTrait, G: Hasher> TemporaryAux<Tree, G> {
                 Tree::Arity::to_usize(),
                 &config,
             )
-            .context("tree_c")?;
+                .context("tree_c")?;
             // Note: from_data_store requires the base tree leaf count
             let tree_c = DiskTree::<
                 Tree::Hasher,
@@ -412,7 +414,7 @@ impl<Tree: MerkleTreeTrait, G: Hasher> TemporaryAux<Tree, G> {
                 tree_c_store,
                 get_merkle_tree_leafs(tree_c_size, Tree::Arity::to_usize())?,
             )
-            .context("tree_c")?;
+                .context("tree_c")?;
             tree_c.delete(config.clone()).context("tree_c")?;
 
             Ok(())
@@ -431,7 +433,7 @@ impl<Tree: MerkleTreeTrait, G: Hasher> TemporaryAux<Tree, G> {
                 tree_d_store,
                 get_merkle_tree_leafs(tree_d_size, BINARY_ARITY)?,
             )
-            .context("tree_d")?;
+                .context("tree_d")?;
 
             tree_d.delete(t_aux.tree_d_config).context("tree_d")?;
             trace!("tree d deleted");
@@ -575,8 +577,8 @@ type VerifyCallback = fn(&StoreConfig, usize, usize) -> Result<()>;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Labels<Tree: MerkleTreeTrait> {
     #[serde(bound(
-        serialize = "StoreConfig: Serialize",
-        deserialize = "StoreConfig: Deserialize<'de>"
+    serialize = "StoreConfig: Serialize",
+    deserialize = "StoreConfig: Deserialize<'de>"
     ))]
     pub labels: Vec<StoreConfig>,
     pub _h: PhantomData<Tree>,

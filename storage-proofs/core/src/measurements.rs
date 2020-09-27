@@ -54,21 +54,21 @@ pub enum Operation {
 
 #[cfg(feature = "measurements")]
 pub fn measure_op<T, F>(op: Operation, f: F) -> T
-where
-    F: FnOnce() -> T,
+    where
+        F: FnOnce() -> T,
 {
     let cpu_time_start = ProcessTime::now();
     let wall_start_time = Instant::now();
 
     #[cfg(feature = "profile")]
-    gperftools::profiler::PROFILER
+        gperftools::profiler::PROFILER
         .lock()
         .unwrap()
         .start(format!("./{:?}.profile", op))
         .unwrap();
     let x = f();
     #[cfg(feature = "profile")]
-    gperftools::profiler::PROFILER
+        gperftools::profiler::PROFILER
         .lock()
         .unwrap()
         .stop()
@@ -94,8 +94,8 @@ where
 
 #[cfg(not(feature = "measurements"))]
 pub fn measure_op<T, F>(_: Operation, f: F) -> T
-where
-    F: FnOnce() -> T,
+    where
+        F: FnOnce() -> T,
 {
     f()
 }

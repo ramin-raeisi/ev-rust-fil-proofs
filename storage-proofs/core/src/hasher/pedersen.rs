@@ -192,23 +192,23 @@ impl StdHasher for PedersenFunction {
     }
 }
 
-pub fn pedersen_hash<I: IntoIterator<Item = bool>>(
+pub fn pedersen_hash<I: IntoIterator<Item=bool>>(
     node_bits: I,
 ) -> fil_sapling_crypto::jubjub::edwards::Point<Bls12, fil_sapling_crypto::jubjub::PrimeOrder> {
     #[cfg(target_arch = "x86_64")]
-    {
-        use fil_sapling_crypto::pedersen_hash::pedersen_hash_bls12_381_with_precomp;
-        pedersen_hash_bls12_381_with_precomp::<_>(
-            Personalization::None,
-            node_bits,
-            &pedersen::JJ_PARAMS,
-        )
-    }
+        {
+            use fil_sapling_crypto::pedersen_hash::pedersen_hash_bls12_381_with_precomp;
+            pedersen_hash_bls12_381_with_precomp::<_>(
+                Personalization::None,
+                node_bits,
+                &pedersen::JJ_PARAMS,
+            )
+        }
     #[cfg(not(target_arch = "x86_64"))]
-    {
-        use fil_sapling_crypto::pedersen_hash::pedersen_hash;
-        pedersen_hash::<Bls12, _>(Personalization::None, node_bits, &pedersen::JJ_PARAMS)
-    }
+        {
+            use fil_sapling_crypto::pedersen_hash::pedersen_hash;
+            pedersen_hash::<Bls12, _>(Personalization::None, node_bits, &pedersen::JJ_PARAMS)
+        }
 }
 
 impl HashFunction<PedersenDomain> for PedersenFunction {
@@ -248,8 +248,8 @@ impl HashFunction<PedersenDomain> for PedersenFunction {
                 &bits,
                 &*pedersen::JJ_PARAMS,
             )?
-            .get_x()
-            .clone())
+                .get_x()
+                .clone())
         } else {
             Self::hash_circuit(cs, &bits)
         }
@@ -271,8 +271,8 @@ impl HashFunction<PedersenDomain> for PedersenFunction {
             &preimage,
             &*pedersen::JJ_PARAMS,
         )?
-        .get_x()
-        .clone())
+            .get_x()
+            .clone())
     }
 
     fn hash_circuit<CS: ConstraintSystem<Bls12>>(
@@ -287,8 +287,8 @@ impl HashFunction<PedersenDomain> for PedersenFunction {
         a_num: &num::AllocatedNum<Bls12>,
         b_num: &num::AllocatedNum<Bls12>,
     ) -> std::result::Result<num::AllocatedNum<Bls12>, SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>,
+        where
+            CS: ConstraintSystem<Bls12>,
     {
         // Allocate as booleans
         let a = a_num.to_bits_le(cs.namespace(|| "a_bits"))?;

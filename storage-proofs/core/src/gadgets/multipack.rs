@@ -7,9 +7,9 @@ use ff::{Field, PrimeField, ScalarEngine};
 
 /// Takes a sequence of booleans and exposes them as a single compact Num.
 pub fn pack_bits<E, CS>(mut cs: CS, bits: &[Boolean]) -> Result<AllocatedNum<E>, SynthesisError>
-where
-    E: ScalarEngine,
-    CS: ConstraintSystem<E>,
+    where
+        E: ScalarEngine,
+        CS: ConstraintSystem<E>,
 {
     let mut num = Num::<E>::zero();
     let mut coeff = E::Fr::one();

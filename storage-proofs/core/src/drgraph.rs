@@ -323,7 +323,7 @@ mod tests {
         let tree = create_base_merkle_tree::<
             MerkleTreeWrapper<H, DiskStore<H::Domain>, U, typenum::U0, typenum::U0>,
         >(config, g.size(), mmapped)
-        .unwrap();
+            .unwrap();
         let proof = tree.gen_proof(2).unwrap();
 
         assert!(proof.verify());

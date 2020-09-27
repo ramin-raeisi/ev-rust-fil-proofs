@@ -120,6 +120,7 @@ mod tests {
             assert!(fr_result.is_err(), "expected a decoding error")
         }
     }
+
     #[test]
     fn test_bytes_into_fr_into_bytes() {
         bytes_fr_test(

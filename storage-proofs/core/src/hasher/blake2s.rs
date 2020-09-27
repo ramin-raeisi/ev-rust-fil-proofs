@@ -78,7 +78,7 @@ impl StdHasher for Blake2sFunction {
 }
 
 #[derive(
-    Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Default, Serialize, Deserialize, Hash,
+Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Default, Serialize, Deserialize, Hash,
 )]
 pub struct Blake2sDomain(pub [u8; 32]);
 
@@ -265,8 +265,8 @@ impl HashFunction<Blake2sDomain> for Blake2sFunction {
         a_num: &num::AllocatedNum<Bls12>,
         b_num: &num::AllocatedNum<Bls12>,
     ) -> std::result::Result<num::AllocatedNum<Bls12>, SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>,
+        where
+            CS: ConstraintSystem<Bls12>,
     {
         // Allocate as booleans
         let a = a_num.to_bits_le(cs.namespace(|| "a_bits"))?;
