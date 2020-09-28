@@ -1,20 +1,15 @@
-use log::*;
-use merkletree::store::{StoreConfig};
-use merkletree::merkle::Element;
 use anyhow::Context;
+use log::*;
+use merkletree::merkle::Element;
+use merkletree::store::StoreConfig;
 use storage_proofs_core::{
-    cache_key::CacheKey,
-    hasher::{Hasher},
-    merkle::MerkleTreeTrait,
-    error::Result,
-    drgraph::Graph,
+    cache_key::CacheKey, drgraph::Graph, error::Result, hasher::Hasher, merkle::MerkleTreeTrait,
 };
 
-use crate::stacked::vanilla::{StackedBucketGraph, proof::LayerState};
+use crate::stacked::vanilla::{proof::LayerState, StackedBucketGraph};
 
 pub mod multi;
 pub mod single;
-
 
 /// Prepares the necessary `StoreConfig`s with which the layers are stored.
 /// Also checks for already existing layers and marks them as such.
@@ -102,4 +97,3 @@ pub fn is_layer_written<Tree: 'static + MerkleTreeTrait>(
 
     Ok(true)
 }
-

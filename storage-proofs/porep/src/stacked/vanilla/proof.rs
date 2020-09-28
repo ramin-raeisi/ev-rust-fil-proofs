@@ -296,12 +296,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     }
 
     /// Generates the layers as needed for encoding.
-    #[allow(clippy::type_complexity)]
-    fn generate_labels_for_encoding(// [P1] Start SDR calculation
-                                    graph: &StackedBucketGraph<Tree::Hasher>,
-                                    layer_challenges: &LayerChallenges,
-                                    replica_id: &<Tree::Hasher as Hasher>::Domain,
-                                    config: StoreConfig,
+    fn generate_labels_for_encoding(
+        graph: &StackedBucketGraph<Tree::Hasher>,
+        layer_challenges: &LayerChallenges,
+        replica_id: &<Tree::Hasher as Hasher>::Domain,
+        config: StoreConfig,
     ) -> Result<(Labels<Tree>, Vec<LayerState>)> {
         let mut parent_cache = graph.parent_cache()?;
 
@@ -1318,14 +1317,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         config: StoreConfig,
         replica_path: PathBuf,
     ) -> Result<TransformedLayers<Tree, G>> {
-        // [P1] Generate key layers.
+        // Generate key layers.
         let labels = measure_op(EncodeWindowTimeAll, || {
-            // For the entire Sector, SDR is calculated and 11 layers are calculated
             Self::generate_labels_for_encoding(graph, layer_challenges, replica_id, config.clone())
                 .context("failed to generate labels")
         })?
             .0;
-        // [P2]
 
         Self::transform_and_replicate_layers_inner(
             graph,
@@ -1735,7 +1732,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         info!("replicate_phase1");
 
         let labels = measure_op(EncodeWindowTimeAll, || {
-            Self::generate_labels_for_encoding(&pp.graph, &pp.layer_challenges, replica_id, config) // [P1] Start SDR calculation
+            Self::generate_labels_for_encoding(&pp.graph, &pp.layer_challenges, replica_id, config)
         })?
             .0;
 
@@ -2140,8 +2137,7 @@ mod tests {
             &layer_challenges,
             &replica_id,
             config.clone(),
-        )
-            .expect("label generation failed");
+        ).expect("label generation failed");
         for state in &label_states[..off] {
             assert!(state.generated);
         }
@@ -2155,6 +2151,133 @@ mod tests {
             &pp,
             &replica_id,
             mmapped_data.as_mut(),
+            Some(config),
+        )
+            .expect("failed to extract data");
+
+        assert_eq!(data, decoded_data);
+
+        cache_dir.close().expect("Failed to remove cache dir");
+    }
+
+    #[test]
+    fn test_resume_seal() {
+        // pretty_env_logger::try_init().ok();
+
+        type Tree = DiskTree<PoseidonHasher, typenum::U8, typenum::U8, typenum::U2>;
+
+        let rng = &mut XorShiftRng::from_seed(crate::TEST_SEED);
+        let replica_id = <PoseidonHasher as Hasher>::Domain::random(rng);
+        let nodes = 64 * get_base_tree_count::<Tree>();
+
+        let data: Vec<u8> = (0..nodes)
+            .flat_map(|_| {
+                let v = <PoseidonHasher as Hasher>::Domain::random(rng);
+                v.into_bytes()
+            })
+            .collect();
+
+        // MT for original data is always named tree-d, and it will be
+        // referenced later in the process as such.
+        let cache_dir = tempfile::tempdir().expect("tempdir failure");
+        let config = StoreConfig::new(
+            cache_dir.path(),
+            CacheKey::CommDTree.to_string(),
+            default_rows_to_discard(nodes, BINARY_ARITY),
+        );
+
+        // Generate a replica path.
+        let replica_path1 = cache_dir.path().join("replica-path-1");
+        let replica_path2 = cache_dir.path().join("replica-path-2");
+        let replica_path3 = cache_dir.path().join("replica-path-3");
+        let mut mmapped_data1 = setup_replica(&data, &replica_path1);
+        let mut mmapped_data2 = setup_replica(&data, &replica_path2);
+        let mut mmapped_data3 = setup_replica(&data, &replica_path3);
+
+        let layer_challenges = LayerChallenges::new(DEFAULT_STACKED_LAYERS, 5);
+
+        let sp = SetupParams {
+            nodes,
+            degree: BASE_DEGREE,
+            expansion_degree: EXP_DEGREE,
+            porep_id: [32; 32],
+            layer_challenges: layer_challenges.clone(),
+        };
+
+        let pp = StackedDrg::<Tree, Blake2sHasher>::setup(&sp).expect("setup failed");
+
+        let clear_temp = || {
+            for entry in glob::glob(&(cache_dir.path().to_string_lossy() + "/*.dat")).unwrap() {
+                let entry = entry.unwrap();
+                if entry.is_file() {
+                    // delete everything except the data-layers
+                    if !entry.to_string_lossy().contains("data-layer") {
+                        std::fs::remove_file(entry).unwrap();
+                    }
+                }
+            }
+        };
+
+        // first replicaton
+        StackedDrg::<Tree, Blake2sHasher>::replicate(
+            &pp,
+            &replica_id,
+            (mmapped_data1.as_mut()).into(),
+            None,
+            config.clone(),
+            replica_path1.clone(),
+        )
+            .expect("replication failed 1");
+        clear_temp();
+
+        // replicate a second time
+        StackedDrg::<Tree, Blake2sHasher>::replicate(
+            &pp,
+            &replica_id,
+            (mmapped_data2.as_mut()).into(),
+            None,
+            config.clone(),
+            replica_path2.clone(),
+        )
+            .expect("replication failed 2");
+        clear_temp();
+
+        // delete last 2 layers
+        let (_, label_states) = StackedDrg::<Tree, Blake2sHasher>::generate_labels_for_encoding(
+            &pp.graph,
+            &layer_challenges,
+            &replica_id,
+            config.clone(),
+        )
+            .expect("label generation failed");
+        let off = label_states.len() - 3;
+        for label_state in &label_states[off..] {
+            let config = &label_state.config;
+            let data_path = StoreConfig::data_path(&config.path, &config.id);
+            std::fs::remove_file(data_path).expect("failed to delete layer cache");
+        }
+
+        // replicate a third time
+        StackedDrg::<Tree, Blake2sHasher>::replicate(
+            &pp,
+            &replica_id,
+            (mmapped_data3.as_mut()).into(),
+            None,
+            config.clone(),
+            replica_path3.clone(),
+        )
+            .expect("replication failed 3");
+        clear_temp();
+
+        assert_ne!(data, &mmapped_data1[..], "replication did not change data");
+
+        assert_eq!(&mmapped_data1[..], &mmapped_data2[..]);
+        assert_eq!(&mmapped_data2[..], &mmapped_data3[..]);
+
+        let decoded_data = StackedDrg::<Tree, Blake2sHasher>::extract_all(
+            &pp,
+            &replica_id,
+            mmapped_data1.as_mut(),
             Some(config),
         )
             .expect("failed to extract data");

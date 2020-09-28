@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use byte_slice_cast::*;
 use crossbeam::thread;
 use digest::generic_array::{
@@ -27,6 +27,7 @@ use super::super::{
     graph::{StackedBucketGraph, DEGREE, EXP_DEGREE},
     memory_handling::{setup_create_label_memory, CacheReader},
     params::{Labels, LabelsCache},
+    proof::LayerState,
     utils::*,
     proof::LayerState,
 };
@@ -208,9 +209,7 @@ fn create_layer_labels(
 ) -> Result<()> {
     info!("Creating labels for layer {}", cur_layer);
     // num_producers is the number of producer threads
-    let (lookahead, num_producers, producer_stride) = if cur_layer == 1 {
-        (400, 1, 16)
-    } else {
+    let (lookahead, num_producers, producer_stride) = {
         // NOTE: Stride must not exceed `sdr_parents_cache_window_nodes`.
         // If it does, the process will deadlock with producers and consumers
         // waiting for each other.
@@ -413,6 +412,7 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let layer_states = super::prepare_layers::<Tree>(graph, &config, layers);
 
+    < < < < < < < HEAD
     // For now, we require it due to changes in encodings structure.
     let mut labels: Vec<DiskStore<<Tree::Hasher as Hasher>::Domain>> = Vec::with_capacity(layers);
 
@@ -420,7 +420,7 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
     let node_count = graph.size() as u64;
     let cache_window_nodes = settings::SETTINGS
         .lock()
-        .expect("sdr_parents_cache_window_nodes settings lock failure")
+        .expect("sdr_parents_cache_size settings lock failure")
         .sdr_parents_cache_size as usize;
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
@@ -472,30 +472,16 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
             let layer_config = &layer_state.config;
 
             info!("  storing labels on disk");
-            // Construct and persist the layer data.
-            let layer_store: DiskStore<<Tree::Hasher as Hasher>::Domain> =
-                DiskStore::new_from_slice_with_config(
-                    graph.size(),
-                    Tree::Arity::to_usize(),
-                    &layer_labels,
-                    layer_config.clone(),
-                )?;
+            super::write_layer(&layer_labels, layer_config).context("failed to store labels")?;
+
             info!(
                 "  generated layer {} store with id {}",
                 layer, layer_config.id
             );
 
             std::mem::swap(&mut layer_labels, &mut exp_labels);
-
-            // Track the layer specific store and StoreConfig for later retrieval.
-            labels.push(layer_store);
         }
     }
-    assert_eq!(
-        labels.len(),
-        layers,
-        "Invalid amount of layers encoded expected"
-    );
 
     Ok((
         Labels::<Tree> {
@@ -505,7 +491,6 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
         layer_states,
     ))
 }
-
 
 #[allow(clippy::type_complexity)]
 pub fn create_labels_for_decoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]>>(
@@ -597,9 +582,7 @@ pub fn create_labels_for_decoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
         "Invalid amount of layers encoded expected"
     );
 
-    Ok(
-        LabelsCache::<Tree> { labels },
-    )
+    Ok(LabelsCache::<Tree> { labels })
 }
 
 #[cfg(test)]
