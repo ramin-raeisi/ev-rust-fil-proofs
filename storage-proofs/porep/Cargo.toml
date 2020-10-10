@@ -19,7 +19,9 @@ mapr = "0.8.0"
 num-bigint = "0.2"
 num-traits = "0.2"
 sha2 = { version = "0.9.1", features = ["compress"] }
-rayon = "1.0.0"
+rayon = "1.2.1"
+rayon-core = "1.6.1"
+rayon-futures = "0.1.1"
 serde = { version = "1.0", features = ["derive"] }
 ff = { git = "https://github.com/nilfoundation/crusty3-ff", rev = "6c3e204", package = "fff", features = ["derive"] }
 bellperson = { git = "ssh://git@github.com/nilfoundation/crusty3-zk.git", branch = "master", features = ["gpu", "multicore"] }

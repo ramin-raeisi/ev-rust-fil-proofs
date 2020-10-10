@@ -158,7 +158,7 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
             .collect::<Result<_>>()?;
         let proofs: Vec<_> = multi_proof.circuit_proofs.iter().collect();
 
-        let res = groth16::verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &proofs, &inputs);
+        let res = groth16::verify_proofs_batch(&pvk, &mut rand::rngs::OsRng, &proofs, &inputs)?;
         Ok(res)
     }
 
@@ -278,7 +278,7 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
             &mut rand::rngs::OsRng,
             &circuit_proofs[..],
             &inputs,
-        );
+        )?;
 
         Ok(res)
     }
