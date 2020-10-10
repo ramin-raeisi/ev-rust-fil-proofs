@@ -28,8 +28,7 @@ use super::super::{
     memory_handling::{setup_create_label_memory, CacheReader},
     params::{Labels, LabelsCache},
     proof::LayerState,
-    utils::*,
-    proof::LayerState,
+    utils::*
 };
 
 const NODE_WORDS: usize = NODE_SIZE / size_of::<u32>();
@@ -412,7 +411,6 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let layer_states = super::prepare_layers::<Tree>(graph, &config, layers);
 
-    < < < < < < < HEAD
     // For now, we require it due to changes in encodings structure.
     let mut labels: Vec<DiskStore<<Tree::Hasher as Hasher>::Domain>> = Vec::with_capacity(layers);
 
