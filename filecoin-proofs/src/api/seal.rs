@@ -41,9 +41,6 @@ use crate::types::{
     SectorSize, Ticket, BINARY_ARITY,
 };
 
-use rayon::prelude::*;
-use thread_binder::ThreadPoolBuilder;
-
 #[allow(clippy::too_many_arguments)]
 pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
     porep_config: PoRepConfig,
@@ -61,11 +58,6 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
         T: AsRef<Path>,
 {
     info!("seal_pre_commit_phase1:start: {:?}", sector_id);
-
-    ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
-        .build_global()
-        .expect("Thread pool build failed");
 
     // Sanity check all input path types.
     ensure!(
@@ -212,11 +204,6 @@ pub fn seal_pre_commit_phase2<R, S, Tree: 'static + MerkleTreeTrait>(
 {
     info!("seal_pre_commit_phase2:start");
 
-    ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
-        .build_global()
-        .expect("Thread pool build failed");
-
     // Sanity check all input path types.
     ensure!(
         metadata(cache_path.as_ref())?.is_dir(),
@@ -341,11 +328,6 @@ pub fn seal_commit_phase1<T: AsRef<Path>, Tree: 'static + MerkleTreeTrait>(
 ) -> Result<SealCommitPhase1Output<Tree>> {
     info!("seal_commit_phase1:start: {:?}", sector_id);
 
-    ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
-        .build_global()
-        .expect("Thread pool build failed");
-
     // Sanity check all input path types.
     ensure!(
         metadata(cache_path.as_ref())?.is_dir(),
@@ -468,11 +450,6 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
     sector_id: SectorId,
 ) -> Result<SealCommitOutput> {
     info!("seal_commit_phase2:start: {:?}", sector_id);
-
-    ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
-        .build_global()
-        .expect("Thread pool build failed");
 
     let SealCommitPhase1Output {
         vanilla_proofs,
