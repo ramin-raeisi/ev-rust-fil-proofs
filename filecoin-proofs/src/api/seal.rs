@@ -41,6 +41,9 @@ use crate::types::{
     SectorSize, Ticket, BINARY_ARITY,
 };
 
+use rayon::prelude::*;
+use thread_binder::ThreadPoolBuilder;
+
 #[allow(clippy::too_many_arguments)]
 pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
     porep_config: PoRepConfig,
@@ -52,10 +55,10 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
     ticket: Ticket,
     piece_infos: &[PieceInfo],
 ) -> Result<SealPreCommitPhase1Output<Tree>>
-where
-    R: AsRef<Path>,
-    S: AsRef<Path>,
-    T: AsRef<Path>,
+    where
+        R: AsRef<Path>,
+        S: AsRef<Path>,
+        T: AsRef<Path>,
 {
     info!("seal_pre_commit_phase1:start: {:?}", sector_id);
 
@@ -198,9 +201,9 @@ pub fn seal_pre_commit_phase2<R, S, Tree: 'static + MerkleTreeTrait>(
     cache_path: S,
     replica_path: R,
 ) -> Result<SealPreCommitOutput>
-where
-    R: AsRef<Path>,
-    S: AsRef<Path>,
+    where
+        R: AsRef<Path>,
+        S: AsRef<Path>,
 {
     info!("seal_pre_commit_phase2:start");
 
@@ -416,16 +419,16 @@ pub fn seal_commit_phase1<T: AsRef<Path>, Tree: 'static + MerkleTreeTrait>(
     >>::setup(&compound_setup_params)?;
 
     let vanilla_proofs = StackedDrg::prove_all_partitions( //seal_commit_phase1
-        &compound_public_params.vanilla_params,
-        &public_inputs,
-        &private_inputs,
-        StackedCompound::partition_count(&compound_public_params),
+                                                           &compound_public_params.vanilla_params,
+                                                           &public_inputs,
+                                                           &private_inputs,
+                                                           StackedCompound::partition_count(&compound_public_params),
     )?;
 
     let sanity_check = StackedDrg::<Tree, DefaultPieceHasher>::verify_all_partitions( //TODO: Verification function
-        &compound_public_params.vanilla_params,
-        &public_inputs,
-        &vanilla_proofs,
+                                                                                      &compound_public_params.vanilla_params,
+                                                                                      &public_inputs,
+                                                                                      &vanilla_proofs,
     )?;
     ensure!(sanity_check, "Invalid vanilla proof generated");
 
@@ -499,6 +502,12 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
     >>::setup(&compound_setup_params)?;
 
     info!("snark_proof:start");
+
+    ThreadPoolBuilder::new()
+        .num_threads(num_cpus::get())
+        .build_global()
+        .expect("Thread pool build failed");
+
     let groth_proofs = StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs(
         &public_inputs,
         vanilla_proofs,
@@ -528,7 +537,7 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
         seed,
         &buf,
     )
-    .context("post-seal verification sanity check failed")?;
+        .context("post-seal verification sanity check failed")?;
 
     let out = SealCommitOutput { proof: buf };
 
@@ -781,7 +790,7 @@ pub fn verify_batch_seal<Tree: 'static + MerkleTreeTrait>(
                 .expect("unknown sector size") as usize,
         },
     )
-    .map_err(Into::into);
+        .map_err(Into::into);
 
     info!("verify_batch_seal:finish");
     result

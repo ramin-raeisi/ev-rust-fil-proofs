@@ -54,6 +54,8 @@ structopt = "0.3.12"
 humansize = "1.1.0"
 indicatif = "0.14.0"
 groupy = { git = "https://github.com/nilfoundation/crusty3-group.git", version = "0.3.1" }
+thread_binder = "0.1.0"
+num_cpus = { version = "1" }
 
 [dependencies.reqwest]
 version = "0.10"
