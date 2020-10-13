@@ -170,31 +170,13 @@ impl<T: FromByteSlice> CacheReader<T> {
     }
 
     fn map_buf(offset: u64, len: usize, file: &File) -> Result<Mmap> {
-        match unsafe {
+        unsafe {
             MmapOptions::new()
                 .offset(offset)
                 .len(len)
                 .private()
-                .lock()
                 .map(file)
-        }
-            .and_then(|mut parents| {
-                parents.mlock()?;
-                Ok(parents)
-            }) {
-            Ok(parents) => Ok(parents),
-            Err(err) => {
-                // fallback to not locked if permissions are not available
-                debug!("failed to lock map {:?}, falling back", err);
-                let parents = unsafe {
-                    MmapOptions::new()
-                        .offset(offset)
-                        .len(len)
-                        .private()
-                        .map(file)?
-                };
-                Ok(parents)
-            }
+                .map_err(|e| e.into())
         }
     }
 

@@ -209,15 +209,18 @@ fn create_layer_labels(
 ) -> Result<()> {
     info!("Creating labels for layer {}", cur_layer);
     // num_producers is the number of producer threads
-    let settings = settings::SETTINGS.lock().expect("settings lock failure");
-    let lookahead = settings.multicore_sdr_lookahead;
-    let num_producers = settings.multicore_sdr_producers;
+    let (lookahead, num_producers, producer_stride) = {
+        let settings = settings::SETTINGS.lock().expect("settings lock failure");
+        let lookahead = settings.multicore_sdr_lookahead;
+        let num_producers = settings.multicore_sdr_producers;
+        // NOTE: Stride must not exceed the number of nodes in parents_cache's window. If it does, the process will deadlock
+        // with producers and consumers waiting for each other.
+        let producer_stride = settings
+            .multicore_sdr_producer_stride
+            .min(parents_cache.window_nodes() as u64);
 
-    // NOTE: Stride must not exceed the number of nodes in parents_cache's window. If it does, the process will deadlock
-    // with producers and consumers waiting for each other.
-    let producer_stride = settings
-        .multicore_sdr_producer_stride
-        .min(parents_cache.window_nodes() as u64);
+        (lookahead, num_producers, producer_stride)
+    };
 
     const BYTES_PER_NODE: usize = (NODE_SIZE * DEGREE) + SHA_BLOCK_SIZE;
 
@@ -260,9 +263,8 @@ fn create_layer_labels(
                 // This could fail, but we will ignore the error if so.
                 // It will be logged as a warning by `bind_core`.
                 debug!("binding core in producer thread {}", i);
-                if let Some(&core_index) = core_index {
-                    let _ = bind_core(core_index);
-                }
+                // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
+                let _cleanup_handle = core_index.map(|c| bind_core(*c));
 
                 create_label_runner(
                     parents_cache,
