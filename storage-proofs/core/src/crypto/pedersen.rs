@@ -11,10 +11,7 @@ use crate::settings;
 
 lazy_static! {
     pub static ref JJ_PARAMS: JubjubBls12 = JubjubBls12::new_with_window_size(
-        settings::SETTINGS
-            .lock()
-            .expect("settings lock failure")
-            .pedersen_hash_exp_window_size
+        settings::SETTINGS.pedersen_hash_exp_window_size
     );
 }
 

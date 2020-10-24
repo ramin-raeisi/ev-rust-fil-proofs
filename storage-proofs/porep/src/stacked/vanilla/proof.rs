@@ -304,10 +304,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     ) -> Result<(Labels<Tree>, Vec<LayerState>)> {
         let mut parent_cache = graph.parent_cache()?;
 
-        if settings::SETTINGS
-            .lock()
-            .expect("use_multicore_sdr settings lock failure")
-            .use_multicore_sdr
+        if settings::SETTINGS.use_multicore_sdr
         {
             info!("multi core replication");
             create_label::multi::create_labels_for_encoding(
@@ -338,10 +335,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     ) -> Result<LabelsCache<Tree>> {
         let mut parent_cache = graph.parent_cache()?;
 
-        if settings::SETTINGS
-            .lock()
-            .expect("use_multicore_sdr settings lock failure")
-            .use_multicore_sdr
+        if settings::SETTINGS.use_multicore_sdr
         {
             info!("multi core replication");
             create_label::multi::create_labels_for_decoding(
@@ -393,10 +387,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             ColumnArity: 'static + PoseidonArity,
             TreeArity: PoseidonArity,
     {
-        if settings::SETTINGS
-            .lock()
-            .expect("use_gpu_column_builder settings lock failure")
-            .use_gpu_column_builder
+        if settings::SETTINGS.use_gpu_column_builder
         {
             Self::generate_tree_c_gpu::<ColumnArity, TreeArity>(
                 layers,
@@ -443,22 +434,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             // Override these values with care using environment variables:
             // FIL_PROOFS_MAX_GPU_COLUMN_BATCH_SIZE, FIL_PROOFS_MAX_GPU_TREE_BATCH_SIZE, and
             // FIL_PROOFS_COLUMN_WRITE_BATCH_SIZE respectively.
-            let max_gpu_column_batch_size = settings::SETTINGS
-                .lock()
-                .expect("max_gpu_column_batch_size settings lock failure")
-                .max_gpu_column_batch_size as usize;
-            let max_gpu_tree_batch_size = settings::SETTINGS
-                .lock()
-                .expect("max_gpu_tree_batch_size settings lock failure")
-                .max_gpu_tree_batch_size as usize;
-            let column_write_batch_size = settings::SETTINGS
-                .lock()
-                .expect("column_write_batch_size settings lock failure")
-                .column_write_batch_size as usize;
+            let max_gpu_column_batch_size = settings::SETTINGS.max_gpu_column_batch_size as usize;
+            let max_gpu_tree_batch_size = settings::SETTINGS.max_gpu_tree_batch_size as usize;
+            let column_write_batch_size = settings::SETTINGS.column_write_batch_size as usize;
 
             // Ryan 
             let mut batchertype_gpus = Vec::new();
-            if settings::SETTINGS.lock().unwrap().use_gpu_column_builder {
+            if settings::SETTINGS.use_gpu_column_builder {
                 let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
@@ -809,14 +791,14 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         data.ensure_data()?;
         let last_layer_labels = labels.labels_for_last_layer()?;
 
-        if settings::SETTINGS.lock().unwrap().use_gpu_tree_builder {    // generate_tree_r_last
+        if settings::SETTINGS.use_gpu_tree_builder {    // generate_tree_r_last
             info!("[tree_r_last] generating tree r last using the GPU");
             let max_gpu_tree_batch_size =
-                settings::SETTINGS.lock().unwrap().max_gpu_tree_batch_size as usize;
+                settings::SETTINGS.max_gpu_tree_batch_size as usize;
 
             // Ryan 
             let mut batchertype_gpus = Vec::new();
-            if settings::SETTINGS.lock().unwrap().use_gpu_tree_builder {
+            if settings::SETTINGS.use_gpu_tree_builder {
                 let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
@@ -1082,14 +1064,14 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         data.ensure_data()?;
         let last_layer_labels = labels.labels_for_last_layer()?;
 
-        if settings::SETTINGS.lock().unwrap().use_gpu_tree_builder {    // generate_tree_r_last
+        if settings::SETTINGS.use_gpu_tree_builder {    // generate_tree_r_last
             info!("[tree_r_last] generating tree r last using the GPU");
             let max_gpu_tree_batch_size =
-                settings::SETTINGS.lock().unwrap().max_gpu_tree_batch_size as usize;
+                settings::SETTINGS.max_gpu_tree_batch_size as usize;
 
             // Ryan 
             let mut batchertype_gpus = Vec::new(); // FIXME-Ryan: batchertype_gpus
-            if settings::SETTINGS.lock().unwrap().use_gpu_tree_builder {
+            if settings::SETTINGS.use_gpu_tree_builder {
                 let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
@@ -1786,10 +1768,10 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             tree_count,
         )?;
 
-        if settings::SETTINGS.lock().unwrap().use_gpu_tree_builder {    // generate_fake_tree_r_last
+        if settings::SETTINGS.use_gpu_tree_builder {    // generate_fake_tree_r_last
             info!("fake generating tree r last using the GPU");
             let max_gpu_tree_batch_size =
-                settings::SETTINGS.lock().unwrap().max_gpu_tree_batch_size as usize;
+                settings::SETTINGS.max_gpu_tree_batch_size as usize;
 
             // let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
             // let _bus_num = all_bus_ids.len();
@@ -1801,8 +1783,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                                           nodes_count,
                                                                           max_gpu_tree_batch_size,
                                                                           tree_r_last_config.rows_to_discard,
-            )
-                .expect("failed to create TreeBuilder");
+            ).expect("failed to create TreeBuilder");
 
             // Allocate zeros once and reuse.
             let zero_leaves: Vec<Fr> = vec![Fr::zero(); max_gpu_tree_batch_size];
