@@ -584,7 +584,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 TreeArity,
                             >::new(
                                 // Some(BatcherType::GPU),
-                                batchertype_gpus[find_idle_gpu].as_ref(), // TODO-Ryan: Use multi
+                                batchertype_gpus[find_idle_gpu].clone(), // TODO-Ryan: Use multi
                                 // GPUs
                                 nodes_count,
                                 max_gpu_column_batch_size,
@@ -907,7 +907,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             info!("[tree_r_last] Use multi GPUs, total_gpu={}, i={}, use_gpu_index={}", _bus_num, i, gpu_index);
                             let mut tree_builder = TreeBuilder::<Tree::Arity>::new(       // GPU constructs Merkle tree neptune
                                                                                           // Some(BatcherType::GPU),
-                                                                                          batchertype_gpus[gpu_index].as_ref(), // TODO: Use multi GPUs for `generate_tree_r_last`
+                                                                                          batchertype_gpus[gpu_index].clone(), // TODO: Use multi GPUs for `generate_tree_r_last`
                                                                                           nodes_count,
                                                                                           max_gpu_tree_batch_size,
                                                                                           tree_r_last_config.rows_to_discard,
