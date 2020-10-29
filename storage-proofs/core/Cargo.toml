@@ -33,7 +33,7 @@ blake2s_simd = "0.5"
 toml = "0.5"
 ff = { git = "https://github.com/nilfoundation/crusty3-ff", rev = "6c3e204", package = "fff", features = ["derive"] }
 bellperson = { git = "ssh://git@github.com/nilfoundation/crusty3-zk.git", branch = "master", features = ["gpu", "multicore"] }
-paired = { git = "https://github.com/nilfoundation/crusty3-pairing", version = "0.20.0", features = ["serde"] }
+paired = { git = "https://github.com/nilfoundation/crusty3-pairing", branch = "master", features = ["serde"] }
 fil-sapling-crypto = { git = "https://github.com/nilfoundation/crusty3-sapling", branch = "master" }
 serde_json = "1.0"
 log = "0.4.7"

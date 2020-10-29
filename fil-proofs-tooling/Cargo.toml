@@ -21,7 +21,7 @@ commandspec = "0.12.2"
 chrono = { version = "0.4.7", features = ["serde"] }
 memmap = "0.7.0"
 bellperson = { git = "ssh://git@github.com/nilfoundation/crusty3-zk.git", branch = "master", features = ["gpu", "multicore"] }
-paired = { git = "https://github.com/nilfoundation/crusty3-pairing", version = "0.20.0" }
+paired = { git = "https://github.com/nilfoundation/crusty3-pairing", branch = "master" }
 fil-sapling-crypto = { git = "https://github.com/nilfoundation/crusty3-sapling", branch = "master" }
 rand = "0.7"
 storage-proofs = { path = "../storage-proofs" }
