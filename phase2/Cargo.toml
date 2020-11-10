@@ -32,7 +32,7 @@ num_cpus = "1.13.0"
 crossbeam = "0.8.0"
 
 [features]
-default = ["pairing", "gpu"]
+default = ["blst", "gpu"]
 gpu = ["bellperson/gpu", "filecoin-proofs/gpu", "storage-proofs/gpu", "filecoin-hashers/gpu"]
 pairing = ["bellperson/pairing", "filecoin-proofs/pairing", "storage-proofs/pairing", "filecoin-hashers/pairing"]
 blst = ["bellperson/blst", "filecoin-proofs/blst", "storage-proofs/blst", "filecoin-hashers/blst"]
