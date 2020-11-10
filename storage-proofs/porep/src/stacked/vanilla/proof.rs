@@ -5,8 +5,9 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::thread;
+use std::time::Duration;
 
-use generic_array::GenericArray;
+use digest::generic_array::{GenericArray, sequence::GenericSequence};
 use anyhow::Context;
 use bellperson::bls::Fr;
 use bincode::deserialize;
@@ -52,9 +53,11 @@ use super::{
     },
 };
 
+use fff::Field;
+
 use neptune::batch_hasher::BatcherType;
-use neptune::column_tree_builder::ColumnTreeBuilder;
-use neptune::tree_builder::TreeBuilder;
+use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
+use neptune::tree_builder::{TreeBuilder, TreeBuilderTrait};
 
 pub const TOTAL_PARENTS: usize = 37;
 
@@ -440,15 +443,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             // FIL_PROOFS_MAX_GPU_COLUMN_BATCH_SIZE, FIL_PROOFS_MAX_GPU_TREE_BATCH_SIZE, and
             // FIL_PROOFS_COLUMN_WRITE_BATCH_SIZE respectively.
             let max_gpu_column_batch_size =
-                settings::SETTINGS.lock().unwrap().max_gpu_column_batch_size as usize;
+                settings::SETTINGS.max_gpu_column_batch_size as usize;
             let max_gpu_tree_batch_size =
-                settings::SETTINGS.lock().unwrap().max_gpu_tree_batch_size as usize;
+                settings::SETTINGS.max_gpu_tree_batch_size as usize;
             let column_write_batch_size =
-                settings::SETTINGS.lock().unwrap().column_write_batch_size as usize;
+                settings::SETTINGS.column_write_batch_size as usize;
 
             // Ryan
             let mut batchertype_gpus = Vec::new();
-            if settings::SETTINGS.lock().unwrap().use_gpu_column_builder {
+            if settings::SETTINGS.use_gpu_column_builder {
                 let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
@@ -1072,14 +1075,14 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         data.ensure_data()?;
         let last_layer_labels = labels.labels_for_last_layer()?;
 
-        if settings::SETTINGS.lock().unwrap().use_gpu_tree_builder {    // generate_tree_r_last
+        if settings::SETTINGS.use_gpu_tree_builder {    // generate_tree_r_last
             info!("[tree_r_last] generating tree r last using the GPU");
             let max_gpu_tree_batch_size =
-                settings::SETTINGS.lock().unwrap().max_gpu_tree_batch_size as usize;
+                settings::SETTINGS.max_gpu_tree_batch_size as usize;
 
             // Ryan
             let mut batchertype_gpus = Vec::new(); // FIXME-Ryan: batchertype_gpus
-            if settings::SETTINGS.lock().unwrap().use_gpu_tree_builder {
+            if settings::SETTINGS.use_gpu_tree_builder {
                 let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
@@ -1307,13 +1310,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         config: StoreConfig,
         replica_path: PathBuf,
     ) -> Result<TransformedLayers<Tree, G>> {
-        // Generate key layers.
+        // [P1] Generate key layers.
         let labels = measure_op(EncodeWindowTimeAll, || {
+            // For the entire Sector, calculate SDR and calculate 11 layers
             Self::generate_labels_for_encoding(graph, layer_challenges, replica_id, config.clone())
                 .context("failed to generate labels")
         })?
             .0;
 
+        // [P2]
         Self::transform_and_replicate_layers_inner(
             graph,
             layer_challenges,
