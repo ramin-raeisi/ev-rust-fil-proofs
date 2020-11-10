@@ -11,13 +11,13 @@ use digest::generic_array::{
     typenum::{Unsigned, U64},
     GenericArray,
 };
+use filecoin_hashers::Hasher;
 use log::*;
 use mapr::MmapMut;
 use merkletree::store::{DiskStore, StoreConfig};
 use storage_proofs_core::{
     cache_key::CacheKey,
     drgraph::{Graph, BASE_DEGREE},
-    hasher::Hasher,
     merkle::*,
     settings,
     util::NODE_SIZE,
@@ -54,8 +54,8 @@ fn fill_buffer(
     cur_node: u64,
     parents_cache: &CacheReader<u32>,
     mut cur_parent: &[u32], // parents for this node
-    layer_labels: &UnsafeSlice<u32>,
-    exp_labels: Option<&UnsafeSlice<u32>>, // None for layer0
+    layer_labels: &UnsafeSlice<'_, u32>,
+    exp_labels: Option<&UnsafeSlice<'_, u32>>, // None for layer0
     buf: &mut [u8],
     base_parent_missing: &mut BitMask,
 ) {
@@ -136,15 +136,15 @@ fn fill_buffer(
 #[allow(clippy::too_many_arguments)]
 fn create_label_runner(
     parents_cache: &CacheReader<u32>,
-    layer_labels: &UnsafeSlice<u32>,
-    exp_labels: Option<&UnsafeSlice<u32>>, // None for layer 0
+    layer_labels: &UnsafeSlice<'_, u32>,
+    exp_labels: Option<&UnsafeSlice<'_, u32>>, // None for layer 0
     num_nodes: u64,
     cur_producer: &AtomicU64,
     cur_awaiting: &AtomicU64,
     stride: u64,
     lookahead: u64,
     ring_buf: &RingBuf,
-    base_parent_missing: &UnsafeSlice<BitMask>,
+    base_parent_missing: &UnsafeSlice<'_, BitMask>,
 ) -> Result<()> {
     info!("created label runner");
     // Label data bytes per node
@@ -205,7 +205,7 @@ fn create_layer_labels(
     exp_labels: Option<&mut MmapMut>,
     num_nodes: u64,
     cur_layer: u32,
-    core_group: Arc<Option<MutexGuard<Vec<CoreIndex>>>>,
+    core_group: Arc<Option<MutexGuard<'_, Vec<CoreIndex>>>>,
 ) -> Result<()> {
     info!("Creating labels for layer {}", cur_layer);
     // num_producers is the number of producer threads
@@ -621,10 +621,10 @@ pub fn create_labels_for_decoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 mod tests {
     use super::*;
 
+    use bellperson::bls::{Fr, FrRepr};
     use ff::PrimeField;
+    use filecoin_hashers::poseidon::PoseidonHasher;
     use generic_array::typenum::{U0, U2, U8};
-    use paired::bls12_381::{Fr, FrRepr};
-    use storage_proofs_core::hasher::poseidon::PoseidonHasher;
 
     #[test]
     fn test_create_labels() {
@@ -632,17 +632,48 @@ mod tests {
         let nodes_2k = 1 << 11;
         let nodes_4k = 1 << 12;
         let replica_id = [9u8; 32];
-        let porep_id = [123; 32];
+
+        // These PoRepIDs are only useful to distinguish legacy/new sectors.
+        // They do not correspond to registered proofs of the sizes used here.
+        let legacy_porep_id = [0; 32];
+        let new_porep_id = [123; 32];
         test_create_labels_aux(
             nodes_2k,
             layers,
             replica_id,
-            porep_id,
+            legacy_porep_id,
             Fr::from_repr(FrRepr([
-                0x1a4017052cbe1c4a,
-                0x446354db91e96d8e,
-                0xbc864a95454eba0c,
-                0x094cf219d72cad06,
+                0xd3faa96b9a0fba04,
+                0xea81a283d106485e,
+                0xe3d51b9afa5ac2b3,
+                0x0462f4f4f1a68d37,
+            ]))
+            .unwrap(),
+        );
+        test_create_labels_aux(
+            nodes_4k,
+            layers,
+            replica_id,
+            legacy_porep_id,
+            Fr::from_repr(FrRepr([
+                0x7e191e52c4a8da86,
+                0x5ae8a1c9e6fac148,
+                0xce239f3b88a894b8,
+                0x234c00d1dc1d53be,
+            ]))
+            .unwrap(),
+        );
+
+        test_create_labels_aux(
+            nodes_2k,
+            layers,
+            replica_id,
+            new_porep_id,
+            Fr::from_repr(FrRepr([
+                0xabb3f38bb70defcf,
+                0x777a2e4d7769119f,
+                0x3448959d495490bc,
+                0x06021188c7a71cb5,
             ]))
                 .unwrap(),
         );
@@ -651,12 +682,12 @@ mod tests {
             nodes_4k,
             layers,
             replica_id,
-            porep_id,
+            new_porep_id,
             Fr::from_repr(FrRepr([
-                0x0a6917a59c51198b,
-                0xd2edc96e3717044a,
-                0xf438a1131f907206,
-                0x084f42888ca2342c,
+                0x22ab81cf68c4676d,
+                0x7a77a82fc7c9c189,
+                0xc6c03d32c1e42d23,
+                0x0f777c18cc2c55bd,
             ]))
                 .unwrap(),
         );

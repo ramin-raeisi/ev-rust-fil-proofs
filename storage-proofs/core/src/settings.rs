@@ -16,7 +16,6 @@ const PREFIX: &str = "FIL_PROOFS";
 pub struct Settings {
     pub verify_cache: bool,
     pub verify_production_params: bool,
-    pub pedersen_hash_exp_window_size: u32,
     pub use_gpu_column_builder: bool,
     pub max_gpu_column_batch_size: u32,
     pub column_write_batch_size: u32,
@@ -27,7 +26,6 @@ pub struct Settings {
     pub window_post_synthesis_num_cpus: u32,
     pub parameter_cache: String,
     pub parent_cache: String,
-    pub use_fil_blst: bool,
     pub use_multicore_sdr: bool,
     pub multicore_sdr_producers: usize,
     pub multicore_sdr_producer_stride: u64,
@@ -39,21 +37,19 @@ impl Default for Settings {
         Settings {
             verify_cache: false,
             verify_production_params: false,
-            pedersen_hash_exp_window_size: 16,
-            use_gpu_column_builder: true,              // FIL_PROOFS_USE_GPU_COLUMN_BUILDER
-            max_gpu_column_batch_size: 400_000,     // FIL_PROOFS_MAX_GPU_COLUMN_BATCH_SIZE
-            column_write_batch_size: 262_144,       // FIL_PROOFS_COLUMN_WRITE_BATCH_SIZE
-            use_gpu_tree_builder: true,                // FIL_PROOFS_USE_GPU_TREE_BUILDER
-            max_gpu_tree_batch_size: 700_000,       // FIL_PROOFS_MAX_GPU_TREE_BATCH_SIZE
-            rows_to_discard: 2,                         // FIL_PROOFS_ROWS_TO_DISCARD
-            sdr_parents_cache_size: 2_048,              // FIL_PROOFS_SDR_PARENTS_CACHE_SIZE
+            use_gpu_column_builder: true,
+            max_gpu_column_batch_size: 400_000,
+            column_write_batch_size: 262_144,
+            use_gpu_tree_builder: true,
+            max_gpu_tree_batch_size: 700_000,
+            rows_to_discard: 2,
+            sdr_parents_cache_size: 2_048,
             window_post_synthesis_num_cpus: num_cpus::get() as u32,
             // `parameter_cache` does not use the cache() mechanism because it is now used
             // for durable, canonical Groth parameters and verifying keys.
             // The name is retained for backwards compatibility.
             parameter_cache: "/var/tmp/filecoin-proof-parameters/".to_string(),
             parent_cache: cache("filecoin-parents"),
-            use_fil_blst: true,
             use_multicore_sdr: true,
             multicore_sdr_producers: 3,
             multicore_sdr_producer_stride: 128,

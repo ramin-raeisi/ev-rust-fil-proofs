@@ -1,15 +1,14 @@
+use lazy_static::lazy_static;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, mpsc, RwLock};
-use std::thread;
-use std::time::Duration;
+use std::sync::{mpsc, Arc, Mutex, RwLock};
 
 use anyhow::Context;
+use bellperson::bls::Fr;
 use bincode::deserialize;
-use ff::Field;
-use generic_array::{GenericArray, sequence::GenericSequence};
+use filecoin_hashers::{Domain, HashFunction, Hasher, PoseidonArity};
 use generic_array::typenum::{self, Unsigned};
 use log::*;
 use merkletree::merkle::{
@@ -17,10 +16,6 @@ use merkletree::merkle::{
     is_merkle_tree_size_valid,
 };
 use merkletree::store::{DiskStore, StoreConfig};
-use neptune::batch_hasher::BatcherType;
-use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
-use neptune::tree_builder::{TreeBuilder, TreeBuilderTrait};
-use paired::bls12_381::Fr;
 use rayon::prelude::*;
 use typenum::{U11, U2, U8};
 
@@ -29,7 +24,6 @@ use storage_proofs_core::{
     data::Data,
     drgraph::Graph,
     error::Result,
-    hasher::{Domain, Hasher, HashFunction, PoseidonArity},
     measurements::{
         measure_op,
         Operation::{CommD, EncodeWindowTimeAll, GenerateTreeC, GenerateTreeRLast},
@@ -58,8 +52,16 @@ use super::{
 
 pub const TOTAL_PARENTS: usize = 37;
 
+lazy_static! {
+    /// Ensure that only one `TreeBuilder` or `ColumnTreeBuilder` uses the GPU at a time.
+    /// Curently, this is accomplished by only instantiating at most one at a time.
+    /// It might be possible relax this constraint, but in that case, only one builder
+    /// should actually be active at any given time, so the mutex should still be used.
+    static ref GPU_LOCK: Mutex<()> = Mutex::new(());
+}
+
 #[derive(Debug)]
-pub struct StackedDrg<'a, Tree: 'a + MerkleTreeTrait, G: 'a + Hasher> {
+pub struct StackedDrg<'a, Tree: MerkleTreeTrait, G: Hasher> {
     _a: PhantomData<&'a Tree>,
     _b: PhantomData<&'a G>,
 }
@@ -304,8 +306,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     ) -> Result<(Labels<Tree>, Vec<LayerState>)> {
         let mut parent_cache = graph.parent_cache()?;
 
-        if settings::SETTINGS.use_multicore_sdr
-        {
+        if settings::SETTINGS.use_multicore_sdr {
             info!("multi core replication");
             create_label::multi::create_labels_for_encoding(
                 graph,
@@ -335,8 +336,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     ) -> Result<LabelsCache<Tree>> {
         let mut parent_cache = graph.parent_cache()?;
 
-        if settings::SETTINGS.use_multicore_sdr
-        {
+        if settings::SETTINGS.use_multicore_sdr {
             info!("multi core replication");
             create_label::multi::create_labels_for_decoding(
                 graph,
@@ -387,8 +387,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             ColumnArity: 'static + PoseidonArity,
             TreeArity: PoseidonArity,
     {
-        if settings::SETTINGS.use_gpu_column_builder
-        {
+        if settings::SETTINGS.use_gpu_column_builder {
             Self::generate_tree_c_gpu::<ColumnArity, TreeArity>(
                 layers,
                 nodes_count,
@@ -693,6 +692,63 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 }
             }); // scope_end
 
+            for config in &configs {
+                let (base_data, tree_data) = writer_rx.recv()?;
+                let tree_len = base_data.len() + tree_data.len();
+
+                assert_eq!(base_data.len(), nodes_count);
+                assert_eq!(tree_len, config.size.expect("config size failure"));
+
+                // Persist the base and tree data to disk based using the current store config.
+                let tree_c_store = DiskStore::<<Tree::Hasher as Hasher>::Domain>::new_with_config(
+                    tree_len,
+                    Tree::Arity::to_usize(),
+                    config.clone(),
+                )
+                .expect("failed to create DiskStore for base tree data");
+
+                let store = Arc::new(RwLock::new(tree_c_store));
+                let batch_size = std::cmp::min(base_data.len(), column_write_batch_size);
+                let flatten_and_write_store = |data: &Vec<Fr>, offset| {
+                    data.into_par_iter()
+                        .chunks(column_write_batch_size)
+                        .enumerate()
+                        .try_for_each(|(index, fr_elements)| {
+                            let mut buf = Vec::with_capacity(batch_size * NODE_SIZE);
+
+                            for fr in fr_elements {
+                                buf.extend(fr_into_bytes(&fr));
+                            }
+                            store
+                                .write()
+                                .expect("failed to access store for write")
+                                .copy_from_slice(&buf[..], offset + (batch_size * index))
+                        })
+                };
+
+                trace!(
+                    "flattening tree_c base data of {} nodes using batch size {}",
+                    base_data.len(),
+                    batch_size
+                );
+                flatten_and_write_store(&base_data, 0).expect("failed to flatten and write store");
+                trace!("done flattening tree_c base data");
+
+                let base_offset = base_data.len();
+                trace!("flattening tree_c tree data of {} nodes using batch size {} and base offset {}", tree_data.len(), batch_size, base_offset);
+                flatten_and_write_store(&tree_data, base_offset)
+                    .expect("failed to flatten and write store");
+                trace!("done flattening tree_c tree data");
+
+                trace!("writing tree_c store data");
+                store
+                    .write()
+                    .expect("failed to access store for sync")
+                    .sync()
+                    .expect("store sync failure");
+                trace!("done writing tree_c store data");
+            }
+
             create_disk_tree::<
                 DiskTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,
             >(configs[0].size.expect("config size failure"), &configs)
@@ -771,7 +827,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     // Internally, it has been changed to use GPU in parallel (after tree_c is built in parallel, tree_r_last is built in parallel)
     #[cfg(feature = "tree_c-serial-tree_r_last")]
     fn generate_tree_r_last<TreeArity>(
-        data: &mut Data,
+        data: &mut Data<'_>,
         nodes_count: usize,
         tree_count: usize,
         tree_r_last_config: StoreConfig,
@@ -1096,8 +1152,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             // This channel will receive batches of leaf nodes and add them to the TreeBuilder.
             let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
+            // This channel will receive the finished tree data to be written to disk.
+            let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(0);
             let config_count = configs.len(); // Don't move config into closure below.
             let configs = &configs;
+            let tree_r_last_config = &tree_r_last_config;
             rayon::scope(|s| {
                 // This is CPU operation, prepare for GPU operation
                 s.spawn(move |_| {
@@ -1159,6 +1218,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         }
                     }
                 });
+                s.spawn(move |_| {
+                    let _gpu_lock = GPU_LOCK.lock().unwrap();
+                    let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
+                        Some(BatcherType::GPU),
+                        nodes_count,
+                        max_gpu_tree_batch_size,
+                        tree_r_last_config.rows_to_discard,
+                    )
+                    .expect("failed to create TreeBuilder");
 
                 { // Parallel tuning GPU computing
                     let tree_r_last_config = &tree_r_last_config;
@@ -1295,7 +1363,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         graph: &StackedBucketGraph<Tree::Hasher>,
         layer_challenges: &LayerChallenges,
         replica_id: &<Tree::Hasher as Hasher>::Domain,
-        data: Data,
+        data: Data<'_>,
         data_tree: Option<BinaryMerkleTree<G>>,
         config: StoreConfig,
         replica_path: PathBuf,
@@ -1324,7 +1392,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     pub(crate) fn transform_and_replicate_layers_inner(
         graph: &StackedBucketGraph<Tree::Hasher>,
         layer_challenges: &LayerChallenges,
-        mut data: Data,
+        mut data: Data<'_>,
         data_tree: Option<BinaryMerkleTree<G>>,
         config: StoreConfig,
         replica_path: PathBuf,
@@ -1399,6 +1467,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let labels =
             LabelsCache::<Tree>::new(&label_configs).context("failed to create labels cache")?;
         let configs = split_config(tree_c_config.clone(), tree_count)?;
+
+        match fdlimit::raise_fd_limit() {
+            Some(res) => {
+                info!("Building trees [{} descriptors max available]", res);
+            }
+            None => error!("Failed to raise the fd limit"),
+        };
 
         let tree_c_root = match layers {
             2 => {
@@ -1951,19 +2026,16 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 mod tests {
     use super::*;
 
+    use bellperson::bls::{Fr, FrRepr};
     use ff::{Field, PrimeField};
-    use paired::bls12_381::{Fr, FrRepr};
+    use filecoin_hashers::{
+        blake2s::Blake2sHasher, poseidon::PoseidonHasher, sha256::Sha256Hasher,
+    };
     use rand::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
-    use storage_proofs_core::hasher::poseidon::PoseidonHasher;
     use storage_proofs_core::{
-        drgraph::BASE_DEGREE,
-        fr32::fr_into_bytes,
-        hasher::{Blake2sHasher, PedersenHasher, Sha256Hasher},
-        merkle::MerkleTreeTrait,
-        proof::ProofScheme,
-        table_tests,
-        test_helper::setup_replica,
+        drgraph::BASE_DEGREE, fr32::fr_into_bytes, merkle::MerkleTreeTrait, proof::ProofScheme,
+        table_tests, test_helper::setup_replica,
     };
 
     use crate::PoRep;
@@ -1980,21 +2052,6 @@ mod tests {
 
         let calculated_count = layer_challenges.challenges_count_all();
         assert_eq!(expected as usize, calculated_count);
-    }
-
-    #[test]
-    fn extract_all_pedersen_8() {
-        test_extract_all::<DiskTree<PedersenHasher, typenum::U8, typenum::U0, typenum::U0>>();
-    }
-
-    #[test]
-    fn extract_all_pedersen_8_2() {
-        test_extract_all::<DiskTree<PedersenHasher, typenum::U8, typenum::U2, typenum::U0>>();
-    }
-
-    #[test]
-    fn extract_all_pedersen_8_8_2() {
-        test_extract_all::<DiskTree<PedersenHasher, typenum::U8, typenum::U8, typenum::U2>>();
     }
 
     #[test]
@@ -2399,32 +2456,6 @@ mod tests {
     fn prove_verify_fixed(n: usize) {
         let challenges = LayerChallenges::new(DEFAULT_STACKED_LAYERS, 5);
 
-        test_prove_verify::<DiskTree<PedersenHasher, typenum::U4, typenum::U0, typenum::U0>>(
-            n,
-            challenges.clone(),
-        );
-        test_prove_verify::<DiskTree<PedersenHasher, typenum::U4, typenum::U2, typenum::U0>>(
-            n,
-            challenges.clone(),
-        );
-        test_prove_verify::<DiskTree<PedersenHasher, typenum::U4, typenum::U8, typenum::U2>>(
-            n,
-            challenges.clone(),
-        );
-
-        test_prove_verify::<DiskTree<PedersenHasher, typenum::U8, typenum::U0, typenum::U0>>(
-            n,
-            challenges.clone(),
-        );
-        test_prove_verify::<DiskTree<PedersenHasher, typenum::U8, typenum::U2, typenum::U0>>(
-            n,
-            challenges.clone(),
-        );
-        test_prove_verify::<DiskTree<PedersenHasher, typenum::U8, typenum::U8, typenum::U2>>(
-            n,
-            challenges.clone(),
-        );
-
         test_prove_verify::<DiskTree<Sha256Hasher, typenum::U8, typenum::U0, typenum::U0>>(
             n,
             challenges.clone(),
@@ -2626,7 +2657,7 @@ mod tests {
         // When this fails, the call to setup should panic, but seems to actually hang (i.e. neither return nor panic) for some reason.
         // When working as designed, the call to setup returns without error.
         let _pp = StackedDrg::<
-            DiskTree<PedersenHasher, typenum::U8, typenum::U0, typenum::U0>,
+            DiskTree<Sha256Hasher, typenum::U8, typenum::U0, typenum::U0>,
             Blake2sHasher,
         >::setup(&sp)
             .expect("setup failed");
@@ -2638,17 +2669,46 @@ mod tests {
         let nodes_2k = 1 << 11;
         let nodes_4k = 1 << 12;
         let replica_id = [9u8; 32];
+        let legacy_porep_id = [0; 32];
         let porep_id = [123; 32];
+        test_generate_labels_aux(
+            nodes_2k,
+            layers,
+            replica_id,
+            legacy_porep_id,
+            Fr::from_repr(FrRepr([
+                0xd3faa96b9a0fba04,
+                0xea81a283d106485e,
+                0xe3d51b9afa5ac2b3,
+                0x0462f4f4f1a68d37,
+            ]))
+            .unwrap(),
+        );
+
+        test_generate_labels_aux(
+            nodes_4k,
+            layers,
+            replica_id,
+            legacy_porep_id,
+            Fr::from_repr(FrRepr([
+                0x7e191e52c4a8da86,
+                0x5ae8a1c9e6fac148,
+                0xce239f3b88a894b8,
+                0x234c00d1dc1d53be,
+            ]))
+            .unwrap(),
+        );
+
         test_generate_labels_aux(
             nodes_2k,
             layers,
             replica_id,
             porep_id,
             Fr::from_repr(FrRepr([
-                0x1a4017052cbe1c4a,
-                0x446354db91e96d8e,
-                0xbc864a95454eba0c,
-                0x094cf219d72cad06,
+                0xabb3f38bb70defcf,
+                0x777a2e4d7769119f,
+                0x3448959d495490bc,
+                0x06021188c7a71cb5,
             ]))
                 .unwrap(),
         );
@@ -2659,10 +2719,10 @@ mod tests {
             replica_id,
             porep_id,
             Fr::from_repr(FrRepr([
-                0x0a6917a59c51198b,
-                0xd2edc96e3717044a,
-                0xf438a1131f907206,
-                0x084f42888ca2342c,
+                0x22ab81cf68c4676d,
+                0x7a77a82fc7c9c189,
+                0xc6c03d32c1e42d23,
+                0x0f777c18cc2c55bd,
             ]))
                 .unwrap(),
         );

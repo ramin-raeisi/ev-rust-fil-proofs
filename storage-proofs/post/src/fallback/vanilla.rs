@@ -2,17 +2,17 @@ use std::collections::BTreeSet;
 use std::marker::PhantomData;
 
 use anyhow::ensure;
+use bellperson::bls::Fr;
 use byteorder::{ByteOrder, LittleEndian};
+use filecoin_hashers::{Domain, HashFunction, Hasher};
 use generic_array::typenum::Unsigned;
 use log::{error, trace};
-use paired::bls12_381::Fr;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use storage_proofs_core::{
     error::{Error, Result},
-    hasher::{Domain, HashFunction, Hasher},
     merkle::{MerkleProof, MerkleProofTrait, MerkleTreeTrait, MerkleTreeWrapper},
     parameter_cache::ParameterSetMetadata,
     proof::ProofScheme,
@@ -159,8 +159,8 @@ impl<P: MerkleProofTrait> SectorProof<P> {
 
 #[derive(Debug, Clone)]
 pub struct FallbackPoSt<'a, Tree>
-    where
-        Tree: 'a + MerkleTreeTrait,
+where
+    Tree: MerkleTreeTrait,
 {
     _t: PhantomData<&'a Tree>,
 }
@@ -205,11 +205,14 @@ pub fn generate_leaf_challenges<T: Domain>(
 ) -> Vec<u64> {
     let mut challenges = Vec::with_capacity(challenge_count);
 
+    let mut hasher = Sha256::new();
+    hasher.update(AsRef::<[u8]>::as_ref(&randomness));
+    hasher.update(&sector_id.to_le_bytes()[..]);
+
     for leaf_challenge_index in 0..challenge_count {
-        let challenge = generate_leaf_challenge(
+        let challenge = generate_leaf_challenge_inner::<T>(
+            hasher.clone(),
             pub_params,
-            randomness,
-            sector_id,
             leaf_challenge_index as u64,
         );
         challenges.push(challenge)
@@ -228,6 +231,15 @@ pub fn generate_leaf_challenge<T: Domain>(
     let mut hasher = Sha256::new();
     hasher.update(AsRef::<[u8]>::as_ref(&randomness));
     hasher.update(&sector_id.to_le_bytes()[..]);
+
+    generate_leaf_challenge_inner::<T>(hasher, pub_params, leaf_challenge_index)
+}
+
+fn generate_leaf_challenge_inner<T: Domain>(
+    mut hasher: Sha256,
+    pub_params: &PublicParams,
+    leaf_challenge_index: u64,
+) -> u64 {
     hasher.update(&leaf_challenge_index.to_le_bytes()[..]);
     let hash = hasher.finalize();
 
@@ -244,7 +256,7 @@ enum ProofOrFault<T> {
 // Generates a single vanilla proof, given the private inputs and sector challenges.
 pub fn vanilla_proof<Tree: MerkleTreeTrait>(
     sector_id: SectorId,
-    priv_inputs: &PrivateInputs<Tree>,
+    priv_inputs: &PrivateInputs<'_, Tree>,
     challenges: &[u64],
 ) -> Result<Proof<Tree::Proof>> {
     ensure!(
@@ -383,6 +395,11 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                     Tree::Arity::to_usize(),
                 );
 
+                // avoid rehashing fixed inputs
+                let mut challenge_hasher = Sha256::new();
+                challenge_hasher.update(AsRef::<[u8]>::as_ref(&pub_inputs.randomness));
+                challenge_hasher.update(&u64::from(sector_id).to_le_bytes()[..]);
+
                 let mut inclusion_proofs = Vec::new();
                 for proof_or_fault in (0..pub_params.challenge_count)
                     .into_par_iter()
@@ -390,12 +407,12 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                         let challenge_index = ((j * num_sectors_per_chunk + i)
                             * pub_params.challenge_count
                             + n) as u64;
-                        let challenged_leaf_start = generate_leaf_challenge(
-                            pub_params,
-                            pub_inputs.randomness,
-                            sector_id.into(),
-                            challenge_index,
-                        );
+                        let challenged_leaf_start =
+                            generate_leaf_challenge_inner::<<Tree::Hasher as Hasher>::Domain>(
+                                challenge_hasher.clone(),
+                                pub_params,
+                                challenge_index,
+                            );
 
                         let proof = tree.gen_cached_proof(
                             challenged_leaf_start as usize,
@@ -405,6 +422,11 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                             Ok(proof) => {
                                 if proof.validate(challenged_leaf_start as usize)
                                     && proof.root() == priv_sector.comm_r_last
+                                    && pub_sector.comm_r
+                                        == <Tree::Hasher as Hasher>::Function::hash2(
+                                            &priv_sector.comm_c,
+                                            &priv_sector.comm_r_last,
+                                        )
                                 {
                                     Ok(ProofOrFault::Proof(proof))
                                 } else {
@@ -517,35 +539,51 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                     inclusion_proofs.len()
                 );
 
-                for (n, inclusion_proof) in inclusion_proofs.iter().enumerate() {
-                    let challenge_index =
-                        ((j * num_sectors_per_chunk + i) * pub_params.challenge_count + n) as u64;
-                    let challenged_leaf_start = generate_leaf_challenge(
-                        pub_params,
-                        pub_inputs.randomness,
-                        sector_id.into(),
-                        challenge_index,
-                    );
+                // avoid rehashing fixed inputs
+                let mut challenge_hasher = Sha256::new();
+                challenge_hasher.update(AsRef::<[u8]>::as_ref(&pub_inputs.randomness));
+                challenge_hasher.update(&u64::from(sector_id).to_le_bytes()[..]);
 
-                    // validate all comm_r_lasts match
-                    if inclusion_proof.root() != comm_r_last {
-                        error!("inclusion proof root != comm_r_last: {:?}", sector_id);
-                        return Ok(false);
-                    }
+                let is_valid_list = inclusion_proofs
+                    .par_iter()
+                    .enumerate()
+                    .map(|(n, inclusion_proof)| -> Result<bool> {
+                        let challenge_index = ((j * num_sectors_per_chunk + i)
+                            * pub_params.challenge_count
+                            + n) as u64;
+                        let challenged_leaf_start =
+                            generate_leaf_challenge_inner::<<Tree::Hasher as Hasher>::Domain>(
+                                challenge_hasher.clone(),
+                                pub_params,
+                                challenge_index,
+                            );
 
-                    // validate the path length
-                    let expected_path_length =
-                        inclusion_proof.expected_len(pub_params.sector_size as usize / NODE_SIZE);
+                        // validate all comm_r_lasts match
+                        if inclusion_proof.root() != comm_r_last {
+                            error!("inclusion proof root != comm_r_last: {:?}", sector_id);
+                            return Ok(false);
+                        }
 
-                    if expected_path_length != inclusion_proof.path().len() {
-                        error!("wrong path length: {:?}", sector_id);
-                        return Ok(false);
-                    }
+                        // validate the path length
+                        let expected_path_length = inclusion_proof
+                            .expected_len(pub_params.sector_size as usize / NODE_SIZE);
 
-                    if !inclusion_proof.validate(challenged_leaf_start as usize) {
-                        error!("invalid inclusion proof: {:?}", sector_id);
-                        return Ok(false);
-                    }
+                        if expected_path_length != inclusion_proof.path().len() {
+                            error!("wrong path length: {:?}", sector_id);
+                            return Ok(false);
+                        }
+
+                        if !inclusion_proof.validate(challenged_leaf_start as usize) {
+                            error!("invalid inclusion proof: {:?}", sector_id);
+                            return Ok(false);
+                        }
+                        Ok(true)
+                    })
+                    .collect::<Result<Vec<bool>>>()?;
+
+                let is_valid = is_valid_list.into_iter().all(|v| v);
+                if !is_valid {
+                    return Ok(false);
                 }
             }
         }
@@ -576,13 +614,12 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
 mod tests {
     use super::*;
 
+    use filecoin_hashers::poseidon::PoseidonHasher;
     use generic_array::typenum::{U0, U2, U4, U8};
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
-
-    use storage_proofs_core::{
-        hasher::{PedersenHasher, PoseidonHasher},
-        merkle::{generate_tree, get_base_tree_count, LCTree, MerkleTreeTrait},
+    use storage_proofs_core::merkle::{
+        generate_tree, get_base_tree_count, LCTree, MerkleTreeTrait,
     };
 
     fn test_fallback_post<Tree: MerkleTreeTrait>(
@@ -759,16 +796,6 @@ mod tests {
     }
 
     #[test]
-    fn fallback_post_pedersen_single_partition_matching_base_8() {
-        test_fallback_post::<LCTree<PedersenHasher, U8, U0, U0>>(5, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_pedersen_single_partition_matching_base_8() {
-        test_invalid_fallback_post::<LCTree<PedersenHasher, U8, U0, U0>>(5, 5, 1);
-    }
-
-    #[test]
     fn fallback_post_poseidon_single_partition_matching_base_8() {
         test_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(5, 5, 1);
     }
@@ -806,16 +833,6 @@ mod tests {
     #[test]
     fn invalid_fallback_post_poseidon_two_partitions_smaller_base_8() {
         test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(5, 3, 2);
-    }
-
-    #[test]
-    fn fallback_post_pedersen_single_partition_matching_sub_8_4() {
-        test_fallback_post::<LCTree<PedersenHasher, U8, U4, U0>>(5, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_pedersen_single_partition_matching_sub_8_4() {
-        test_invalid_fallback_post::<LCTree<PedersenHasher, U8, U4, U0>>(5, 5, 1);
     }
 
     #[test]
@@ -876,26 +893,6 @@ mod tests {
     #[test]
     fn invalid_fallback_post_poseidon_two_partitions_smaller_sub_8_8() {
         test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U8, U0>>(5, 3, 2);
-    }
-
-    #[test]
-    fn fallback_post_pedersen_single_partition_matching_top_8_4_2() {
-        test_fallback_post::<LCTree<PedersenHasher, U8, U4, U2>>(5, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_pedersen_single_partition_matching_top_8_4_2() {
-        test_invalid_fallback_post::<LCTree<PedersenHasher, U8, U4, U2>>(5, 5, 1);
-    }
-
-    #[test]
-    fn fallback_post_pedersen_single_partition_matching_top_8_8_2() {
-        test_fallback_post::<LCTree<PedersenHasher, U8, U8, U2>>(5, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_pedersen_single_partition_matching_top_8_8_2() {
-        test_invalid_fallback_post::<LCTree<PedersenHasher, U8, U8, U2>>(5, 5, 1);
     }
 
     #[test]

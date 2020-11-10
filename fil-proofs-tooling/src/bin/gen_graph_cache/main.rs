@@ -7,10 +7,10 @@ use anyhow::Result;
 use clap::{value_t, App, Arg};
 use serde::{Deserialize, Serialize};
 
+use filecoin_hashers::sha256::Sha256Hasher;
 use filecoin_proofs::constants::*;
 use filecoin_proofs::types::*;
 use filecoin_proofs::with_shape;
-use storage_proofs::hasher::Sha256Hasher;
 use storage_proofs::porep::stacked::{LayerChallenges, SetupParams, StackedDrg};
 use storage_proofs::proof::ProofScheme;
 
@@ -128,6 +128,41 @@ fn main() -> Result<()> {
             SECTOR_SIZE_64_GIB,
             [
                 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
+        ),
+        (
+            SECTOR_SIZE_2_KIB, // v1.1
+            [
+                5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
+        ),
+        (
+            SECTOR_SIZE_8_MIB, // v1.1
+            [
+                6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
+        ),
+        (
+            SECTOR_SIZE_512_MIB, // v1.1
+            [
+                7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
+        ),
+        (
+            SECTOR_SIZE_32_GIB, // v1.1
+            [
+                8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
+        ),
+        (
+            SECTOR_SIZE_64_GIB, // v1.1
+            [
+                9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0,
             ],
         ),

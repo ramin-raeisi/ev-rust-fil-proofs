@@ -4,10 +4,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{ensure, Context, Result};
 use bincode::deserialize;
+use filecoin_hashers::Hasher;
 use log::info;
 use merkletree::store::{DiskStore, LevelCacheStore, StoreConfig};
 use storage_proofs::cache_key::CacheKey;
-use storage_proofs::hasher::Hasher;
 use storage_proofs::measurements::{measure_op, Operation};
 use storage_proofs::merkle::get_base_tree_count;
 use storage_proofs::porep::stacked::{
@@ -587,8 +587,8 @@ where
 mod tests {
     use super::*;
 
+    use bellperson::bls::Fr;
     use ff::Field;
-    use paired::bls12_381::Fr;
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
     use storage_proofs::fr32::bytes_into_fr;

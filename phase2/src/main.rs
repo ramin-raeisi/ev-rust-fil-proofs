@@ -1,3 +1,5 @@
+#![deny(clippy::all, clippy::perf, clippy::correctness, rust_2018_idioms)]
+
 use std::fmt::{self, Debug, Formatter};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
@@ -9,9 +11,13 @@ use std::sync::mpsc::{channel, TryRecvError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use bellperson::bls::{Bls12, G1Affine, G1Uncompressed, G2Affine, G2Uncompressed};
 use bellperson::groth16;
 use byteorder::{BigEndian, ReadBytesExt};
 use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
+use filecoin_hashers::sha256::Sha256Hasher;
+use filecoin_phase2::small::{read_small_params_from_large_file, MPCSmall, Streamer};
+use filecoin_phase2::MPCParameters;
 use filecoin_proofs::constants::*;
 use filecoin_proofs::parameters::{
     setup_params, window_post_public_params, winning_post_public_params,
@@ -22,15 +28,11 @@ use filecoin_proofs::types::{
 use filecoin_proofs::with_shape;
 use groupy::{CurveAffine, EncodedPoint};
 use log::{error, info, warn};
-use paired::bls12_381::{Bls12, G1Affine, G1Uncompressed, G2Affine, G2Uncompressed};
-use phase2::small::{read_small_params_from_large_file, MPCSmall, Streamer};
-use phase2::MPCParameters;
 use rand::rngs::OsRng;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use simplelog::{self, CombinedLogger, LevelFilter, TermLogger, TerminalMode, WriteLogger};
 use storage_proofs::compound_proof::{self, CompoundProof};
-use storage_proofs::hasher::Sha256Hasher;
 use storage_proofs::merkle::MerkleTreeTrait;
 use storage_proofs::parameter_cache::{
     self, metadata_id, parameter_id, verifying_key_id, CacheableParameters,
@@ -91,7 +93,6 @@ impl Proof {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Hasher {
     Poseidon,
-    // ShaPedersen,
 }
 
 impl Hasher {
@@ -101,7 +102,6 @@ impl Hasher {
     fn pretty_print(&self) -> &str {
         match self {
             Hasher::Poseidon => "Poseidon",
-            // Hasher::ShaPedersen => "SHA-Pederson",
         }
     }
 
@@ -109,7 +109,6 @@ impl Hasher {
     fn lowercase(&self) -> &str {
         match self {
             Hasher::Poseidon => "poseidon",
-            // Hasher::ShaPedersen => "shapederson",
         }
     }
 }
@@ -246,7 +245,6 @@ fn parse_params_filename(path: &str) -> (Proof, Hasher, Sector, String, usize, P
 
     let hasher = match split[1] {
         "poseidon" => Hasher::Poseidon,
-        // "shapedersen" => Hasher::ShaPedersen,
         other => panic!("invalid hasher name in params filename: {}", other),
     };
 
@@ -317,47 +315,12 @@ fn blank_sdr_poseidon_params<Tree: MerkleTreeTrait>(sector_size: u64) -> PoRepPu
     };
 
     let public_params = <StackedCompound<Tree, Sha256Hasher> as CompoundProof<
-        StackedDrg<Tree, Sha256Hasher>,
+        StackedDrg<'_, Tree, Sha256Hasher>,
         _,
     >>::setup(&setup_params)
     .expect("public param setup failed");
     public_params.vanilla_params
 }
-
-/*
-fn blank_porep_sha_pedersen_circuit(
-    sector_size: u64,
-) -> StackedCircuit<'static, PedersenHasher, Sha256Hasher> {
-    let	n_partitions = *POREP_PARTITIONS.read().unwrap().get(&sector_size).unwrap();
-
-    let porep_config = PoRepConfig {
-        sector_size: SectorSize(sector_size),
-        partitions: PoRepProofPartitions(n_partitions),
-    };
-
-    let setup_params = compound_proof::SetupParams {
-        vanilla_params: setup_params(
-            PaddedBytesAmount::from(porep_config),
-            usize::from(PoRepProofPartitions::from(porep_config)),
-        )
-        .unwrap(),
-        partitions: Some(usize::from(PoRepProofPartitions::from(porep_config))),
-        priority: false,
-    };
-
-    let public_params =
-        <StackedCompound<PedersenHasher, Sha256Hasher> as CompoundProof<_, StackedDrg<PedersenHasher, Sha256Hasher>, _>>::setup(
-            &setup_params,
-        )
-        .unwrap();
-
-    <StackedCompound<PedersenHasher, Sha256Hasher> as CompoundProof<
-        _,
-        StackedDrg<PedersenHasher, Sha256Hasher>,
-        _,
-    >>::blank_circuit(&public_params.vanilla_params)
-}
-*/
 
 fn blank_winning_post_poseidon_params<Tree: 'static + MerkleTreeTrait>(
     sector_size: u64,
@@ -416,7 +379,7 @@ fn create_initial_params<Tree: 'static + MerkleTreeTrait>(
             let start = Instant::now();
             let public_params = blank_sdr_poseidon_params(sector_size.as_u64());
             let circuit = <StackedCompound<Tree, Sha256Hasher> as CompoundProof<
-                StackedDrg<Tree, Sha256Hasher>,
+                StackedDrg<'_, Tree, Sha256Hasher>,
                 _,
             >>::blank_circuit(&public_params);
             dt_create_circuit = start.elapsed().as_secs();
@@ -429,7 +392,7 @@ fn create_initial_params<Tree: 'static + MerkleTreeTrait>(
             let start = Instant::now();
             let public_params = blank_winning_post_poseidon_params::<Tree>(sector_size.as_u64());
             let circuit = <FallbackPoStCompound<Tree> as CompoundProof<
-                FallbackPoSt<Tree>,
+                FallbackPoSt<'_, Tree>,
                 FallbackPoStCircuit<Tree>,
             >>::blank_circuit(&public_params);
             dt_create_circuit = start.elapsed().as_secs();
@@ -442,7 +405,7 @@ fn create_initial_params<Tree: 'static + MerkleTreeTrait>(
             let start = Instant::now();
             let public_params = blank_window_post_poseidon_params::<Tree>(sector_size.as_u64());
             let circuit = <FallbackPoStCompound<Tree> as CompoundProof<
-                FallbackPoSt<Tree>,
+                FallbackPoSt<'_, Tree>,
                 FallbackPoStCircuit<Tree>,
             >>::blank_circuit(&public_params);
             dt_create_circuit = start.elapsed().as_secs();
@@ -853,7 +816,7 @@ fn verify_contribution(
     info!("verifying contribution");
     let start_verification = Instant::now();
 
-    let calculated_contrib = phase2::small::verify_contribution_small(
+    let calculated_contrib = filecoin_phase2::small::verify_contribution_small(
         &before_params.expect("before params failure"),
         &after_params.expect("after params failure"),
     )
@@ -940,7 +903,7 @@ struct FileInfo {
 }
 
 impl Debug for FileInfo {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("FileInfo")
             .field("delta_g1_offset", &self.delta_g1_offset)
             .field("delta_g1", &self.delta_g1)
@@ -1104,7 +1067,7 @@ fn parameter_identifier<Tree: 'static + MerkleTreeTrait>(sector_size: u64, proof
             let public_params = blank_sdr_poseidon_params::<Tree>(sector_size);
 
             <StackedCompound<Tree, Sha256Hasher> as CacheableParameters<
-                StackedCircuit<Tree, Sha256Hasher>,
+                StackedCircuit<'_, Tree, Sha256Hasher>,
                 _,
             >>::cache_identifier(&public_params)
         }

@@ -1,8 +1,9 @@
-use bellperson::gadgets::{boolean::Boolean, num, sha256::sha256 as sha256_circuit, uint32};
-use bellperson::{ConstraintSystem, SynthesisError};
+use bellperson::gadgets::{
+    boolean::Boolean, multipack, num, sha256::sha256 as sha256_circuit, uint32,
+};
+use bellperson::{bls::Engine, ConstraintSystem, SynthesisError};
 use ff::PrimeField;
-use fil_sapling_crypto::jubjub::JubjubEngine;
-use storage_proofs_core::{gadgets::multipack, gadgets::uint64, util::reverse_bit_numbering};
+use storage_proofs_core::{gadgets::uint64, util::reverse_bit_numbering};
 
 use crate::stacked::vanilla::TOTAL_PARENTS;
 
@@ -14,9 +15,9 @@ pub fn create_label_circuit<E, CS>(
     layer_index: uint32::UInt32,
     node: uint64::UInt64,
 ) -> Result<num::AllocatedNum<E>, SynthesisError>
-    where
-        E: JubjubEngine,
-        CS: ConstraintSystem<E>,
+where
+    E: Engine,
+    CS: ConstraintSystem<E>,
 {
     assert!(replica_id.len() >= 32, "replica id is too small");
     assert!(replica_id.len() <= 256, "replica id is too large");
@@ -68,16 +69,17 @@ pub fn create_label_circuit<E, CS>(
 mod tests {
     use super::*;
 
+    use bellperson::bls::{Bls12, Fr};
     use bellperson::gadgets::boolean::Boolean;
     use bellperson::util_cs::test_cs::TestConstraintSystem;
     use ff::Field;
-    use paired::bls12_381::{Bls12, Fr};
+    use filecoin_hashers::sha256::Sha256Hasher;
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
+
     use storage_proofs_core::{
         drgraph::{Graph, BASE_DEGREE},
         fr32::{bytes_into_fr, fr_into_bytes},
-        hasher::Sha256Hasher,
         util::bytes_into_boolean_vec_be,
         util::{data_at_node, NODE_SIZE},
     };

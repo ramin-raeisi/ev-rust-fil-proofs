@@ -5,9 +5,9 @@ use std::iter::Iterator;
 use std::sync::Mutex;
 
 use anyhow::{ensure, Context, Result};
+use filecoin_hashers::{HashFunction, Hasher};
 use lazy_static::lazy_static;
 use log::info;
-use storage_proofs::hasher::{HashFunction, Hasher};
 use storage_proofs::util::NODE_SIZE;
 
 use crate::constants::{
@@ -357,7 +357,7 @@ mod tests {
     use crate::constants::{DRG_DEGREE, EXP_DEGREE};
     use crate::types::DataTree;
 
-    use paired::bls12_381::Fr;
+    use bellperson::bls::Fr;
     use rand::{Rng, RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
     use storage_proofs::drgraph::Graph;

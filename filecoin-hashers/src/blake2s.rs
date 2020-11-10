@@ -1,21 +1,18 @@
 use std::fmt;
 use std::hash::Hasher as StdHasher;
 
-use anyhow::ensure;
-use bellperson::gadgets::{blake2s as blake2s_circuit, boolean, num};
+use anyhow::{ensure, Result};
+use bellperson::bls::{Bls12, Fr, FrRepr};
+use bellperson::gadgets::{blake2s as blake2s_circuit, boolean, multipack, num};
 use bellperson::{ConstraintSystem, SynthesisError};
 use blake2s_simd::{Hash as Blake2sHash, Params as Blake2s, State};
 use ff::{Field, PrimeField, PrimeFieldRepr};
 use merkletree::hash::{Algorithm, Hashable};
 use merkletree::merkle::Element;
-use paired::bls12_381::{Bls12, Fr, FrRepr};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
 use super::{Domain, HashFunction, Hasher};
-use crate::crypto::sloth;
-use crate::error::*;
-use crate::gadgets::multipack;
 
 #[derive(Default, Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Blake2sHasher {}
@@ -26,19 +23,6 @@ impl Hasher for Blake2sHasher {
 
     fn name() -> String {
         "Blake2sHasher".into()
-    }
-
-    fn sloth_encode(key: &Self::Domain, ciphertext: &Self::Domain) -> Result<Self::Domain> {
-        // TODO: validate this is how sloth should work in this case
-        let k = (*key).into();
-        let c = (*ciphertext).into();
-
-        Ok(sloth::encode(&k, &c).into())
-    }
-
-    fn sloth_decode(key: &Self::Domain, ciphertext: &Self::Domain) -> Result<Self::Domain> {
-        // TODO: validate this is how sloth should work in this case
-        Ok(sloth::decode(&(*key).into(), &(*ciphertext).into()).into())
     }
 }
 
@@ -60,7 +44,7 @@ impl PartialEq for Blake2sFunction {
 impl Eq for Blake2sFunction {}
 
 impl fmt::Debug for Blake2sFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Blake2sFunction({:?})", self.0)
     }
 }
@@ -161,7 +145,7 @@ impl Domain for Blake2sDomain {
     fn try_from_bytes(raw: &[u8]) -> Result<Self> {
         ensure!(
             raw.len() == 32 && u32::from(raw[31]) <= Fr::NUM_BITS,
-            Error::InvalidInputSize
+            "invalid amount of bytes"
         );
 
         let mut res = Blake2sDomain::default();
@@ -170,7 +154,7 @@ impl Domain for Blake2sDomain {
     }
 
     fn write_bytes(&self, dest: &mut [u8]) -> Result<()> {
-        ensure!(dest.len() >= 32, Error::InvalidInputSize);
+        ensure!(dest.len() >= 32, "too many bytes");
         dest[0..32].copy_from_slice(&self.0[..]);
         Ok(())
     }
