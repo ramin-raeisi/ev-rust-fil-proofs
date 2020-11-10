@@ -53,7 +53,7 @@ use super::{
     },
 };
 
-use fff::Field;
+use ff::Field;
 
 use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
