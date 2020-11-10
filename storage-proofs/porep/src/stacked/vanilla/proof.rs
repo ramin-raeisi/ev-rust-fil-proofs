@@ -1300,37 +1300,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         )
     }
 
-    // SDR calculation logic
-    pub(crate) fn transform_and_replicate_layers(
-        graph: &StackedBucketGraph<Tree::Hasher>,
-        layer_challenges: &LayerChallenges,
-        replica_id: &<Tree::Hasher as Hasher>::Domain,
-        data: Data<'_>,
-        data_tree: Option<BinaryMerkleTree<G>>,
-        config: StoreConfig,
-        replica_path: PathBuf,
-    ) -> Result<TransformedLayers<Tree, G>> {
-        // [P1] Generate key layers.
-        let labels = measure_op(EncodeWindowTimeAll, || {
-            // For the entire Sector, calculate SDR and calculate 11 layers
-            Self::generate_labels_for_encoding(graph, layer_challenges, replica_id, config.clone())
-                .context("failed to generate labels")
-        })?
-            .0;
-
-        // [P2]
-        Self::transform_and_replicate_layers_inner(
-            graph,
-            layer_challenges,
-            data,
-            data_tree,
-            config,
-            replica_path,
-            labels,
-        )
-            .context("failed to transform")
-    }
-
     // Calculation logic implementation of Precommit2 (tree_c and tree_r_last serial)
     #[cfg(feature = "tree_c-serial-tree_r_last")]
     pub(crate) fn transform_and_replicate_layers_inner(
@@ -1724,6 +1693,37 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         ))
     }
 // */
+
+    // SDR calculation logic
+    pub(crate) fn transform_and_replicate_layers(
+        graph: &StackedBucketGraph<Tree::Hasher>,
+        layer_challenges: &LayerChallenges,
+        replica_id: &<Tree::Hasher as Hasher>::Domain,
+        data: Data<'_>,
+        data_tree: Option<BinaryMerkleTree<G>>,
+        config: StoreConfig,
+        replica_path: PathBuf,
+    ) -> Result<TransformedLayers<Tree, G>> {
+        // [P1] Generate key layers.
+        let labels = measure_op(EncodeWindowTimeAll, || {
+            // For the entire Sector, calculate SDR and calculate 11 layers
+            Self::generate_labels_for_encoding(graph, layer_challenges, replica_id, config.clone())
+                .context("failed to generate labels")
+        })?
+            .0;
+
+        // [P2]
+        Self::transform_and_replicate_layers_inner(
+            graph,
+            layer_challenges,
+            data,
+            data_tree,
+            config,
+            replica_path,
+            labels,
+        )
+            .context("failed to transform")
+    }
 
     /// Phase1 of replication.
     pub fn replicate_phase1(
