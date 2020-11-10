@@ -63,12 +63,14 @@ failure = "0.1.7"
 tempfile = "3"
 
 [features]
-default = ["gpu", "pairing"]
+default = ["gpu", "blst", "tree_c-serial-tree_r_last"]
 cpu-profile = ["gperftools"]
 heap-profile = ["gperftools/heap"]
 simd = ["storage-proofs/simd"]
 asm = ["storage-proofs/asm"]
 gpu = ["storage-proofs/gpu", "bellperson/gpu", "filecoin-hashers/gpu"]
+tree_c-serial-tree_r_last = ["storage-proofs/tree_c-serial-tree_r_last"]
+tree_c-parallel-tree_r_last = ["storage-proofs/tree_c-parallel-tree_r_last"]
 pairing = ["storage-proofs/pairing", "bellperson/pairing", "filecoin-hashers/pairing"]
 blst = ["storage-proofs/blst", "bellperson/blst", "filecoin-hashers/blst"]
 
