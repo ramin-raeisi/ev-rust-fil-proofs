@@ -59,6 +59,8 @@ use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
 use neptune::tree_builder::{TreeBuilder, TreeBuilderTrait};
 
+use rust_gpu_tools::opencl;
+
 pub const TOTAL_PARENTS: usize = 37;
 
 lazy_static! {
@@ -452,11 +454,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             // Ryan
             let mut batchertype_gpus = Vec::new();
             if settings::SETTINGS.use_gpu_column_builder {
-                let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
+                let all_bus_ids = opencl::Device::all()
+                    .unwrap()
+                    .iter()
+                    .map(|d| d.bus_id())
+                    .collect::<Vec<_>>();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
                 for gpu_index in 0.._bus_num {
-                    batchertype_gpus.push(Some(BatcherType::CustomGPU(neptune::cl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
+                    batchertype_gpus.push(Some(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
                 };
             }
 
@@ -810,11 +816,16 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             // Ryan 
             let mut batchertype_gpus = Vec::new();
             if settings::SETTINGS.use_gpu_tree_builder {
-                let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
+                let all_bus_ids = opencl::Device::all()
+                    .unwrap()
+                    .iter()
+                    .map(|d| d.bus_id())
+                    .collect::<Vec<_>>();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
                 for gpu_index in 0.._bus_num {
-                    batchertype_gpus.push(Some(BatcherType::CustomGPU(neptune::cl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
+                    batchertype_gpus.push(Some(BatcherType::CustomGPU
+                        (opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
                 };
             }
 
@@ -1083,11 +1094,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             // Ryan
             let mut batchertype_gpus = Vec::new(); // FIXME-Ryan: batchertype_gpus
             if settings::SETTINGS.use_gpu_tree_builder {
-                let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
+                let all_bus_ids = opencl::Device::all()
+                    .unwrap()
+                    .iter()
+                    .map(|d| d.bus_id())
+                    .collect::<Vec<_>>();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
                 for gpu_index in 0.._bus_num {
-                    batchertype_gpus.push(Some(BatcherType::CustomGPU(neptune::cl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
+                    batchertype_gpus.push(Some(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
                 };
             }
 
@@ -1095,12 +1110,16 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             assert!(_bus_num > 0);
             let batchertype_gpu = batchertype_gpus[_bus_num - 1];  // FIXME-Ryan: //Use the last GPU
 
-            // let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
+            // let all_bus_ids = opencl::Device::all()
+            //                     .unwrap()
+            //                     .iter()
+            //                     .map(|d| d.bus_id())
+            //                     .collect::<Vec<_>>();
             // let _bus_num = all_bus_ids.len();
             // assert!(_bus_num>0);
             // let batchertype_gpu = match _bus_num {
             //     1 => Some(BatcherType::GPU),
-            //     x => Some(BatcherType::CustomGPU(neptune::cl::GPUSelector::BusId(all_bus_ids[x-1]))),
+            //     x => Some(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[x-1]))),
             // };
             // Ryan End
 
@@ -1793,7 +1812,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let max_gpu_tree_batch_size =
                 settings::SETTINGS.max_gpu_tree_batch_size as usize;
 
-            // let all_bus_ids = neptune::cl::get_all_bus_ids().unwrap();
+            // let all_bus_ids = let all_bus_ids = opencl::Device::all()
+            //                     .unwrap()
+            //                     .iter()
+            //                     .map(|d| d.bus_id())
+            //                     .collect::<Vec<_>>();
             // let _bus_num = all_bus_ids.len();
             // assert!(_bus_num>0);
 

@@ -41,6 +41,7 @@ byte-slice-cast = "1.0.0"
 hwloc = "0.5.0"
 libc = "0.2"
 fdlimit = "0.2.0"
+rust-gpu-tools = { version = "0.2.2" }
 
 [dev-dependencies]
 tempfile = "3"
