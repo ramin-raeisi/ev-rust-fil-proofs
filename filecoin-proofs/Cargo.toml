@@ -9,7 +9,7 @@ repository = "https://github.com/filecoin-project/rust-fil-proofs"
 readme = "README.md"
 
 [dependencies]
-storage-proofs = { version = "^5.0.0", path = "../storage-proofs", default-features = false }
+storage-proofs = { version = "^5.0.0", path = "../storage-proofs", default-features = false, features = ["tree_c-serial-tree_r_last"] }
 filecoin-hashers = { version = "1.0.0", path = "../filecoin-hashers", default-features = false, features = ["poseidon", "sha256"] }
 bitvec = "0.17"
 rand = "0.7"
@@ -63,14 +63,12 @@ failure = "0.1.7"
 tempfile = "3"
 
 [features]
-default = ["gpu", "blst", "tree_c-serial-tree_r_last"]
+default = ["gpu", "blst"]
 cpu-profile = ["gperftools"]
 heap-profile = ["gperftools/heap"]
 simd = ["storage-proofs/simd"]
 asm = ["storage-proofs/asm"]
 gpu = ["storage-proofs/gpu", "bellperson/gpu", "filecoin-hashers/gpu"]
-tree_c-serial-tree_r_last = ["storage-proofs/tree_c-serial-tree_r_last"]
-tree_c-parallel-tree_r_last = ["storage-proofs/tree_c-parallel-tree_r_last"]
 pairing = ["storage-proofs/pairing", "bellperson/pairing", "filecoin-hashers/pairing"]
 blst = ["storage-proofs/blst", "bellperson/blst", "filecoin-hashers/blst"]
 

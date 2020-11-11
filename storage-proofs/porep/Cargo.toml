@@ -31,7 +31,7 @@ log = "0.4.7"
 pretty_assertions = "0.6.1"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { git = "https://github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false, features = ["gpu"] }
+neptune = { git = "https://github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false }
 num_cpus = "1.10.1"
 hex = "0.4.2"
 bincode = "1.1.2"
@@ -52,7 +52,7 @@ filecoin-hashers = { path = "../../filecoin-hashers", version = "1.0.0", default
 
 [features]
 default = ["blst", "gpu", "tree_c-serial-tree_r_last"]
-gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu"]
+gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu", "neptune/gpu"]
 pairing = ["storage-proofs-core/pairing", "bellperson/pairing", "neptune/pairing", "filecoin-hashers/pairing"]
 blst = ["storage-proofs-core/blst", "bellperson/blst", "neptune/blst", "filecoin-hashers/blst"]
 tree_c-serial-tree_r_last = []
