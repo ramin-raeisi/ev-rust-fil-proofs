@@ -22,6 +22,8 @@ use storage_proofs_core::{
 use super::params::Proof;
 use crate::stacked::StackedDrg;
 
+use rayon::prelude::*;
+
 /// Stacked DRG based Proof of Replication.
 ///
 /// # Fields
@@ -150,7 +152,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
             );
         }
 
-        for (i, proof) in proofs.into_iter().enumerate() {
+        proofs.par_iter().enumerate().for_each(|(i, proof)| {
             proof.synthesize(
                 &mut cs.namespace(|| format!("challenge_{}", i)),
                 public_params.layer_challenges.layers(),
@@ -159,7 +161,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                 &comm_r_last_num,
                 &replica_id_bits,
             )?;
-        }
+        });
 
         Ok(())
     }
