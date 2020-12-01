@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use bellperson::bls::Bls12;
 use bellperson::util_cs::bench_cs::BenchCS;
 use bellperson::Circuit;
@@ -18,7 +16,6 @@ use log::info;
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use serde::{Deserialize, Serialize};
-use storage_proofs::api_version::ApiVersion;
 use storage_proofs::compound_proof::CompoundProof;
 #[cfg(feature = "measurements")]
 use storage_proofs::measurements::Operation;
@@ -50,15 +47,11 @@ pub struct ProdbenchInputs {
     stacked_layers: u64,
     /// How many sectors should be created in parallel.
     num_sectors: u64,
-    api_version: String,
 }
 
 impl ProdbenchInputs {
     pub fn sector_size_bytes(&self) -> u64 {
         bytefmt::parse(&self.sector_size).expect("failed to parse sector size")
-    }
-    pub fn api_version(&self) -> ApiVersion {
-        ApiVersion::from_str(&self.api_version).expect("failed to parse api version")
     }
 }
 
@@ -195,7 +188,6 @@ pub fn run(
         inputs.num_sectors as usize,
         only_add_piece,
         arbitrary_porep_id,
-        inputs.api_version(),
     );
 
     if only_add_piece || only_replicate {
@@ -288,7 +280,6 @@ fn measure_porep_circuit(i: &ProdbenchInputs) -> usize {
         expansion_degree,
         porep_id: arbitrary_porep_id,
         layer_challenges,
-        api_version: i.api_version(),
     };
 
     let pp = StackedDrg::<ProdbenchTree, Sha256Hasher>::setup(&sp).expect("failed to setup DRG");
@@ -322,7 +313,6 @@ fn generate_params(i: &ProdbenchInputs) {
         sector_size,
         partitions,
         porep_id: dummy_porep_id,
-        api_version: i.api_version(),
     });
 }
 
@@ -330,11 +320,11 @@ fn cache_porep_params(porep_config: PoRepConfig) {
     use filecoin_proofs::parameters::public_params;
     use storage_proofs::porep::stacked::{StackedCompound, StackedDrg};
 
+    let dummy_porep_id = [0; 32];
     let public_params = public_params(
         PaddedBytesAmount::from(porep_config),
         usize::from(PoRepProofPartitions::from(porep_config)),
-        porep_config.porep_id,
-        porep_config.api_version,
+        dummy_porep_id,
     )
     .expect("failed to get public_params");
 

@@ -5,8 +5,6 @@ use anyhow::Result;
 use bellperson::bls::Fr;
 use rand::{Rng, RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
-
-use storage_proofs::api_version::ApiVersion;
 use storage_proofs::drgraph::Graph;
 use storage_proofs::merkle::create_base_merkle_tree;
 use storage_proofs::porep::stacked::StackedBucketGraph;
@@ -378,7 +376,6 @@ fn build_sector(
         DRG_DEGREE,
         EXP_DEGREE,
         porep_id,
-        ApiVersion::V1_1_0,
     )?;
 
     let mut staged_sector = Vec::with_capacity(u64::from(sector_size) as usize);

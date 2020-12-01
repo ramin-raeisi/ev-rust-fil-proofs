@@ -1,6 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, ParameterizedBenchmark};
 use filecoin_hashers::poseidon::*;
-use storage_proofs_core::api_version::ApiVersion;
 use storage_proofs_core::drgraph::*;
 
 #[allow(clippy::unit_arg)]
@@ -12,14 +11,8 @@ fn drgraph(c: &mut Criterion) {
         ParameterizedBenchmark::new(
             "bucket/m=6",
             |b, n| {
-                let graph = BucketGraph::<PoseidonHasher>::new(
-                    *n,
-                    BASE_DEGREE,
-                    0,
-                    [32; 32],
-                    ApiVersion::V1_1_0,
-                )
-                .unwrap();
+                let graph =
+                    BucketGraph::<PoseidonHasher>::new(*n, BASE_DEGREE, 0, [32; 32]).unwrap();
 
                 b.iter(|| {
                     let mut parents = vec![0; 6];

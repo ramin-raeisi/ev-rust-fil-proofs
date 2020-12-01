@@ -174,7 +174,6 @@ where
         PaddedBytesAmount::from(porep_config),
         usize::from(PoRepProofPartitions::from(porep_config)),
         porep_config.porep_id,
-        porep_config.api_version,
     )?;
 
     let offset_padded: PaddedBytesAmount = UnpaddedBytesAmount::from(offset).into();

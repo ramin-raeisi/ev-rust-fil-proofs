@@ -8,13 +8,12 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use sha2::{Digest, Sha256};
 
-use crate::api_version::ApiVersion;
 use crate::crypto::{derive_porep_domain_seed, DRSAMPLE_DST};
 use crate::error::*;
 use crate::fr32::bytes_into_fr_repr_safe;
 use crate::parameter_cache::ParameterSetMetadata;
 use crate::util::{data_at_node_offset, NODE_SIZE};
-use crate::PoRepID;
+use crate::{is_legacy_porep_id, PoRepID};
 
 pub const PARALLEL_MERKLE: bool = true;
 
@@ -58,7 +57,6 @@ pub trait Graph<H: Hasher>: ::std::fmt::Debug + Clone + PartialEq + Eq {
         base_degree: usize,
         expansion_degree: usize,
         porep_id: PoRepID,
-        api_version: ApiVersion,
     ) -> Result<Self>;
     fn seed(&self) -> [u8; 28];
 
@@ -84,7 +82,7 @@ pub struct BucketGraph<H: Hasher> {
     nodes: usize,
     base_degree: usize,
     seed: [u8; 28],
-    api_version: ApiVersion,
+    is_legacy: bool,
     _h: PhantomData<H>,
 }
 
@@ -159,9 +157,10 @@ impl<H: Hasher> Graph<H> for BucketGraph<H> {
                 let metagraph_node = node as u64 * m_prime as u64;
                 let n_buckets = (metagraph_node as f64).log2().ceil() as u64;
 
-                let (predecessor_index, other_drg_parents) = match self.api_version {
-                    ApiVersion::V1_0_0 => (m_prime, &mut parents[..]),
-                    ApiVersion::V1_1_0 => (0, &mut parents[1..]),
+                let (predecessor_index, other_drg_parents) = if self.is_legacy {
+                    (m_prime, &mut parents[..])
+                } else {
+                    (0, &mut parents[1..])
                 };
 
                 for parent in other_drg_parents.iter_mut().take(m_prime) {
@@ -215,7 +214,6 @@ impl<H: Hasher> Graph<H> for BucketGraph<H> {
         base_degree: usize,
         expansion_degree: usize,
         porep_id: PoRepID,
-        api_version: ApiVersion,
     ) -> Result<Self> {
         ensure!(expansion_degree == 0, "Expension degree must be zero.");
 
@@ -234,7 +232,7 @@ impl<H: Hasher> Graph<H> for BucketGraph<H> {
             nodes,
             base_degree,
             seed: drg_seed,
-            api_version,
+            is_legacy: is_legacy_porep_id(porep_id),
             _h: PhantomData,
         })
     }
@@ -286,15 +284,15 @@ mod tests {
         let legacy_porep_id = porep_id(0);
         let new_porep_id = porep_id(5);
 
-        graph_bucket_aux::<H>(legacy_porep_id, ApiVersion::V1_0_0);
-        graph_bucket_aux::<H>(new_porep_id, ApiVersion::V1_1_0);
+        graph_bucket_aux::<H>(legacy_porep_id);
+        graph_bucket_aux::<H>(new_porep_id);
     }
 
-    fn graph_bucket_aux<H: Hasher>(porep_id: PoRepID, api_version: ApiVersion) {
+    fn graph_bucket_aux<H: Hasher>(porep_id: PoRepID) {
         let degree = BASE_DEGREE;
 
         for &size in &[4, 16, 256, 2048] {
-            let g = BucketGraph::<H>::new(size, degree, 0, porep_id, api_version).unwrap();
+            let g = BucketGraph::<H>::new(size, degree, 0, porep_id).unwrap();
 
             assert_eq!(g.size(), size, "wrong nodes count");
 
@@ -324,21 +322,18 @@ mod tests {
                     assert_ne!(i, parent as usize, "self reference found");
                 }
 
-                match api_version {
-                    ApiVersion::V1_0_0 => {
-                        assert_eq!(
-                            i - 1,
-                            pa1[degree - 1] as usize,
-                            "immediate predecessor was not last DRG parent"
-                        );
-                    }
-                    ApiVersion::V1_1_0 => {
-                        assert_eq!(
-                            i - 1,
-                            pa1[0] as usize,
-                            "immediate predecessor was not first parent"
-                        );
-                    }
+                if is_legacy_porep_id(porep_id) {
+                    assert_eq!(
+                        i - 1,
+                        pa1[degree - 1] as usize,
+                        "immediate predecessor was not last DRG parent"
+                    );
+                } else {
+                    assert_eq!(
+                        i - 1,
+                        pa1[0] as usize,
+                        "immediate predecessor was not first parent"
+                    );
                 }
             }
         }
@@ -357,7 +352,7 @@ mod tests {
     fn gen_proof<H: 'static + Hasher, U: 'static + PoseidonArity>(config: Option<StoreConfig>) {
         let leafs = 64;
         let porep_id = [1; 32];
-        let g = BucketGraph::<H>::new(leafs, BASE_DEGREE, 0, porep_id, ApiVersion::V1_1_0).unwrap();
+        let g = BucketGraph::<H>::new(leafs, BASE_DEGREE, 0, porep_id).unwrap();
         let data = vec![2u8; NODE_SIZE * leafs];
 
         let mmapped = &mmap_from(&data);

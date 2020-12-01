@@ -6,7 +6,6 @@ use filecoin_hashers::Hasher;
 use log::info;
 use sha2raw::Sha256;
 use storage_proofs_core::{
-    api_version::ApiVersion,
     crypto::{
         derive_porep_domain_seed,
         feistel::{self, FeistelPrecomputed},
@@ -15,6 +14,7 @@ use storage_proofs_core::{
     drgraph::BASE_DEGREE,
     drgraph::{BucketGraph, Graph},
     error::Result,
+    is_legacy_porep_id,
     parameter_cache::ParameterSetMetadata,
     settings,
     util::NODE_SIZE,
@@ -38,7 +38,7 @@ pub struct StackedGraph<H, G>
     base_graph: G,
     pub(crate) feistel_keys: [feistel::Index; 4],
     feistel_precomputed: FeistelPrecomputed,
-    api_version: ApiVersion,
+    is_legacy: bool,
     id: String,
     _h: PhantomData<H>,
 }
@@ -101,7 +101,6 @@ impl<H, G> StackedGraph<H, G>
         base_degree: usize,
         expansion_degree: usize,
         porep_id: PoRepID,
-        api_version: ApiVersion,
     ) -> Result<Self> {
         assert_eq!(base_degree, BASE_DEGREE);
         assert_eq!(expansion_degree, EXP_DEGREE);
@@ -109,7 +108,7 @@ impl<H, G> StackedGraph<H, G>
 
         let base_graph = match base_graph {
             Some(graph) => graph,
-            None => G::new(nodes, base_degree, 0, porep_id, api_version)?,
+            None => G::new(nodes, base_degree, 0, porep_id)?,
         };
 
         let bg_id = base_graph.identifier();
@@ -125,7 +124,7 @@ impl<H, G> StackedGraph<H, G>
             expansion_degree,
             feistel_keys,
             feistel_precomputed: feistel::precompute((expansion_degree * nodes) as feistel::Index),
-            api_version,
+            is_legacy: is_legacy_porep_id(porep_id),
             _h: PhantomData,
         };
 
@@ -314,9 +313,8 @@ impl<H, G> Graph<H> for StackedGraph<H, G>
         base_degree: usize,
         expansion_degree: usize,
         porep_id: PoRepID,
-        api_version: ApiVersion,
     ) -> Result<Self> {
-        Self::new_stacked(nodes, base_degree, expansion_degree, porep_id, api_version)
+        Self::new_stacked(nodes, base_degree, expansion_degree, porep_id)
     }
 
     fn create_key(
@@ -372,10 +370,11 @@ impl<'a, H, G> StackedGraph<H, G>
             self.feistel_precomputed,
         );
 
-        match self.api_version {
-            ApiVersion::V1_0_0 => transformed as u32 / self.expansion_degree as u32,
-            ApiVersion::V1_1_0 => u32::try_from(transformed as u64 / self.expansion_degree as u64)
-                .expect("invalid transformation"),
+        if self.is_legacy {
+            transformed as u32 / self.expansion_degree as u32
+        } else {
+            u32::try_from(transformed as u64 / self.expansion_degree as u64)
+                .expect("invalid transformation")
         }
 
         // Collapse the output in the matrix search space to the row of the corresponding
@@ -395,16 +394,8 @@ impl<'a, H, G> StackedGraph<H, G>
         base_degree: usize,
         expansion_degree: usize,
         porep_id: PoRepID,
-        api_version: ApiVersion,
     ) -> Result<Self> {
-        Self::new(
-            None,
-            nodes,
-            base_degree,
-            expansion_degree,
-            porep_id,
-            api_version,
-        )
+        Self::new(None, nodes, base_degree, expansion_degree, porep_id)
     }
 
     pub fn base_graph(&self) -> &G {
@@ -454,6 +445,20 @@ mod tests {
     use std::collections::HashSet;
 
     use filecoin_hashers::poseidon::PoseidonHasher;
+
+    #[test]
+    fn test_is_legacy() {
+        fn p(v: u64) -> PoRepID {
+            let mut res = [0u8; 32];
+            res[..8].copy_from_slice(&v.to_le_bytes());
+            res
+        }
+
+        assert!(is_legacy_porep_id(p(0)));
+        assert!(is_legacy_porep_id(p(1)));
+        assert!(is_legacy_porep_id(p(4)));
+        assert!(!is_legacy_porep_id(p(5)));
+    }
 
     // Test that 3 (or more) rounds of the Feistel cipher can be used
     // as a pseudorandom permutation, that is, each input will be mapped
@@ -510,14 +515,14 @@ mod tests {
             porep_id
         };
 
-        test_pathology_aux(porep_id(3), sector32_nodes, ApiVersion::V1_0_0);
-        test_pathology_aux(porep_id(4), sector64_nodes, ApiVersion::V1_0_0);
+        test_pathology_aux(porep_id(3), sector32_nodes);
+        test_pathology_aux(porep_id(4), sector64_nodes);
 
-        test_pathology_aux(porep_id(8), sector32_nodes, ApiVersion::V1_1_0);
-        test_pathology_aux(porep_id(9), sector64_nodes, ApiVersion::V1_1_0);
+        test_pathology_aux(porep_id(8), sector32_nodes);
+        test_pathology_aux(porep_id(9), sector64_nodes);
     }
 
-    fn test_pathology_aux(porep_id: PoRepID, nodes: u32, api_version: ApiVersion) {
+    fn test_pathology_aux(porep_id: PoRepID, nodes: u32) {
         // In point of fact, the concrete graphs expected to be non-pathological
         // appear to demonstrate this immediately (i.e. in the first node). We
         // test more than that just to make the tentative diagnosis of pathology
@@ -528,17 +533,13 @@ mod tests {
         // is sound.
         let test_n = 1_000;
 
-        let expect_pathological = match api_version {
-            ApiVersion::V1_0_0 => true,
-            ApiVersion::V1_1_0 => false,
-        };
+        let expect_pathological = is_legacy_porep_id(porep_id);
 
         let graph = StackedBucketGraph::<PoseidonHasher>::new_stacked(
             nodes as usize,
             BASE_DEGREE,
             EXP_DEGREE,
             porep_id,
-            api_version,
         )
         .unwrap();
 
@@ -605,7 +606,6 @@ mod tests {
             BASE_DEGREE,
             EXP_DEGREE,
             porep_id,
-            ApiVersion::V1_1_0,
         )
         .unwrap();
 
@@ -653,7 +653,6 @@ mod tests {
             BASE_DEGREE,
             EXP_DEGREE,
             porep_id,
-            ApiVersion::V1_1_0,
         )
         .unwrap();
 

@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use humansize::{file_size_opts, FileSize};
 use log::{info, warn};
@@ -14,7 +12,6 @@ use filecoin_proofs::parameters::{
 use filecoin_proofs::types::*;
 use filecoin_proofs::with_shape;
 use filecoin_proofs::PoStType;
-use storage_proofs::api_version::ApiVersion;
 use storage_proofs::compound_proof::CompoundProof;
 use storage_proofs::porep::stacked::{StackedCompound, StackedDrg};
 use storage_proofs::post::fallback::{FallbackPoSt, FallbackPoStCircuit, FallbackPoStCompound};
@@ -43,7 +40,6 @@ fn get_porep_info<Tree: 'static + MerkleTreeTrait>(porep_config: PoRepConfig) ->
         PaddedBytesAmount::from(porep_config),
         usize::from(PoRepProofPartitions::from(porep_config)),
         porep_config.porep_id,
-        porep_config.api_version,
     )
     .expect("failed to get public params from config");
 
@@ -94,11 +90,9 @@ struct Opt {
     porep: bool,
     #[structopt(short = "z", long, use_delimiter = true)]
     constraints_for_sector_sizes: Vec<u64>,
-    #[structopt(default_value = "1.0.0", long)]
-    api_version: String,
 }
 
-fn winning_post_info(sector_size: u64, api_version: ApiVersion) -> CircuitInfo {
+fn winning_post_info(sector_size: u64) -> CircuitInfo {
     with_shape!(
         sector_size,
         get_winning_post_info,
@@ -108,12 +102,11 @@ fn winning_post_info(sector_size: u64, api_version: ApiVersion) -> CircuitInfo {
             sector_count: WINNING_POST_SECTOR_COUNT,
             typ: PoStType::Winning,
             priority: true,
-            api_version,
         }
     )
 }
 
-fn window_post_info(sector_size: u64, api_version: ApiVersion) -> CircuitInfo {
+fn window_post_info(sector_size: u64) -> CircuitInfo {
     with_shape!(
         sector_size,
         get_window_post_info,
@@ -127,12 +120,11 @@ fn window_post_info(sector_size: u64, api_version: ApiVersion) -> CircuitInfo {
                 .expect("unknown sector size"),
             typ: PoStType::Window,
             priority: true,
-            api_version,
         }
     )
 }
 
-fn porep_info(sector_size: u64, api_version: ApiVersion) -> (CircuitInfo, usize) {
+fn porep_info(sector_size: u64) -> (CircuitInfo, usize) {
     let partitions = PoRepProofPartitions(
         *POREP_PARTITIONS
             .read()
@@ -147,7 +139,6 @@ fn porep_info(sector_size: u64, api_version: ApiVersion) -> (CircuitInfo, usize)
             sector_size: SectorSize(sector_size),
             partitions,
             porep_id: [0; 32],
-            api_version,
         }
     );
     (info, partitions.into())
@@ -218,8 +209,6 @@ pub fn main() {
     let count_winning = opts.winning;
     let count_window = opts.window;
     let count_porep = opts.porep;
-    let api_version = ApiVersion::from_str(&opts.api_version)
-        .expect("Failed to parse api_version from semver string");
 
     for sector_size in sizes {
         let human_size = sector_size
@@ -228,7 +217,7 @@ pub fn main() {
         println!("Getting circuit info for sector size: {}", human_size);
 
         if count_winning {
-            let info = winning_post_info(sector_size, api_version);
+            let info = winning_post_info(sector_size);
             println!(
                 "{} Winning PoSt constraints: {}, public inputs: {}, partitions: 1",
                 human_size, info.constraints, info.inputs
@@ -236,7 +225,7 @@ pub fn main() {
         }
 
         if count_window {
-            let info = window_post_info(sector_size, api_version);
+            let info = window_post_info(sector_size);
             println!(
                 "{} Window PoSt constraints (per partition): {}, public inputs (per partition): {}, partitions: <depends on input size>",
                 human_size, info.constraints, info.inputs
@@ -244,7 +233,7 @@ pub fn main() {
         }
 
         if count_porep {
-            let (info, partitions) = porep_info(sector_size, api_version);
+            let (info, partitions) = porep_info(sector_size);
             println!(
                 "{} PoRep constraints: {}, public inputs: {}, partitions: {}",
                 human_size, info.constraints, info.inputs, partitions

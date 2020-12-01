@@ -29,7 +29,6 @@ for StackedDrg<'c, Tree, G>
             sp.degree,
             sp.expansion_degree,
             sp.porep_id,
-            sp.api_version,
         )?;
 
         Ok(PublicParams::new(graph, sp.layer_challenges.clone()))
