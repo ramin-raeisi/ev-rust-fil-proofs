@@ -23,6 +23,8 @@ commandspec = "0.12.2"
 chrono = { version = "0.4.7", features = ["serde"] }
 memmap = "0.7.0"
 bellperson = { version = "0.12", default-features = false }
+paired = "0.20.0"
+fil-sapling-crypto = "0.6.3"
 rand = "0.7"
 tempfile = "3.0.8"
 cpu-time = "1.0.0"
@@ -32,7 +34,7 @@ async-std = "1.6"
 blake2s_simd = "0.5.6"
 fil_logger = "0.1"
 log = "0.4.8"
-uom = "0.28"
+uom = "0.30"
 merkletree = { path = "../../merkle_light" }
 bincode = "1.1.2"
 anyhow = "1.0.23"
@@ -44,6 +46,7 @@ flexi_logger = "0.16.1"
 typenum = "1.11.2"
 generic-array = "0.14.4"
 byte-unit = "4.0.9"
+base64-url = "1.4.7"
 
 [features]
 default = ["gpu", "measurements"]
