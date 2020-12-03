@@ -223,6 +223,7 @@ mod tests {
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
     use storage_proofs_core::{
+        api_version::ApiVersion,
         compound_proof::CompoundProof,
         merkle::{generate_tree, get_base_tree_count, LCTree, MerkleTreeTrait, OctMerkleTree},
         proof::ProofScheme,
@@ -272,6 +273,7 @@ mod tests {
             sector_size: 1024 * 1024 * 1024 * 32 as u64,
             challenge_count: 10,
             sector_count: 5,
+            api_version: ApiVersion::V1_1_0,
         };
 
         let pp = FallbackPoSt::<OctMerkleTree<PoseidonHasher>>::setup(&params)
@@ -305,6 +307,7 @@ mod tests {
             sector_size: sector_size as u64,
             challenge_count: 5,
             sector_count,
+            api_version: ApiVersion::V1_1_0,
         };
 
         let temp_dir = tempfile::tempdir().expect("tempdir failure");

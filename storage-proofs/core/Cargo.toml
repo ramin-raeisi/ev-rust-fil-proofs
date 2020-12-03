@@ -45,6 +45,7 @@ neptune = { git = "https://github.com/nilfoundation/crusty3-neptune", branch = "
 cpu-time = { version = "1.0", optional = true }
 gperftools = { version = "0.2", optional = true }
 num_cpus = "1.10.1"
+semver = "0.11.0"
 
 [dev-dependencies]
 proptest = "0.10"
