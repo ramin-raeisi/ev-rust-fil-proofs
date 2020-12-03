@@ -72,7 +72,6 @@ for StackedDrg<'c, Tree, G>
             &priv_inputs.t_aux,
             &pub_params.layer_challenges,
             pub_params.layer_challenges.layers(),
-            pub_params.layer_challenges.layers(),
             partition_count,
         )
     }

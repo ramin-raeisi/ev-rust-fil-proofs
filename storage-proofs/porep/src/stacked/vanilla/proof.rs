@@ -92,7 +92,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         t_aux: &TemporaryAuxCache<Tree, G>,
         layer_challenges: &LayerChallenges,
         layers: usize,
-        _total_layers: usize,
         partition_count: usize,
     ) -> Result<Vec<Vec<Proof<Tree, G>>>> {
         assert!(layers > 0);
@@ -595,107 +594,26 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             assert!(find_idle_gpu >= 0);
                             let find_idle_gpu: usize = find_idle_gpu as usize;
 
-                            info!("[tree_c] Use multi GPUs, total_gpu={}, i={}, use_gpu_index={}", _bus_num, i, find_idle_gpu);
-                            let mut column_tree_builder = ColumnTreeBuilder::<
-                                ColumnArity,
-                                TreeArity,
-                            >::new(
-                                // Some(BatcherType::GPU),
-                                batchertype_gpus[find_idle_gpu].clone(), // TODO-Ryan: Use multi GPUs
-                                nodes_count,
-                                max_gpu_column_batch_size,
-                                max_gpu_tree_batch_size,
-                            ).expect("failed to create ColumnTreeBuilder");
+                    // Persist the base and tree data to disk based using the current store config.
+                    let tree_c_store =
+                        DiskStore::<<Tree::Hasher as Hasher>::Domain>::new_with_config(
+                            tree_len,
+                            Tree::Arity::to_usize(),
+                            config.clone(),
+                        )
+                        .expect("failed to create DiskStore for base tree data");
 
-                            // let mut i = 0;
-                            let config = &configs[i]; //let mut config = &configs[i];
+                    let store = Arc::new(RwLock::new(tree_c_store));
+                    let batch_size = std::cmp::min(base_data.len(), column_write_batch_size);
+                    let flatten_and_write_store = |data: &Vec<Fr>, offset| {
+                        data.into_par_iter()
+                            .chunks(batch_size)
+                            .enumerate()
+                            .try_for_each(|(index, fr_elements)| {
+                                let mut buf = Vec::with_capacity(batch_size * NODE_SIZE);
 
-                            // Loop until all trees for all configs have been built.
-                            loop { //while i < configs.len() {
-                                let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) = builder_rx.recv().expect("failed to recv columns");
-
-                                // Just add non-final column batches.
-                                if !is_final {
-                                    column_tree_builder.add_columns(&columns).expect("failed to add columns");
-                                    continue;
-                                };
-
-                                info!("[tree_c] final column");
-                                // If we get here, this is a final column: build a sub-tree.
-                                let (base_data, tree_data) = column_tree_builder.add_final_columns(&columns).expect("failed to add final columns");
-                                trace!(
-                                    "base data len {}, tree data len {}",
-                                    base_data.len(),
-                                    tree_data.len()
-                                );
-                                let tree_len = base_data.len() + tree_data.len();
-                                info!(
-                                    "persisting base tree_c {}/{} of length {}",
-                                    i + 1,
-                                    tree_count,
-                                    tree_len,
-                                );
-                                assert_eq!(base_data.len(), nodes_count);
-                                assert_eq!(tree_len, config.size.unwrap());
-                                // *gpu_busy_flag[find_idle_gpu].write().unwrap() = 0; // TODO-Ryan: At the store stage, you can go directly to the preparation of the next tree (intel platform adopted)
-                                // trace!("[tree_c] set gpu idle={} i={}, j={}", find_idle_gpu, i, j);
-
-                                // Persist the base and tree data to disk based using the current store config.
-                                let tree_c_store =
-                                    DiskStore::<<Tree::Hasher as Hasher>::Domain>::new_with_config(
-                                        tree_len,
-                                        Tree::Arity::to_usize(),
-                                        config.clone(),
-                                    ).expect("failed to create DiskStore for base tree data");
-
-                                let store = Arc::new(RwLock::new(tree_c_store));
-                                let batch_size = std::cmp::min(base_data.len(), column_write_batch_size);
-                                let flatten_and_write_store = |data: &Vec<Fr>, offset| {
-                                    data.into_par_iter()
-                                        .chunks(column_write_batch_size)
-                                        .enumerate()
-                                        .try_for_each(|(index, fr_elements)| {
-                                            let mut buf = Vec::with_capacity(batch_size * NODE_SIZE);
-
-                                            for fr in fr_elements {
-                                                buf.extend(fr_into_bytes(&fr));
-                                            }
-                                            store
-                                                .write()
-                                                .expect("failed to access store for write")
-                                                .copy_from_slice(&buf[..], offset + (batch_size * index))
-                                        })
-                                };
-
-                                {//TODO-Ryan: tree_c gpu store, At the same time, only one thread can write data to the disk, leaving the scope to unlock
-                                    let _mutex = mutex.write().expect("[tree_c] failed to access store for write"); // Cannot be changed to _, the lock will be released immediately
-
-                                    trace!(
-                                        "flattening tree_c base data of {} nodes using batch size {}",
-                                        base_data.len(),
-                                        batch_size
-                                    );
-                                    flatten_and_write_store(&base_data, 0).expect("failed to flatten and write store");
-                                    trace!("done flattening tree_c base data");
-
-                                    let base_offset = base_data.len();
-                                    trace!("flattening tree_c tree data of {} nodes using batch size {} and base offset {}", tree_data.len(), batch_size, base_offset);
-                                    flatten_and_write_store(&tree_data, base_offset).expect("failed to flatten and write store");
-                                    trace!("done flattening tree_c tree data");
-
-                                    trace!("writing tree_c store data");
-                                    store
-                                        .write()
-                                        .expect("failed to access store for sync")
-                                        .sync().unwrap();
-                                    trace!("done writing tree_c store data");
-
-                                    // // Move on to the next config.
-                                    // i += 1;
-                                    // if i == configs.len() {
-                                    //     break;
-                                    // }
-                                    // config = &configs[i];
+                                for fr in fr_elements {
+                                    buf.extend(fr_into_bytes(&fr));
                                 }
                                 break;
                             }
