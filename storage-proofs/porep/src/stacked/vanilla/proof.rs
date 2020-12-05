@@ -454,7 +454,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let mut batchertype_gpus = Vec::new();
             if settings::SETTINGS.use_gpu_column_builder {
                 let all_bus_ids = opencl::Device::all()
-                    .unwrap()
                     .iter()
                     .map(|d| d.bus_id())
                     .collect::<Vec<_>>();
@@ -816,7 +815,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let mut batchertype_gpus = Vec::new();
             if settings::SETTINGS.use_gpu_tree_builder {
                 let all_bus_ids = opencl::Device::all()
-                    .unwrap()
                     .iter()
                     .map(|d| d.bus_id())
                     .collect::<Vec<_>>();
