@@ -455,7 +455,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             if settings::SETTINGS.use_gpu_column_builder {
                 let all_bus_ids = opencl::Device::all()
                     .iter()
-                    .map(|d| d.bus_id())
+                    .map(|d| d.bus_id().unwrap())
                     .collect::<Vec<_>>();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
@@ -816,7 +816,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             if settings::SETTINGS.use_gpu_tree_builder {
                 let all_bus_ids = opencl::Device::all()
                     .iter()
-                    .map(|d| d.bus_id())
+                    .map(|d| d.bus_id().unwrap())
                     .collect::<Vec<_>>();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
@@ -1094,7 +1094,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 let all_bus_ids = opencl::Device::all()
                     .unwrap()
                     .iter()
-                    .map(|d| d.bus_id())
+                    .map(|d| d.bus_id().unwrap())
                     .collect::<Vec<_>>();
                 let _bus_num = all_bus_ids.len();
                 assert!(_bus_num > 0);
@@ -1108,9 +1108,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let batchertype_gpu = batchertype_gpus[_bus_num - 1];  // FIXME-Ryan: //Use the last GPU
 
             // let all_bus_ids = opencl::Device::all()
-            //                     .unwrap()
             //                     .iter()
-            //                     .map(|d| d.bus_id())
+            //                     .map(|d| d.bus_id().unwrap())
             //                     .collect::<Vec<_>>();
             // let _bus_num = all_bus_ids.len();
             // assert!(_bus_num>0);
@@ -1810,9 +1809,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 settings::SETTINGS.max_gpu_tree_batch_size as usize;
 
             // let all_bus_ids = let all_bus_ids = opencl::Device::all()
-            //                     .unwrap()
             //                     .iter()
-            //                     .map(|d| d.bus_id())
+            //                     .map(|d| d.bus_id().unwrap())
             //                     .collect::<Vec<_>>();
             // let _bus_num = all_bus_ids.len();
             // assert!(_bus_num>0);
