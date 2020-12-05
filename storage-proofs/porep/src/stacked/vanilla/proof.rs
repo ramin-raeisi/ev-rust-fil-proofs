@@ -66,7 +66,7 @@ pub const TOTAL_PARENTS: usize = 37;
 lazy_static! {
     /// Ensure that only one `TreeBuilder` or `ColumnTreeBuilder` uses the GPU at a time.
     /// Curently, this is accomplished by only instantiating at most one at a time.
-    /// It might be possible relax this constraint, but in that case, only one builder
+    /// It might be possible to relax this constraint, but in that case, only one builder
     /// should actually be active at any given time, so the mutex should still be used.
     static ref GPU_LOCK: Mutex<()> = Mutex::new(());
 }
@@ -92,7 +92,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         t_aux: &TemporaryAuxCache<Tree, G>,
         layer_challenges: &LayerChallenges,
         layers: usize,
-        _total_layers: usize,
         partition_count: usize,
     ) -> Result<Vec<Vec<Proof<Tree, G>>>> {
         assert!(layers > 0);

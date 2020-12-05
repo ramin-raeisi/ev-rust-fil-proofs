@@ -1,6 +1,6 @@
 [package]
 name = "storage-proofs-porep"
-version = "5.4.0"
+version = "6.0.0"
 authors = ["dignifiedquire <me@dignifiedquire.com>"]
 description = "Proofs of replication"
 license = "MIT OR Apache-2.0"
@@ -11,9 +11,9 @@ readme = "README.md"
 [dependencies]
 crossbeam = "0.8"
 digest = "0.9"
-storage-proofs-core = { path = "../core", version = "^5.0.0", default-features = false }
-sha2raw = { path = "../../sha2raw", version = "^2.0.0" }
-filecoin-hashers = { path = "../../filecoin-hashers", version = "1.0.0", default-features = false, features = ["poseidon", "sha256"] }
+storage-proofs-core = { path = "../core", version = "^6.0.0", default-features = false}
+sha2raw = { path = "../../sha2raw", version = "^2.0.0"}
+filecoin-hashers = { path = "../../filecoin-hashers", version = "1.0.0", default-features = false, features = ["poseidon", "sha256"]}
 rand = "0.7"
 merkletree = "0.21.0"
 mapr = "0.8.0"
@@ -58,6 +58,7 @@ pairing = ["storage-proofs-core/pairing", "bellperson/pairing", "neptune/pairing
 blst = ["storage-proofs-core/blst", "bellperson/blst", "neptune/blst", "filecoin-hashers/blst"]
 tree_c-serial-tree_r_last = []
 tree_c-parallel-tree_r_last = []
+single-threaded = []
 
 [[bench]]
 name = "encode"
