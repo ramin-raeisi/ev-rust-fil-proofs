@@ -481,8 +481,9 @@ impl RangeReader {
     ) -> std::io::Result<usize> {
         let mut readsize  = 0;
         let mut ret = Err(Error::new(ErrorKind::InvalidData ,"error config"));
-        debug!("download multi range bufsize: {} ranges: {}", buf.len(), ranges.len());
+        
         let range = format!("bytes={}", gen_range(ranges));
+        
         let mut retry_index = 0;
         let mut pos_list: Vec<(u64, u64, u64)> = Vec::with_capacity(ranges.len());
         for url in self.choose_urls() {
@@ -495,7 +496,10 @@ impl RangeReader {
             pos_list.clear();
             let urlobj = Url::parse(url).unwrap();
             let hostport = format!("{}:{}",urlobj.host_str().unwrap(),urlobj.port().unwrap());            
-            debug!("download multi range {} {}",hostport, &range);
+            debug!("download multi range host:{} bucket:{},key:{} {}",hostport, 
+            self.bucket.as_ref().unwrap(),
+            self.key.as_ref().unwrap(),
+             &range);
             let posturl=format!("{}://{}/{}?get",urlobj.scheme(),hostport,self.bucket.as_ref().unwrap());
             let body = format!(
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Get><Object><Key>{}</Key><Range>{}</Range></Object></Get>",
@@ -582,7 +586,7 @@ impl RangeReader {
                                 //pos_list.push((start << 24 | l as u64, (off-l) as u64));
                                 pos_list.push((start,length,(off-l) as u64));
                                 readsize+=l;
-                                debug!("=range:{:?} value:{}",field.headers.range,String::from_utf8_lossy(buf));     
+                                trace!("=range:{:?} value:{}",field.headers.range,String::from_utf8_lossy(buf));     
                                 
                                 return Ok(());
                             })

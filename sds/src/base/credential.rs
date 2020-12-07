@@ -179,7 +179,7 @@ impl Credential {
         data_to_sign.extend_from_slice(resource.as_bytes());
 
         
-        debug!("string to sign\n{}",String::from_utf8(data_to_sign.clone()).unwrap());
+        trace!("string to sign\n{}",String::from_utf8(data_to_sign.clone()).unwrap());
 
         return (self.sign_s3_v2(&data_to_sign),date);     
     }
