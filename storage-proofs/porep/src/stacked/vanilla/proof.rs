@@ -544,16 +544,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                 let batchertype_gpus = &batchertype_gpus;
                 //Parallel tuning GPU computing
-                for j in 0.._bus_num {
+                for gpu_index in 0.._bus_num {
                     let gpu_busy_flag = gpu_busy_flag.clone();
                     let (builder_tx, builder_rx) = mpsc::sync_channel(0);
                     let writer_tx = writer_tx.clone();
-                    s.spawn(move |_| {
-                        /*for i in (0..config_count).step_by(_bus_num) {
-                            // TODO-Ryan: find_idle_gpu
-                            
-                        }*/
 
+                    s.spawn(move |_| {
                         // TODO-Ryan: find_idle_gpu
                         info!("[tree_c] begin to find idle gpu");
                         let mut find_idle_gpu: i32 = -1;
@@ -577,7 +573,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                         assert!(find_idle_gpu >= 0);
                         let find_idle_gpu: usize = find_idle_gpu as usize;
-                        info!("[tree_c] Use multi GPUs, total_gpu={}, use_gpu_index={}", _bus_num, find_idle_gpu);
+                        info!("[tree_c] Use multi GPUs, total_gpu={}, use_gpu_index={}", _bus_num, gpu_index);
 
                         let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
                             //Some(BatcherType::GPU),
@@ -590,6 +586,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                         // Loop until all trees for all configs have been built.
                         for i in (0..config_count).step_by(_bus_num) {
+                            let i = i + j;
+                            if i >= gpu_index {
+                                break;
+                            }
+
                             loop {
                                 let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
                                     builder_rx.recv().expect("failed to recv columns");
@@ -628,7 +629,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         }
 
                         *gpu_busy_flag[find_idle_gpu].write().unwrap() = 0; // TODO-Ryan: After the store is completed, enter the preparation for the next tree (adopted by the amd platform)
-                        trace!("[tree_c] set gpu idle={}, j={}", find_idle_gpu, j);
+                        trace!("[tree_c] set gpu idle={}", find_idle_gpu);
                     }); // spawn
                 } // gpu loop
 
@@ -769,6 +770,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         })
     }
 
+    // Internally, it has been changed to use GPU in parallel (after tree_c is built in parallel, tree_r_last is built in parallel)
+    #[cfg(feature = "tree_c-serial-tree_r_last")]
     fn generate_tree_r_last<TreeArity>(
         data: &mut Data<'_>,
         nodes_count: usize,
@@ -791,8 +794,31 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let last_layer_labels = labels.labels_for_last_layer()?;
 
         if settings::SETTINGS.use_gpu_tree_builder {
-            info!("generating tree r last using the GPU");
+            info!("[tree_r_last] generating tree r last using the GPU");
             let max_gpu_tree_batch_size = settings::SETTINGS.max_gpu_tree_batch_size as usize;
+
+            // Ryan 
+            let mut batchertype_gpus = Vec::new();
+            if settings::SETTINGS.use_gpu_tree_builder {
+                let all_bus_ids = opencl::Device::all()
+                    .unwrap()
+                    .iter()
+                    .map(|d| d.bus_id())
+                    .collect::<Vec<_>>();
+                let _bus_num = all_bus_ids.len();
+                assert!(_bus_num > 0);
+                for gpu_index in 0.._bus_num {
+                    batchertype_gpus.push(Some(BatcherType::CustomGPU
+                        (opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
+                };
+            }
+
+            let _bus_num = batchertype_gpus.len();
+            assert!(_bus_num > 0);
+
+            let mutex_data = Arc::new(RwLock::new(data)); //Arc:new Thread safe reading and writing of variable data
+            let mutex = Arc::new(RwLock::new(0));
+            // Ryan End
 
             // This channel will receive batches of leaf nodes and add them to the TreeBuilder.
             let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
@@ -802,7 +828,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             rayon::scope(|s| {
                 // This channel will receive the finished tree data to be written to disk.
                 let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(0);
-
+                
                 s.spawn(move |_| {
                     for i in 0..config_count {
                         let mut node_index = 0;
@@ -862,45 +888,63 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         }
                     }
                 });
-                s.spawn(move |_| {
-                    let _gpu_lock = GPU_LOCK.lock().unwrap();
-                    let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
-                        Some(BatcherType::GPU),
-                        nodes_count,
-                        max_gpu_tree_batch_size,
-                        tree_r_last_config.rows_to_discard,
-                    )
-                    .expect("failed to create TreeBuilder");
+                for gpu_index in 0.._bus_num {
+                    // Parallel tuning GPU computing
+                    let tree_r_last_config = &tree_r_last_config;
+                    let batchertype_gpus = &batchertype_gpus;
 
-                    // Loop until all trees for all configs have been built.
-                    for i in 0..config_count {
-                        loop {
-                            let (encoded, is_final) =
-                                builder_rx.recv().expect("failed to recv encoded data");
+                    // This channel will receive batches of leaf nodes and add them to the TreeBuilder.
+                    let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
+                    // let data = data.clone();
+                    let mutex_data = mutex_data.clone();
+                    let mutex = mutex.clone();
 
-                            // Just add non-final leaf batches.
-                            if !is_final {
-                                tree_builder
-                                    .add_leaves(&encoded)
-                                    .expect("failed to add leaves");
-                                continue;
-                            };
+                    s.spawn(move |_| {
+                        info!("[tree_r_last] Use multi GPUs, total_gpu={}, use_gpu_index={}", _bus_num, gpu_index);
+                        let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
+                            batchertype_gpus[gpu_index].clone(),
+                            nodes_count,
+                            max_gpu_tree_batch_size,
+                            tree_r_last_config.rows_to_discard,
+                        )
+                        .expect("failed to create TreeBuilder");
+    
+                        // Loop until all trees for all configs have been built.
+                        for i in (0..config_count).step_by(_bus_num) {
+                            // Move on to the next config.
+                            let i = i + gpu_index;
+                            if i >= config_count {
+                                break;
+                            }
 
-                            // If we get here, this is a final leaf batch: build a sub-tree.
-                            info!(
-                                "building base tree_r_last with GPU {}/{}",
-                                i + 1,
-                                tree_count
-                            );
-                            let (_, tree_data) = tree_builder
-                                .add_final_leaves(&encoded)
-                                .expect("failed to add final leaves");
-
-                            writer_tx.send(tree_data).expect("failed to send tree_data");
-                            break;
+                            loop {
+                                let (encoded, is_final) =
+                                    builder_rx.recv().expect("failed to recv encoded data");
+    
+                                // Just add non-final leaf batches.
+                                if !is_final {
+                                    tree_builder
+                                        .add_leaves(&encoded)
+                                        .expect("failed to add leaves");
+                                    continue;
+                                };
+    
+                                // If we get here, this is a final leaf batch: build a sub-tree.
+                                info!(
+                                    "building base tree_r_last with GPU {}/{}",
+                                    i + 1,
+                                    tree_count
+                                );
+                                let (_, tree_data) = tree_builder
+                                    .add_final_leaves(&encoded)
+                                    .expect("failed to add final leaves");
+    
+                                writer_tx.send(tree_data).expect("failed to send tree_data");
+                                break;
+                            }
                         }
-                    }
-                });
+                    });
+                } // gpu loop
 
                 for config in configs.iter() {
                     let tree_data = writer_rx
