@@ -1219,6 +1219,7 @@ fn create_seal_simple<R: Rng, Tree: 'static + MerkleTreeTrait>(
             *POREP_PARTITIONS.read().unwrap().get(&sector_size).unwrap(),
         ),
         porep_id: arbitrary_porep_id,
+        api_version: ApiVersion::V1_0_0,
     };
 
     let cache_dir = tempfile::tempdir().unwrap();
