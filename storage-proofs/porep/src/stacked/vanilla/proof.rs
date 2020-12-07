@@ -559,7 +559,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     *gpu_busy_flag[i].write().unwrap() = 1;
                                     find_idle_gpu = i as i32;
 
-                                    trace!("[tree_c] find_idle_gpu={} i={}, j={}", find_idle_gpu, i, j);
+                                    trace!("[tree_c] find_idle_gpu={}, gpu_index={}", find_idle_gpu, gpu_index);
                                     break;
                                 }
                             }
@@ -586,7 +586,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                         // Loop until all trees for all configs have been built.
                         for i in (0..config_count).step_by(_bus_num) {
-                            let i = i + j;
+                            let i = i + gpu_index;
                             if i >= gpu_index {
                                 break;
                             }
@@ -771,7 +771,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     }
 
     // Internally, it has been changed to use GPU in parallel (after tree_c is built in parallel, tree_r_last is built in parallel)
-    #[cfg(feature = "tree_c-serial-tree_r_last")]
+    //#[cfg(feature = "tree_c-serial-tree_r_last")]
     fn generate_tree_r_last<TreeArity>(
         data: &mut Data<'_>,
         nodes_count: usize,
@@ -815,9 +815,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let _bus_num = batchertype_gpus.len();
             assert!(_bus_num > 0);
-
-            let mutex_data = Arc::new(RwLock::new(data)); //Arc:new Thread safe reading and writing of variable data
-            let mutex = Arc::new(RwLock::new(0));
             // Ryan End
 
             // This channel will receive batches of leaf nodes and add them to the TreeBuilder.
@@ -895,9 +892,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                     // This channel will receive batches of leaf nodes and add them to the TreeBuilder.
                     let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
-                    // let data = data.clone();
-                    let mutex_data = mutex_data.clone();
-                    let mutex = mutex.clone();
+                    let writer_tx = writer_tx.clone();
 
                     s.spawn(move |_| {
                         info!("[tree_r_last] Use multi GPUs, total_gpu={}, use_gpu_index={}", _bus_num, gpu_index);
