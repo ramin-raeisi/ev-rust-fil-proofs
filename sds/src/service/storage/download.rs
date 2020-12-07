@@ -188,6 +188,31 @@ fn parse_boundary(headers:&HeaderMap)->std::io::Result<String>{
     return Ok(boundary.unwrap());
 }
 
+
+fn build_pos_list(
+    ranges: &Vec<(u64, u64)>,
+    pos_list_ret: &mut Vec<(u64, u64)>,
+    pos_list_src: & Vec<(u64, u64, u64)>){
+ 
+    for(start_t,len_t) in ranges {
+        let mut found =false;
+        for( start,len,buff_pos) in pos_list_src{
+            if start_t>=start && 
+                *start_t < start+len &&
+                start_t+len_t <= start+len {
+                pos_list_ret.push((start_t << 24 | len_t , buff_pos+(start_t-start)));
+                found= true;
+                break;
+            }
+        }
+        if !found{
+            error!("range not found start {} len {} !",start_t,len_t);
+        }
+
+    }
+
+}
+
 fn is_debug() -> bool {
     env::var("SDS_DEBUG").is_ok()
 }
@@ -216,7 +241,6 @@ pub struct RangeReader {
     bucket:Option<String>,
     key:Option<String>,
 }
-
 
 
 impl RangeReader {
@@ -255,7 +279,7 @@ impl RangeReader {
             tries: 5,
             credential: Some(credential),
             bucket: Some(bucket.to_string()),
-            key:Some(key.to_string())
+            key:Some(key.trim_start_matches("/").to_string())
         }
        
     }
@@ -446,19 +470,21 @@ impl RangeReader {
         warn!("final failed read_last_bytes {} {:?}", u, ret);
         return ret.unwrap();
     }
+
+
     
     pub fn read_multi_range(
         &self,
         buf: &mut [u8],
         ranges: &Vec<(u64, u64)>,
-        pos_list: &mut Vec<(u64, u64)>,
+        pos_list_ret: &mut Vec<(u64, u64)>,
     ) -> std::io::Result<usize> {
         let mut readsize  = 0;
         let mut ret = Err(Error::new(ErrorKind::InvalidData ,"error config"));
         debug!("download multi range bufsize: {} ranges: {}", buf.len(), ranges.len());
         let range = format!("bytes={}", gen_range(ranges));
         let mut retry_index = 0;
-        
+        let mut pos_list: Vec<(u64, u64, u64)> = Vec::with_capacity(ranges.len());
         for url in self.choose_urls() {
             if retry_index == 3 {
                 thread::sleep(Duration::from_secs(5));
@@ -553,7 +579,8 @@ impl RangeReader {
                                     l += x;
                                     off+=x;
                                 }
-                                pos_list.push((start << 24 | l as u64, (off-l) as u64));
+                                //pos_list.push((start << 24 | l as u64, (off-l) as u64));
+                                pos_list.push((start,length,(off-l) as u64));
                                 readsize+=l;
                                 debug!("=range:{:?} value:{}",field.headers.range,String::from_utf8_lossy(buf));     
                                 
@@ -568,7 +595,7 @@ impl RangeReader {
                         error!("parse inner multpart failed {:?}",innerResult);
                         return innerResult;
                     }
-                    
+                    build_pos_list(ranges, pos_list_ret,&pos_list);
                     return Ok(readsize);
                 }
             }
@@ -1258,17 +1285,21 @@ mod tests {
     #[test]
     fn test_multi_down_s3_ok() {
         setup();
-        let io_hosts = vec!["http://20.20.5.191:8010"];
-        let reader = RangeReader::new_from_key("tmp", &io_hosts, "jq", "jq",
-                                               0, "lotus", true, false);
+        let io_hosts = vec!["http://20.20.124.21:8010"];
+        let reader = RangeReader::new_from_key("tmp/stdir/bench056087331/sealed/s-t01000-1", &io_hosts, "lotus", "lotus",
+                                               0, "sds", true, false);
         let mut read_data = vec![0; 30];
-        let range = vec![(10,10),(99995,11)];
+        let range = vec![(10,10),(11,4),(9,6)];
         let mut pos:Vec<(u64, u64)> = Vec::with_capacity(range.len());
         let ret = reader.read_multi_range(&mut read_data, &range, &mut pos);
         let r = ret.unwrap();
-        assert_eq!(r, 21);
+        
         let v = read_data;
-        println!("{} {} {} {}", v[0], v[1], v[v.len()-2], v[v.len()-1]);
+        info!("{} {} {} {}", v[0], v[1], v[v.len()-2], v[v.len()-1]);
+        for (p,off) in pos{
+            info!("range :start {} len {} bufpos {}",p>>24,p&0xfff,off);
+        }
+        assert_eq!(r, 11);
     }
 
     #[test]
