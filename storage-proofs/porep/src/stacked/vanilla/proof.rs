@@ -406,9 +406,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         configs: Vec<StoreConfig>,
         labels: &LabelsCache<Tree>,
     ) -> Result<DiskTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>
-        where
-            ColumnArity: 'static + PoseidonArity,
-            TreeArity: PoseidonArity,
+    where
+        ColumnArity: 'static + PoseidonArity,
+        TreeArity: PoseidonArity,
     {
         Self::generate_tree_c_cpu::<ColumnArity, TreeArity>(
             layers,
@@ -787,6 +787,61 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         where
             TreeArity: PoseidonArity,
     {
+        if settings::SETTINGS.use_gpu_tree_builder {
+            Self::generate_tree_r_last_gpu::<TreeArity>(
+                data,
+                nodes_count,
+                tree_count,
+                tree_r_last_config,
+                replica_path,
+                labels,
+            )
+        } else {
+            Self::generate_tree_r_last_cpu::<TreeArity>(
+                data,
+                nodes_count,
+                tree_count,
+                tree_r_last_config,
+                replica_path,
+                labels,
+            )
+        }
+    }
+
+    #[cfg(not(feature = "gpu"))]
+    fn generate_tree_r_last<TreeArity>(
+        data: &mut Data<'_>,
+        nodes_count: usize,
+        tree_count: usize,
+        tree_r_last_config: StoreConfig,
+        replica_path: PathBuf,
+        labels: &LabelsCache<Tree>,
+    ) -> Result<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>
+    where
+        TreeArity: PoseidonArity,
+    {
+        Self::generate_tree_r_last_cpu::<TreeArity>(
+            data,
+            nodes_count,
+            tree_count,
+            tree_r_last_config,
+            replica_path,
+            labels,
+        )
+    }
+
+    #[cfg(feature = "gpu")]
+    fn generate_tree_r_last_gpu<TreeArity>(
+        data: &mut Data<'_>,
+        nodes_count: usize,
+        tree_count: usize,
+        tree_r_last_config: StoreConfig,
+        replica_path: PathBuf,
+        labels: &LabelsCache<Tree>,
+    ) -> Result<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>
+    where
+        TreeArity: PoseidonArity,
+    {
         use bellperson::bls::Fr;
         use merkletree::merkle::{get_merkle_tree_cache_size, get_merkle_tree_leafs};
         use neptune::batch_hasher::BatcherType;
@@ -849,7 +904,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 let data_node = <Tree::Hasher as Hasher>::Domain::try_from_bytes(
                                     data_node_bytes,
                                 )
-                                    .expect("try_from_bytes failed");
+                                .expect("try_from_bytes failed");
                                 let encoded_node =
                                     encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
                                 data_node_bytes
@@ -927,11 +982,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         config.size.expect("config size failure"),
                         Tree::Arity::to_usize(),
                     )
-                        .expect("failed to get merkle tree leaves"),
+                    .expect("failed to get merkle tree leaves"),
                     Tree::Arity::to_usize(),
                     config.rows_to_discard,
                 )
-                    .expect("failed to get merkle tree cache size");
+                .expect("failed to get merkle tree cache size");
                 assert_eq!(tree_data_len, cache_size);
 
                 let flat_tree_data: Vec<_> = tree_data
@@ -972,8 +1027,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         replica_path: PathBuf,
         labels: &LabelsCache<Tree>,
     ) -> Result<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>
-        where
-            TreeArity: PoseidonArity,
+    where
+        TreeArity: PoseidonArity,
     {
         let (configs, replica_config) = split_config_and_replica(
             tree_r_last_config.clone(),
@@ -1418,8 +1473,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         tree_r_last_config: StoreConfig,
         replica_path: PathBuf,
     ) -> Result<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>
-        where
-            TreeArity: PoseidonArity,
+    where
+        TreeArity: PoseidonArity,
     {
         let (configs, replica_config) = split_config_and_replica(
             tree_r_last_config.clone(),

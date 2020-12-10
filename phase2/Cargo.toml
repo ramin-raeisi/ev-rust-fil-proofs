@@ -8,7 +8,6 @@ edition = "2018"
 repository = "https://github.com/filecoin-project/rust-fil-proofs"
 readme = "README.md"
 
-
 [dependencies]
 bellperson = { git = "ssh://git@github.com/nilfoundation/fil-zk.git", branch = "master", default-features = false }
 filecoin-proofs = { version = "^6.0.0", path = "../filecoin-proofs", default-features = false }
