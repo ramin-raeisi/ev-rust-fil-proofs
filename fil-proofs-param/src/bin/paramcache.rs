@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
@@ -17,6 +19,7 @@ use filecoin_proofs::types::{
 };
 use filecoin_proofs::{with_shape, PoStType};
 
+use storage_proofs::api_version::ApiVersion;
 use storage_proofs::compound_proof::CompoundProof;
 use storage_proofs::merkle::MerkleTreeTrait;
 
@@ -31,8 +34,9 @@ fn cache_porep_params<Tree: 'static + MerkleTreeTrait>(porep_config: PoRepConfig
         PaddedBytesAmount::from(porep_config),
         usize::from(PoRepProofPartitions::from(porep_config)),
         porep_config.porep_id,
+        porep_config.api_version,
     )
-    .expect("failed to get public params from config");
+        .expect("failed to get public params from config");
 
     {
         let circuit = <StackedCompound<Tree, DefaultPieceHasher> as CompoundProof<
@@ -54,7 +58,7 @@ fn cache_porep_params<Tree: 'static + MerkleTreeTrait>(porep_config: PoRepConfig
             circuit,
             &public_params,
         )
-        .expect("failed to get groth params");
+            .expect("failed to get groth params");
     }
     {
         let circuit = <StackedCompound<Tree, DefaultPieceHasher> as CompoundProof<
@@ -67,7 +71,7 @@ fn cache_porep_params<Tree: 'static + MerkleTreeTrait>(porep_config: PoRepConfig
             circuit,
             &public_params,
         )
-        .expect("failed to get verifying key");
+            .expect("failed to get verifying key");
     }
 }
 
@@ -97,7 +101,7 @@ fn cache_winning_post_params<Tree: 'static + MerkleTreeTrait>(post_config: &PoSt
             post_circuit,
             &post_public_params,
         )
-        .expect("failed to get groth params");
+            .expect("failed to get groth params");
     }
     {
         let post_circuit: FallbackPoStCircuit<Tree> =
@@ -111,7 +115,7 @@ fn cache_winning_post_params<Tree: 'static + MerkleTreeTrait>(post_config: &PoSt
             post_circuit,
             &post_public_params,
         )
-        .expect("failed to get verifying key");
+            .expect("failed to get verifying key");
     }
 }
 
@@ -141,7 +145,7 @@ fn cache_window_post_params<Tree: 'static + MerkleTreeTrait>(post_config: &PoStC
             post_circuit,
             &post_public_params,
         )
-        .expect("failed to get groth params");
+            .expect("failed to get groth params");
     }
     {
         let post_circuit: FallbackPoStCircuit<Tree> =
@@ -155,7 +159,7 @@ fn cache_window_post_params<Tree: 'static + MerkleTreeTrait>(post_config: &PoStC
             post_circuit,
             &post_public_params,
         )
-        .expect("failed to get verifying key");
+            .expect("failed to get verifying key");
     }
 }
 
@@ -168,9 +172,11 @@ struct Opt {
     only_post: bool,
     #[structopt(short = "z", long, use_delimiter = true)]
     params_for_sector_sizes: Vec<u64>,
+    #[structopt(default_value = "1.1.0", long)]
+    api_version: String,
 }
 
-fn generate_params_post(sector_size: u64) {
+fn generate_params_post(sector_size: u64, api_version: ApiVersion) {
     with_shape!(
         sector_size,
         cache_winning_post_params,
@@ -180,6 +186,7 @@ fn generate_params_post(sector_size: u64) {
             sector_count: WINNING_POST_SECTOR_COUNT,
             typ: PoStType::Winning,
             priority: true,
+            api_version,
         }
     );
 
@@ -196,11 +203,12 @@ fn generate_params_post(sector_size: u64) {
                 .expect("unknown sector size"),
             typ: PoStType::Window,
             priority: true,
+            api_version,
         }
     );
 }
 
-fn generate_params_porep(sector_size: u64) {
+fn generate_params_porep(sector_size: u64, api_version: ApiVersion) {
     with_shape!(
         sector_size,
         cache_porep_params,
@@ -214,6 +222,7 @@ fn generate_params_porep(sector_size: u64) {
                     .expect("unknown sector size"),
             ),
             porep_id: [0; 32],
+            api_version,
         }
     );
 }
@@ -281,6 +290,8 @@ pub fn main() {
     }
 
     let only_post = opts.only_post;
+    let api_version = ApiVersion::from_str(&opts.api_version)
+        .expect("Cannot parse API version from semver string (e.g. 1.1.0)");
 
     for sector_size in sizes {
         let human_size = sector_size
@@ -293,10 +304,11 @@ pub fn main() {
         spinner.set_message(&message);
         spinner.enable_steady_tick(100);
 
-        generate_params_post(sector_size);
+        // TODO: get API version from command line args
+        generate_params_post(sector_size, api_version);
 
         if !only_post {
-            generate_params_porep(sector_size);
+            generate_params_porep(sector_size, api_version);
         }
         spinner.finish_with_message(&format!("✔ {}", &message));
     }

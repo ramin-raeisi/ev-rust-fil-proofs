@@ -787,61 +787,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         where
             TreeArity: PoseidonArity,
     {
-        if settings::SETTINGS.use_gpu_tree_builder {
-            Self::generate_tree_r_last_gpu::<TreeArity>(
-                data,
-                nodes_count,
-                tree_count,
-                tree_r_last_config,
-                replica_path,
-                labels,
-            )
-        } else {
-            Self::generate_tree_r_last_cpu::<TreeArity>(
-                data,
-                nodes_count,
-                tree_count,
-                tree_r_last_config,
-                replica_path,
-                labels,
-            )
-        }
-    }
-
-    #[cfg(not(feature = "gpu"))]
-    fn generate_tree_r_last<TreeArity>(
-        data: &mut Data<'_>,
-        nodes_count: usize,
-        tree_count: usize,
-        tree_r_last_config: StoreConfig,
-        replica_path: PathBuf,
-        labels: &LabelsCache<Tree>,
-    ) -> Result<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>
-        where
-            TreeArity: PoseidonArity,
-    {
-        Self::generate_tree_r_last_cpu::<TreeArity>(
-            data,
-            nodes_count,
-            tree_count,
-            tree_r_last_config,
-            replica_path,
-            labels,
-        )
-    }
-
-    #[cfg(feature = "gpu")]
-    fn generate_tree_r_last_gpu<TreeArity>(
-        data: &mut Data<'_>,
-        nodes_count: usize,
-        tree_count: usize,
-        tree_r_last_config: StoreConfig,
-        replica_path: PathBuf,
-        labels: &LabelsCache<Tree>,
-    ) -> Result<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>
-        where
-            TreeArity: PoseidonArity,
-    {
         use bellperson::bls::Fr;
         use merkletree::merkle::{get_merkle_tree_cache_size, get_merkle_tree_leafs};
         use neptune::batch_hasher::BatcherType;
@@ -2191,7 +2136,8 @@ mod tests {
             EXP_DEGREE,
             porep_id,
             api_version,
-        ).unwrap();
+        )
+            .unwrap();
 
         let unused_layer_challenges = LayerChallenges::new(layers, 0);
 

@@ -59,7 +59,7 @@ impl<H: Hasher> Column<H> {
     }
 
     /// Create a column proof for this column.
-    pub fn into_proof<S: Store<H::Domain>, Tree: MerkleTreeTrait<Hasher=H, Store=S>>(
+    pub fn into_proof<S: Store<H::Domain>, Tree: MerkleTreeTrait<Hasher = H, Store = S>>(
         self,
         tree_c: &Tree,
     ) -> Result<ColumnProof<Tree::Proof>> {

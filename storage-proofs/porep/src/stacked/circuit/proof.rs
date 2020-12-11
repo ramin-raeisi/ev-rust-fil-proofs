@@ -22,8 +22,6 @@ use storage_proofs_core::{
 use super::params::Proof;
 use crate::stacked::StackedDrg;
 
-use rayon::prelude::*;
-
 /// Stacked DRG based Proof of Replication.
 ///
 /// # Fields

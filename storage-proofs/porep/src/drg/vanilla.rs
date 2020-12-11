@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use storage_proofs_core::{
+    api_version::ApiVersion,
     crypto::sloth,
     drgraph::Graph,
     error::Result,
@@ -69,6 +70,7 @@ pub struct SetupParams {
     pub drg: DrgParams,
     pub private: bool,
     pub challenges_count: usize,
+    pub api_version: ApiVersion,
 }
 
 #[derive(Debug, Clone)]
@@ -225,9 +227,9 @@ impl<'a, H: Hasher> From<&'a Proof<H>> for Proof<H> {
 
 #[derive(Default)]
 pub struct DrgPoRep<'a, H, G>
-where
-    H: Hasher,
-    G: 'a + Graph<H>,
+    where
+        H: Hasher,
+        G: 'a + Graph<H>,
 {
     _h: PhantomData<&'a H>,
     _g: PhantomData<G>,
@@ -251,6 +253,7 @@ impl<'a, H, G> ProofScheme<'a> for DrgPoRep<'a, H, G>
             sp.drg.degree,
             sp.drg.expansion_degree,
             sp.drg.porep_id,
+            sp.api_version,
         )?;
 
         Ok(PublicParams::new(graph, sp.private, sp.challenges_count))
@@ -486,7 +489,7 @@ impl<'a, H, G> PoRep<'a, H, H> for DrgPoRep<'a, H, G>
                 &replica_config,
             )?;
 
-        let comm_d = tree_d.root(); // replicate
+        let comm_d = tree_d.root();
         let comm_r = tree_r.root();
 
         Ok((Tau::new(comm_d, comm_r), ProverAux::new(tree_d, tree_r)))
@@ -663,6 +666,7 @@ mod tests {
             },
             private: false,
             challenges_count: 1,
+            api_version: ApiVersion::V1_1_0,
         };
 
         let pp: PublicParams<Tree::Hasher, BucketGraph<Tree::Hasher>> =
@@ -737,6 +741,7 @@ mod tests {
             },
             private: false,
             challenges_count: 1,
+            api_version: ApiVersion::V1_1_0,
         };
 
         let pp =
@@ -825,6 +830,7 @@ mod tests {
                 },
                 private: false,
                 challenges_count: 2,
+                api_version: ApiVersion::V1_1_0,
             };
 
             let pp = DrgPoRep::<Tree::Hasher, BucketGraph<_>>::setup(&sp).expect("setup failed");

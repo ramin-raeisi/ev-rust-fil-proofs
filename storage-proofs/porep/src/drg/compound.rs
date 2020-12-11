@@ -279,6 +279,8 @@ for DrgPoRepCompound<H, G>
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use bellperson::util_cs::{metric_cs::MetricCS, test_cs::TestConstraintSystem};
     use ff::Field;
     use filecoin_hashers::{poseidon::PoseidonHasher, Hasher};
@@ -288,9 +290,10 @@ mod tests {
     use rand_xorshift::XorShiftRng;
 
     use storage_proofs_core::{
+        api_version::ApiVersion,
         cache_key::CacheKey,
         compound_proof,
-        drgraph::{BASE_DEGREE, BucketGraph},
+        drgraph::{BucketGraph, BASE_DEGREE},
         fr32::fr_into_bytes,
         merkle::{BinaryMerkleTree, MerkleTreeTrait},
         proof::NoRequirements,
@@ -298,10 +301,8 @@ mod tests {
         util::default_rows_to_discard,
     };
 
-    use crate::{drg, PoRep};
     use crate::stacked::BINARY_ARITY;
-
-    use super::*;
+    use crate::{drg, PoRep};
 
     #[test]
     #[ignore] // Slow test – run only when compiled for release.
@@ -348,6 +349,7 @@ mod tests {
                 },
                 private: false,
                 challenges_count: 2,
+                api_version: ApiVersion::V1_1_0,
             },
             partitions: None,
             priority: false,
@@ -390,6 +392,7 @@ mod tests {
                 },
                 private: false,
                 challenges_count: 2,
+                api_version: ApiVersion::V1_1_0,
             },
             partitions: None,
             priority: false,
@@ -410,7 +413,7 @@ mod tests {
             let mut cs = TestConstraintSystem::new();
 
             circuit
-                .synthesize(&mut cs) //The synthesize interface of the corresponding circuit will be called to complete the process of generating R1CS from the entire circuit
+                .synthesize(&mut cs)
                 .expect("failed to synthesize test circuit");
             assert!(cs.is_satisfied());
             assert!(cs.verify(&inputs));
