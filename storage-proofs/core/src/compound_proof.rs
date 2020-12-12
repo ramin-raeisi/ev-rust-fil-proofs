@@ -251,11 +251,7 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let groth_proofs = if priority {
-            groth16::create_random_proof_batch_in_priority(circuits, groth_params, &mut rng)?
-        } else {
-            groth16::create_random_proof_batch(circuits, groth_params, &mut rng)?
-        };
+        let groth_proofs = groth16::create_proof_batch(circuits, groth_params)?;
 
         groth_proofs
             .into_iter()
