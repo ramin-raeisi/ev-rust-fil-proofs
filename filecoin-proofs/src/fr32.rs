@@ -181,8 +181,8 @@ pub type BitVecLEu8 = BitVec<LittleEndian, u8>;
 // parameter/return types are tuned for current caller convenience.
 
 pub fn target_unpadded_bytes<W: ?Sized>(target: &mut W) -> io::Result<u64>
-where
-    W: Seek,
+    where
+        W: Seek,
 {
     let (_, unpadded, _) = FR32_PADDING_MAP.target_offsets(target)?;
 
@@ -198,8 +198,8 @@ pub fn almost_truncate_to_unpadded_bytes<W: ?Sized>(
     _target: &mut W,
     length: u64,
 ) -> io::Result<usize>
-where
-    W: Read + Write + Seek,
+    where
+        W: Read + Write + Seek,
 {
     let padded =
         BitByte::from_bits(FR32_PADDING_MAP.transform_bit_offset((length * 8) as usize, true));
@@ -363,8 +363,8 @@ impl PaddingMap {
     // - a BitByte representing the number of padded bits contained in the
     //   byte-aligned padded layout
     pub fn target_offsets<W: ?Sized>(&self, target: &mut W) -> io::Result<(u64, u64, BitByte)>
-    where
-        W: Seek,
+        where
+            W: Seek,
     {
         // The current position in `target` is the number of padded bytes already written
         // to the byte-aligned stream.
@@ -679,8 +679,8 @@ pub fn write_unpadded<W: ?Sized>(
     offset: usize,
     len: usize,
 ) -> io::Result<usize>
-where
-    W: Write,
+    where
+        W: Write,
 {
     // Check that there's actually `len` raw data bytes encoded inside
     // `source` starting at `offset`.
@@ -688,7 +688,7 @@ where
     let raw_data_size = BitByte::from_bits(
         FR32_PADDING_MAP.transform_bit_offset(source.len() * 8 - read_pos.total_bits(), false),
     )
-    .bytes_needed();
+        .bytes_needed();
     if raw_data_size < len {
         return Err(Error::new(
             ErrorKind::Other,
@@ -747,8 +747,8 @@ pub fn write_unpadded_aux<W: ?Sized>(
     write_pos: usize,
     max_write_size: usize,
 ) -> io::Result<usize>
-where
-    W: Write,
+    where
+        W: Write,
 {
     // Position of the reader in the padded bit stream layout, deduced from
     // the position of the writer (`write_pos`) in the raw data layout.
@@ -775,7 +775,7 @@ where
     let mut raw_data_size = BitByte::from_bits(
         padding_map.transform_bit_offset(source.len() * 8 - read_pos.total_bits(), false),
     )
-    .bytes_needed();
+        .bytes_needed();
     raw_data_size = min(raw_data_size, max_write_size);
 
     // Recovered raw data unpadded from the `source` which will

@@ -314,7 +314,7 @@ mod tests {
             &right_bits,
             height,
         )
-        .expect("key derivation function failed");
+            .expect("key derivation function failed");
 
         assert!(cs.is_satisfied(), "constraints not satisfied");
         assert_eq!(cs.num_constraints(), 45_387);

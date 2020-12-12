@@ -8,7 +8,6 @@ use std::arch::x86_64::*;
 
 /// Process a block with the SHA-256 algorithm.
 /// Based on https://github.com/noloader/SHA-Intrinsics/blob/master/sha256-x86.c
-/// Intel SHA extensions using C intrinsics
 #[inline(always)]
 pub unsafe fn compress256(state: &mut [u32; 8], blocks: &[&[u8]]) {
     assert_eq!(blocks.len() % 2, 0);
@@ -28,7 +27,7 @@ pub unsafe fn compress256(state: &mut [u32; 8], blocks: &[&[u8]]) {
     let mut cdgh_save: __m128i;
 
     #[allow(non_snake_case)]
-    let MASK: __m128i = _mm_set_epi64x(
+        let MASK: __m128i = _mm_set_epi64x(
         0x0c0d_0e0f_0809_0a0bu64 as i64,
         0x0405_0607_0001_0203u64 as i64,
     );

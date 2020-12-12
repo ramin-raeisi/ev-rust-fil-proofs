@@ -27,7 +27,7 @@ bellperson = { git = "ssh://git@github.com/nilfoundation/fil-zk.git", branch = "
 log = "0.4.7"
 fil_logger = "0.1"
 env_proxy = "0.4"
-flate2 = { version = "1.0.9", features = ["rust_backend"]}
+flate2 = { version = "1.0.9", features = ["rust_backend"] }
 tar = "0.4.26"
 rayon = "1.2.1"
 rayon-core = "1.6.1"

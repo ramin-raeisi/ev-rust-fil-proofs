@@ -14,7 +14,7 @@ pub fn as_safe_commitment<H: Domain, T: AsRef<str>>(
 ) -> Result<H> {
     bytes_into_fr(comm)
         .map(Into::into)
-        .with_context(|| format!("Invalid commitment ({})", commitment_name.as_ref(),))
+        .with_context(|| format!("Invalid commitment ({})", commitment_name.as_ref(), ))
 }
 
 pub fn commitment_from_fr(fr: Fr) -> Commitment {

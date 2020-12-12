@@ -415,7 +415,7 @@ mod tests {
         let t = MerkleTree::<PoseidonDomain, PoseidonFunction, VecStore<_>, typenum::U2>::new(
             values.iter().copied(),
         )
-        .expect("merkle tree new failure");
+            .expect("merkle tree new failure");
 
         let p = t.gen_proof(0).expect("gen_proof failure"); // create a proof for the first value =k Fr::one()
 
@@ -446,7 +446,7 @@ mod tests {
         let t = MerkleTree::<PoseidonDomain, PoseidonFunction, VecStore<_>, typenum::U2>::new(
             leaves.iter().copied(),
         )
-        .expect("merkle tree new failure");
+            .expect("merkle tree new failure");
 
         assert_eq!(t.leafs(), 4);
 

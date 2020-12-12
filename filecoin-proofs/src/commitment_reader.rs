@@ -102,7 +102,7 @@ mod tests {
             &mut fr32_reader,
             PaddedBytesAmount::from(UnpaddedBytesAmount(piece_size as u64)).into(),
         )
-        .expect("failed to generate piece commitment bytes from source");
+            .expect("failed to generate piece commitment bytes from source");
 
         let fr32_reader = crate::fr32_reader::Fr32Reader::new(io::Cursor::new(&source));
         let mut commitment_reader = CommitmentReader::new(fr32_reader);

@@ -398,7 +398,7 @@ pub fn read_cached_params(cache_entry_path: &PathBuf) -> Result<groth16::MappedP
 
         Ok(mapped_params)
     })
-    .map_err(Into::into)
+        .map_err(Into::into)
 }
 
 fn read_cached_verifying_key(
@@ -465,17 +465,17 @@ fn write_cached_params(
 }
 
 pub fn with_exclusive_lock<T, E, F>(file_path: &PathBuf, f: F) -> std::result::Result<T, E>
-where
-    F: FnOnce(&mut LockedFile) -> std::result::Result<T, E>,
-    E: From<io::Error>,
+    where
+        F: FnOnce(&mut LockedFile) -> std::result::Result<T, E>,
+        E: From<io::Error>,
 {
     with_open_file(file_path, LockedFile::open_exclusive, f)
 }
 
 pub fn with_exclusive_read_lock<T, E, F>(file_path: &PathBuf, f: F) -> std::result::Result<T, E>
-where
-    F: FnOnce(&mut LockedFile) -> std::result::Result<T, E>,
-    E: From<io::Error>,
+    where
+        F: FnOnce(&mut LockedFile) -> std::result::Result<T, E>,
+        E: From<io::Error>,
 {
     with_open_file(file_path, LockedFile::open_exclusive_read, f)
 }
@@ -485,10 +485,10 @@ pub fn with_open_file<'a, T, E, F, G>(
     open_file: G,
     f: F,
 ) -> std::result::Result<T, E>
-where
-    F: FnOnce(&mut LockedFile) -> std::result::Result<T, E>,
-    G: FnOnce(&'a PathBuf) -> io::Result<LockedFile>,
-    E: From<io::Error>,
+    where
+        F: FnOnce(&mut LockedFile) -> std::result::Result<T, E>,
+        G: FnOnce(&'a PathBuf) -> io::Result<LockedFile>,
+        E: From<io::Error>,
 {
     ensure_parent(&file_path)?;
     f(&mut open_file(&file_path)?)

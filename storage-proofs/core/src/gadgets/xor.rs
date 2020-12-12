@@ -6,9 +6,9 @@ pub fn xor<E, CS>(
     key: &[Boolean],
     input: &[Boolean],
 ) -> Result<Vec<Boolean>, SynthesisError>
-where
-    E: Engine,
-    CS: ConstraintSystem<E>,
+    where
+        E: Engine,
+        CS: ConstraintSystem<E>,
 {
     let key_len = key.len();
     assert_eq!(key_len, 32 * 8);

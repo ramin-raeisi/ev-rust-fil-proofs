@@ -7,8 +7,7 @@ This crate contains the following binaries
 
 ## `benchy`
 
-The `benchy` program can (currently) be used to capture Stacked performance
-metrics. Metrics are printed to stdout.
+The `benchy` program can (currently) be used to capture Stacked performance metrics. Metrics are printed to stdout.
 
 ```
 $ ./target/release/benchy stacked --size=1024 | jq '.'
@@ -86,8 +85,7 @@ $ ./scripts/benchy.sh stacked --size=1024 | jq '.'
 }
 ```
 
-To run benchy on a remote server, provide SSH connection information to the
-benchy-remote.sh script:
+To run benchy on a remote server, provide SSH connection information to the benchy-remote.sh script:
 
 ```shell
 10:13 $ ./fil-proofs-tooling/scripts/benchy-remote.sh master foo@16.16.16.16 stacked --size=1 | jq '.'
@@ -188,7 +186,6 @@ Run benchy in "prodbench" mode with custom input and detailed metrics.
   }
 }
 ```
-
 
 ## `micro`
 

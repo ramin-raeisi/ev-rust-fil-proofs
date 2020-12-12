@@ -64,5 +64,64 @@ fn xor_benchmark(c: &mut Criterion) {
     );
 }
 
+fn xor_circuit_benchmark(c: &mut Criterion) {
+    let mut rng1 = thread_rng();
+    let groth_params = generate_random_parameters::<Bls12, _, _>(
+        XorExample {
+            key: &[None; 8 * 32],
+            data: &[None; 256],
+        },
+        &mut rng1,
+    )
+        .unwrap();
+
+    let params = vec![32];
+
+    c.bench(
+        "xor-circuit",
+        ParameterizedBenchmark::new(
+            "create-proof",
+            move |b, bytes| {
+                let mut rng = thread_rng();
+                let key: Vec<Option<bool>> = (0..32 * 8).map(|_| Some(rng.gen())).collect();
+                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
+
+                b.iter(|| {
+                    let proof = create_random_proof(
+                        XorExample {
+                            key: key.as_slice(),
+                            data: data.as_slice(),
+                        },
+                        &groth_params,
+                        &mut rng,
+                    )
+                        .unwrap();
+
+                    black_box(proof)
+                });
+            },
+            params,
+        )
+            .with_function("synthesize", move |b, bytes| {
+                let mut rng = thread_rng();
+                let key: Vec<Option<bool>> = (0..32 * 8).map(|_| Some(rng.gen())).collect();
+                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
+
+                b.iter(|| {
+                    let mut cs = BenchCS::<Bls12>::new();
+                    XorExample {
+                        key: key.as_slice(),
+                        data: data.as_slice(),
+                    }
+                        .synthesize(&mut cs)
+                        .unwrap();
+
+                    black_box(cs)
+                });
+            })
+            .sample_size(20),
+    );
+}
+
 criterion_group!(benches, xor_benchmark, xor_circuit_benchmark);
 criterion_main!(benches);
