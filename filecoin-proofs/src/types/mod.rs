@@ -1,4 +1,4 @@
-pub use filecoin_hashers::Hasher;
+use filecoin_hashers::Hasher;
 use serde::{Deserialize, Serialize};
 use storage_proofs::porep::stacked;
 use storage_proofs::post::fallback::*;
