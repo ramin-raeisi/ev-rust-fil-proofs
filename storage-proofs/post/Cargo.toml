@@ -28,7 +28,7 @@ log = "0.4.7"
 hex = "0.4.0"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { git = "https://github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false, features = ["gpu"] }
+neptune = { git = "ssh://github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false, features = ["gpu"] }
 num_cpus = "1.10.1"
 
 [dev-dependencies]

@@ -17,7 +17,7 @@ anyhow = "1.0.34"
 serde = "1.0.117"
 rand = "0.7.3"
 
-neptune = { git = "https://github.com/NilFoundation/crusty3-neptune", branch = "master", default-features = false, features = ["gpu"], optional = true }
+neptune = { git = "ssh://github.com/NilFoundation/crusty3-neptune", branch = "master", default-features = false, features = ["gpu"], optional = true }
 lazy_static = { version = "1.4.0", optional = true }
 blake2s_simd = { version = "0.5.11", optional = true }
 sha2 = { version = "0.9.2", optional = true }
