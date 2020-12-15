@@ -71,7 +71,7 @@ fn test_get_piece_alignment() {
     ];
 
     for (bytes_in_sector, bytes_in_piece, (expected_left_align, expected_right_align)) in
-        table.clone()
+    table.clone()
     {
         let PieceAlignment {
             left_bytes: UnpaddedBytesAmount(actual_left_align),
@@ -152,9 +152,9 @@ fn test_verify_simple_pieces() {
         verify_pieces(
             &comm_d,
             &[a.clone(), b.clone(), c.clone(), d.clone()],
-            sector_size
+            sector_size,
         )
-        .expect("failed to verify"),
+            .expect("failed to verify"),
         "[a, b, c, d]"
     );
 

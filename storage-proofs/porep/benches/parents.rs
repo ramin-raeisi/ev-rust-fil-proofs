@@ -60,11 +60,11 @@ fn parents_loop_benchmark(cc: &mut Criterion) {
             },
             sizes,
         )
-        .with_function("Sha256", |b, degree| {
-            let graph = pregenerate_graph::<Sha256Hasher>(*degree, ApiVersion::V1_1_0);
-            let mut parents = vec![0; graph.degree()];
-            b.iter(|| black_box(parents_loop::<Sha256Hasher, _>(&graph, &mut parents)))
-        }),
+            .with_function("Sha256", |b, degree| {
+                let graph = pregenerate_graph::<Sha256Hasher>(*degree, ApiVersion::V1_1_0);
+                let mut parents = vec![0; graph.degree()];
+                b.iter(|| black_box(parents_loop::<Sha256Hasher, _>(&graph, &mut parents)))
+            }),
     );
 }
 

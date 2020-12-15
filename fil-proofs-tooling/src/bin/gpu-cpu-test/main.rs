@@ -23,6 +23,7 @@ use storage_proofs::sector::SectorId;
 const FIXED_API_VERSION: ApiVersion = ApiVersion::V1_0_0;
 
 type MerkleTree = SectorShape8MiB;
+
 const SECTOR_SIZE: u64 = SECTOR_SIZE_8_MIB;
 const TIMEOUT: u64 = 5 * 60;
 const POST_CONFIG: PoStConfig = PoStConfig {
@@ -249,11 +250,11 @@ fn main() {
         )
         .arg(
             Arg::with_name("mode")
-              .long("mode")
-              .help("Whether to run with threads or processes.")
-               .possible_values(&["threads", "processes"])
-               .case_insensitive(true)
-               .default_value("threads"),
+                .long("mode")
+                .help("Whether to run with threads or processes.")
+                .possible_values(&["threads", "processes"])
+                .case_insensitive(true)
+                .default_value("threads"),
         )
         .get_matches();
 

@@ -26,6 +26,7 @@ const ARBITRARY_POREP_ID_V1_0_0: [u8; 32] = [127; 32];
 const ARBITRARY_POREP_ID_V1_1_0: [u8; 32] = [128; 32];
 
 static INIT_LOGGER: Once = Once::new();
+
 fn init_logger() {
     INIT_LOGGER.call_once(|| {
         fil_logger::init();
@@ -302,7 +303,7 @@ fn run_resumable_seal<Tree: 'static + MerkleTreeTrait>(
         &mut piece_file,
         &sealed_sector_file,
     )
-    .expect("failed to run seal pre commit phase1");
+        .expect("failed to run seal pre commit phase1");
     let layers = get_layer_file_paths(&cache_dir);
     assert_eq!(layers.len(), 2, "not all expected layers were created");
 
@@ -330,7 +331,7 @@ fn run_resumable_seal<Tree: 'static + MerkleTreeTrait>(
         &mut piece_file,
         &sealed_sector_file,
     )
-    .expect("failed to run seal pre commit phase1");
+        .expect("failed to run seal pre commit phase1");
 
     // Running proofs clears the cache, hence we can only check for existence of files if we don't
     // run them
@@ -352,7 +353,7 @@ fn run_resumable_seal<Tree: 'static + MerkleTreeTrait>(
             cache_dir.path(),
             sealed_sector_file.path(),
         )
-        .expect("failed to run seal pre commit phase2");
+            .expect("failed to run seal pre commit phase2");
 
         validate_cache_for_commit::<_, _, Tree>(cache_dir.path(), sealed_sector_file.path())
             .expect("failed to validate cache for commit");
@@ -370,7 +371,7 @@ fn run_resumable_seal<Tree: 'static + MerkleTreeTrait>(
             &piece_infos,
             &piece_bytes,
         )
-        .expect("failed to proof");
+            .expect("failed to proof");
     }
 }
 
@@ -448,9 +449,9 @@ fn test_winning_post_empty_sector_challenge() -> Result<()> {
         &config,
         &randomness,
         sector_count as u64,
-        prover_id
+        prover_id,
     )
-    .is_err());
+        .is_err());
 
     Ok(())
 }
@@ -1106,7 +1107,7 @@ fn create_seal<R: Rng, Tree: 'static + MerkleTreeTrait>(
         config,
         phase1_output,
         cache_dir.path(),
-        sealed_sector_file.path(),  //replica_path
+        sealed_sector_file.path(),
     )?;
 
     let comm_r = pre_commit_output.comm_r;
@@ -1128,7 +1129,7 @@ fn create_seal<R: Rng, Tree: 'static + MerkleTreeTrait>(
             &piece_infos,
             &piece_bytes,
         )
-        .expect("failed to proof");
+            .expect("failed to proof");
     }
 
     Ok((sector_id, sealed_sector_file, comm_r, cache_dir))
@@ -1156,126 +1157,6 @@ fn create_fake_seal<R: rand::Rng, Tree: 'static + MerkleTreeTrait>(
         cache_dir.path(),
         sealed_sector_file.path(),
     )?;
-
-    Ok((sector_id, sealed_sector_file, comm_r, cache_dir))
-}
-
-
-#[test]
-//TODO-Ryan: UT P1, P2, C1 
-fn test_seal_simple_2kib_base_8() -> Result<()> {
-    // assert!(false, "test -- failed -- test");
-    seal_simple_lifecycle::<SectorShape2KiB>(SECTOR_SIZE_2_KIB)
-    // seal_simple_lifecycle::<SectorShape8MiB>(SECTOR_SIZE_8_MIB)
-}
-
-fn seal_simple_lifecycle<Tree: 'static + MerkleTreeTrait>(sector_size: u64) -> Result<()> {
-    let rng = &mut XorShiftRng::from_seed(TEST_SEED);
-    let prover_fr: DefaultTreeDomain = Fr::random(rng).into();
-    let mut prover_id = [0u8; 32];
-    prover_id.copy_from_slice(AsRef::<[u8]>::as_ref(&prover_fr));
-
-    create_seal_simple::<_, Tree>(rng, sector_size, prover_id, false)?;
-    Ok(())
-}
-
-fn create_seal_simple<R: Rng, Tree: 'static + MerkleTreeTrait>(
-    rng: &mut R,
-    sector_size: u64,
-    prover_id: ProverId,
-    skip_proof: bool,
-) -> Result<(SectorId, NamedTempFile, Commitment, tempfile::TempDir)> {
-    init_logger();
-
-    let number_of_bytes_in_piece = UnpaddedBytesAmount::from(PaddedBytesAmount(sector_size));
-
-    let piece_bytes: Vec<u8> = (0..number_of_bytes_in_piece.0)
-        .map(|_| rand::random::<u8>())
-        .collect();
-
-    let mut piece_file = NamedTempFile::new()?;
-    piece_file.write_all(&piece_bytes)?;
-    piece_file.as_file_mut().sync_all()?;
-    piece_file.as_file_mut().seek(SeekFrom::Start(0))?;
-
-    let piece_info = generate_piece_commitment(piece_file.as_file_mut(), number_of_bytes_in_piece)?;
-    piece_file.as_file_mut().seek(SeekFrom::Start(0))?;
-
-    let mut staged_sector_file = NamedTempFile::new()?;
-    add_piece(
-        &mut piece_file,
-        &mut staged_sector_file,
-        number_of_bytes_in_piece,
-        &[],
-    )?;
-
-    let piece_infos = vec![piece_info];
-    let arbitrary_porep_id = [28; 32];
-    let sealed_sector_file = NamedTempFile::new()?;
-    // let mut unseal_file = NamedTempFile::new()?;
-    let config = PoRepConfig {
-        sector_size: SectorSize(sector_size),
-        partitions: PoRepProofPartitions(
-            *POREP_PARTITIONS.read().unwrap().get(&sector_size).unwrap(),
-        ),
-        porep_id: arbitrary_porep_id,
-        api_version: ApiVersion::V1_0_0,
-    };
-
-    let cache_dir = tempfile::tempdir().unwrap();
-
-    let ticket = rng.gen();
-    let seed = rng.gen();
-    let sector_id = rng.gen::<u64>().into();
-
-    let phase1_output = seal_pre_commit_phase1::<_, _, _, Tree>(
-        config,
-        cache_dir.path(),
-        staged_sector_file.path(),
-        sealed_sector_file.path(),
-        prover_id,
-        sector_id,
-        ticket,
-        &piece_infos,
-    )?;
-
-    validate_cache_for_precommit_phase2(
-        cache_dir.path(),
-        staged_sector_file.path(),
-        &phase1_output,
-    )?;
-
-    let pre_commit_output = seal_pre_commit_phase2(
-        config,
-        phase1_output,
-        cache_dir.path(),
-        sealed_sector_file.path(),  //replica_path
-    )?;
-
-    // let comm_d = pre_commit_output.comm_d;  // from seal_pre_commit_phase2
-    let comm_r = pre_commit_output.comm_r;
-
-    validate_cache_for_commit::<_, _, Tree>(cache_dir.path(), sealed_sector_file.path())?;
-
-    if skip_proof {
-        clear_cache::<Tree>(cache_dir.path())?;
-    } else {
-        let phase1_output = seal_commit_phase1::<_, Tree>(
-            config,                     //porep_config
-            cache_dir.path(),           //cache_path
-            sealed_sector_file.path(),  //replica_path
-            prover_id,
-            sector_id,
-            ticket,
-            seed,
-            pre_commit_output,
-            &piece_infos,
-        )?;
-
-        clear_cache::<Tree>(cache_dir.path())?;
-
-        drop(phase1_output);
-    }
 
     Ok((sector_id, sealed_sector_file, comm_r, cache_dir))
 }

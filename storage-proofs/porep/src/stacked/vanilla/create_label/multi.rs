@@ -650,7 +650,7 @@ mod tests {
                 0xe3d51b9afa5ac2b3,
                 0x0462f4f4f1a68d37,
             ]))
-            .unwrap(),
+                .unwrap(),
         );
         test_create_labels_aux(
             nodes_4k,
@@ -664,7 +664,7 @@ mod tests {
                 0xce239f3b88a894b8,
                 0x234c00d1dc1d53be,
             ]))
-            .unwrap(),
+                .unwrap(),
         );
 
         test_create_labels_aux(

@@ -235,7 +235,7 @@ fn main() -> Result<()> {
             } else {
                 serde_json::from_reader(stdin())
             }
-            .expect("failed to deserialize stdin to ProdbenchInputs");
+                .expect("failed to deserialize stdin to ProdbenchInputs");
 
             let outputs = prodbench::run(
                 inputs,

@@ -75,61 +75,6 @@ fn sha256_raw_benchmark(c: &mut Criterion) {
     );
 }
 
-fn sha256_circuit_benchmark(c: &mut Criterion) {
-    let mut rng1 = thread_rng();
-
-    let params = vec![32, 64];
-
-    c.bench(
-        "hash-sha256-circuit",
-        ParameterizedBenchmark::new(
-            "create-proof",
-            move |b, bytes| {
-                let groth_params = generate_random_parameters::<Bls12, _, _>(
-                    Sha256Example {
-                        data: &vec![None; *bytes as usize * 8],
-                    },
-                    &mut rng1,
-                )
-                    .unwrap();
-
-                let mut rng = thread_rng();
-                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
-
-                b.iter(|| {
-                    let proof = create_random_proof(
-                        Sha256Example {
-                            data: data.as_slice(),
-                        },
-                        &groth_params,
-                        &mut rng,
-                    )
-                        .unwrap();
-
-                    black_box(proof)
-                });
-            },
-            params,
-        )
-            .with_function("synthesize", move |b, bytes| {
-                let mut rng = thread_rng();
-                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
-
-                b.iter(|| {
-                    let mut cs = BenchCS::<Bls12>::new();
-                    Sha256Example {
-                        data: data.as_slice(),
-                    }
-                        .synthesize(&mut cs)
-                        .unwrap();
-
-                    black_box(cs)
-                });
-            })
-            .sample_size(20),
-    );
-}
-
 criterion_group!(
     benches,
     sha256_benchmark,

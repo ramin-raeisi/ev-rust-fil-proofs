@@ -161,7 +161,7 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
             sector_size_unpadded_bytes_ammount,
             &[],
         )
-        .expect("failed to add piece");
+            .expect("failed to add piece");
         piece_infos.push(vec![info]);
     }
 
@@ -205,7 +205,7 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
             })
             .collect::<Result<Vec<_>, _>>()
     })
-    .expect("seal_pre_commit produced an error");
+        .expect("seal_pre_commit produced an error");
 
     info!("collecting infos");
 
@@ -219,7 +219,7 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
                 seal_pre_commit_output.comm_r,
                 cache_dir.into_path(),
             )
-            .expect("failed to create PrivateReplicaInfo")
+                .expect("failed to create PrivateReplicaInfo")
         })
         .collect::<Vec<_>>();
 

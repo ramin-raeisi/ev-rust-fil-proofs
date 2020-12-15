@@ -36,7 +36,7 @@ fn cache_porep_params<Tree: 'static + MerkleTreeTrait>(porep_config: PoRepConfig
         porep_config.porep_id,
         porep_config.api_version,
     )
-    .expect("failed to get public params from config");
+        .expect("failed to get public params from config");
 
     {
         let circuit = <StackedCompound<Tree, DefaultPieceHasher> as CompoundProof<
@@ -58,7 +58,7 @@ fn cache_porep_params<Tree: 'static + MerkleTreeTrait>(porep_config: PoRepConfig
             circuit,
             &public_params,
         )
-        .expect("failed to get groth params");
+            .expect("failed to get groth params");
     }
     {
         let circuit = <StackedCompound<Tree, DefaultPieceHasher> as CompoundProof<
@@ -71,7 +71,7 @@ fn cache_porep_params<Tree: 'static + MerkleTreeTrait>(porep_config: PoRepConfig
             circuit,
             &public_params,
         )
-        .expect("failed to get verifying key");
+            .expect("failed to get verifying key");
     }
 }
 
@@ -101,7 +101,7 @@ fn cache_winning_post_params<Tree: 'static + MerkleTreeTrait>(post_config: &PoSt
             post_circuit,
             &post_public_params,
         )
-        .expect("failed to get groth params");
+            .expect("failed to get groth params");
     }
     {
         let post_circuit: FallbackPoStCircuit<Tree> =
@@ -115,7 +115,7 @@ fn cache_winning_post_params<Tree: 'static + MerkleTreeTrait>(post_config: &PoSt
             post_circuit,
             &post_public_params,
         )
-        .expect("failed to get verifying key");
+            .expect("failed to get verifying key");
     }
 }
 
@@ -145,7 +145,7 @@ fn cache_window_post_params<Tree: 'static + MerkleTreeTrait>(post_config: &PoStC
             post_circuit,
             &post_public_params,
         )
-        .expect("failed to get groth params");
+            .expect("failed to get groth params");
     }
     {
         let post_circuit: FallbackPoStCircuit<Tree> =
@@ -159,7 +159,7 @@ fn cache_window_post_params<Tree: 'static + MerkleTreeTrait>(post_config: &PoStC
             post_circuit,
             &post_public_params,
         )
-        .expect("failed to get verifying key");
+            .expect("failed to get verifying key");
     }
 }
 

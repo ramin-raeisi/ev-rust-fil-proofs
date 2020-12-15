@@ -109,7 +109,7 @@ fn run_pre_commit_phases<Tree: 'static + MerkleTreeTrait>(
     skip_staging: bool,
 ) -> anyhow::Result<((u64, u64), (u64, u64), (u64, u64))> {
     let (seal_pre_commit_phase1_measurement_cpu_time, seal_pre_commit_phase1_measurement_wall_time): (u64, u64) = if skip_precommit_phase1 {
-            // generate no-op measurements
+        // generate no-op measurements
         (0, 0)
     } else {
         // Create files for the staged and sealed sectors.
@@ -269,7 +269,7 @@ fn run_pre_commit_phases<Tree: 'static + MerkleTreeTrait>(
                 &precommit_phase1_output,
             )
         })
-        .expect("failed to validate cache for precommit phase2");
+            .expect("failed to validate cache for precommit phase2");
 
         let seal_pre_commit_phase2_measurement: FuncMeasurement<SealPreCommitOutput> =
             measure(|| {
@@ -280,7 +280,7 @@ fn run_pre_commit_phases<Tree: 'static + MerkleTreeTrait>(
                     sealed_file_path.clone(),
                 )
             })
-            .expect("failed in seal_pre_commit_phase2");
+                .expect("failed in seal_pre_commit_phase2");
         let precommit_phase2_output = seal_pre_commit_phase2_measurement.return_value;
 
         // Persist precommit phase2_output here
@@ -421,7 +421,7 @@ pub fn run_window_post_bench<Tree: 'static + MerkleTreeTrait>(
         let validate_cache_for_commit_measurement = measure(|| {
             validate_cache_for_commit::<_, _, Tree>(cache_dir.clone(), sealed_file_path.clone())
         })
-        .expect("failed to validate cache for commit");
+            .expect("failed to validate cache for commit");
 
         let seal_commit_phase1_measurement = measure(|| {
             seal_commit_phase1::<_, Tree>(
@@ -436,7 +436,7 @@ pub fn run_window_post_bench<Tree: 'static + MerkleTreeTrait>(
                 &piece_infos,
             )
         })
-        .expect("failed in seal_commit_phase1");
+            .expect("failed in seal_commit_phase1");
         let phase1_output = seal_commit_phase1_measurement.return_value;
 
         // Persist commit phase1_output here
@@ -488,7 +488,7 @@ pub fn run_window_post_bench<Tree: 'static + MerkleTreeTrait>(
         let seal_commit_phase2_measurement = measure(|| {
             seal_commit_phase2::<Tree>(porep_config, commit_phase1_output, PROVER_ID, sector_id)
         })
-        .expect("failed in seal_commit_phase2");
+            .expect("failed in seal_commit_phase2");
 
         (
             seal_commit_phase2_measurement.cpu_time.as_millis() as u64,
@@ -525,7 +525,7 @@ pub fn run_window_post_bench<Tree: 'static + MerkleTreeTrait>(
     let gen_window_post_measurement = measure(|| {
         generate_window_post::<Tree>(&post_config, &RANDOMNESS, &priv_replica_info, PROVER_ID)
     })
-    .expect("failed to generate window post");
+        .expect("failed to generate window post");
 
     let proof = &gen_window_post_measurement.return_value;
 
@@ -538,7 +538,7 @@ pub fn run_window_post_bench<Tree: 'static + MerkleTreeTrait>(
             &proof,
         )
     })
-    .expect("failed to verify window post proof");
+        .expect("failed to verify window post proof");
 
     if preserve_cache {
         info!("Preserving cache directory {:?}", cache_dir);

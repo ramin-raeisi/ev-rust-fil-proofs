@@ -80,12 +80,12 @@ pub fn run_fallback_post_bench<Tree: 'static + MerkleTreeTrait>(
             PROVER_ID,
         )
     })
-    .expect("failed to generate winning post sector challenge");
+        .expect("failed to generate winning post sector challenge");
 
     let gen_winning_post_measurement = measure(|| {
         generate_winning_post::<Tree>(&post_config, &RANDOMNESS, &priv_replica_info[..], PROVER_ID)
     })
-    .expect("failed to generate winning post");
+        .expect("failed to generate winning post");
 
     let proof = &gen_winning_post_measurement.return_value;
 
@@ -98,7 +98,7 @@ pub fn run_fallback_post_bench<Tree: 'static + MerkleTreeTrait>(
             &proof,
         )
     })
-    .expect("failed to verify winning post proof");
+        .expect("failed to verify winning post proof");
 
     // Create a JSON serializable report that we print to stdout (that will later be parsed using
     // the CLI JSON parser `jq`).
@@ -113,13 +113,13 @@ pub fn run_fallback_post_bench<Tree: 'static + MerkleTreeTrait>(
             verify_winning_post_wall_time_ms: verify_winning_post_measurement.wall_time.as_millis()
                 as u64,
             gen_winning_post_sector_challenge_cpu_time_ms:
-                gen_winning_post_sector_challenge_measurement
-                    .cpu_time
-                    .as_millis() as u64,
+            gen_winning_post_sector_challenge_measurement
+                .cpu_time
+                .as_millis() as u64,
             gen_winning_post_sector_challenge_wall_time_ms:
-                gen_winning_post_sector_challenge_measurement
-                    .wall_time
-                    .as_millis() as u64,
+            gen_winning_post_sector_challenge_measurement
+                .wall_time
+                .as_millis() as u64,
         },
     };
     report.print();

@@ -2,10 +2,9 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Platform {
     Portable,
-    #[cfg(feature = "asm")]    // For extreme low-level operation and performance requirements, you may wish to directly control the CPU. Rust supports the use of inline assembly through the asm! macro.
+    #[cfg(feature = "asm")]
     Asm,
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] // Will detect whether the CPU
-    // supports SHA extension
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     Sha,
 }
 
@@ -66,18 +65,16 @@ impl Implementation {
     pub fn compress256(self, state: &mut [u32; 8], blocks: &[&[u8]]) {
         match self.0 {
             Platform::Portable => {
-                // Simulation implementation, no cpu acceleration
                 use crate::sha256_utils;
                 sha256_utils::compress256(state, blocks);
             }
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Platform::Sha => {
-                // Implementation of sha extensions for CPU
                 use crate::sha256_intrinsics;
                 unsafe { sha256_intrinsics::compress256(state, blocks) };
             }
             #[cfg(feature = "asm")]
-            Platform::Asm => { // Assembly implementation
+            Platform::Asm => {
                 let mut buffer = [0u8; 64];
                 for block in blocks.chunks(2) {
                     buffer[..32].copy_from_slice(&block[0]);

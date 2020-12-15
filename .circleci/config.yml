@@ -147,6 +147,7 @@ jobs:
             ulimit -u 20000
             ulimit -n 20000
             cargo +<< pipeline.parameters.nightly-toolchain >> -Zpackage-features test --all --verbose --release lifecycle -- --ignored --nocapture
+            cargo +<< pipeline.parameters.nightly-toolchain >> -Zpackage-features test -p storage-proofs-porep --features single-threaded --release checkout_cores -- --test-threads=1
           no_output_timeout: 30m
           environment:
             RUST_TEST_THREADS: 1
@@ -163,6 +164,29 @@ jobs:
           environment:
             RUST_TEST_THREADS: 1
             FIL_PROOFS_USE_MULTICORE_SDR: true
+
+  test_no_gpu:
+    executor: default
+    environment: *setup-env
+    steps:
+      - checkout
+      - attach_workspace:
+          at: "."
+      - restore_cache:
+          keys:
+            - cargo-v28-b-{{ checksum "rust-toolchain" }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}-{{ arch }}
+      - restore_parameter_cache
+      - run:
+          name: Test with no gpu (pairing)
+          command: |
+            cargo +<< pipeline.parameters.nightly-toolchain >> -Zpackage-features test --all --verbose --no-default-features --features pairing
+          no_output_timeout: 30m
+      - run:
+          name: Test with no gpu (blst)
+          command: |
+            cargo +<< pipeline.parameters.nightly-toolchain >> -Zpackage-features test --all --verbose --no-default-features --features blst
+          no_output_timeout: 30m
+
 
   test_blst:
     executor: default
@@ -552,20 +576,6 @@ workflows:
 
             
       - test_blst:
-          name: test_blst_phase2
-          crate: "filecoin-phase2"
-          requires:
-            - cargo_fetch
-            - ensure_groth_parameters_and_keys_linux
-
-      - test:
-          name: test_phase2
-          crate: "filecoin-phase2"
-          requires:
-            - cargo_fetch
-            - ensure_groth_parameters_and_keys_linux
-
-      - test_blst:
           name: test_blst_filecoin_hashers
           crate: "filecoin-hashers"
           features: "blst,gpu,poseidon,sha256,blake2s"
@@ -591,6 +601,11 @@ workflows:
       - test:
           name: test_fil_proofs_param
           crate: "fil-proofs-param"
+          requires:
+            - cargo_fetch
+            - ensure_groth_parameters_and_keys_linux
+
+      - test_no_gpu:
           requires:
             - cargo_fetch
             - ensure_groth_parameters_and_keys_linux

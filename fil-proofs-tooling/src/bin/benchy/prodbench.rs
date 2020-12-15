@@ -209,7 +209,7 @@ pub fn run(
 
     if !skip_seal_proof {
         for (value, (sector_id, replica_info)) in
-            replica_measurement.return_value.iter().zip(created.iter())
+        replica_measurement.return_value.iter().zip(created.iter())
         {
             let measured = measure(|| {
                 validate_cache_for_commit::<_, _, DefaultOctLCTree>(
@@ -235,7 +235,7 @@ pub fn run(
 
                 seal_commit_phase2(cfg, phase1_output, PROVER_ID, *sector_id)
             })
-            .expect("failed to prove sector");
+                .expect("failed to prove sector");
 
             outputs.porep_proof_gen_cpu_time_ms += measured.cpu_time.as_millis() as u64;
             outputs.porep_proof_gen_wall_time_ms += measured.wall_time.as_millis() as u64;
@@ -336,7 +336,7 @@ fn cache_porep_params(porep_config: PoRepConfig) {
         porep_config.porep_id,
         porep_config.api_version,
     )
-    .expect("failed to get public_params");
+        .expect("failed to get public_params");
 
     {
         let circuit = <StackedCompound<ProdbenchTree, _> as CompoundProof<
@@ -356,7 +356,7 @@ fn cache_porep_params(porep_config: PoRepConfig) {
             circuit,
             &public_params,
         )
-        .expect("failed to get groth params");
+            .expect("failed to get groth params");
     }
     {
         let circuit = <StackedCompound<ProdbenchTree, _> as CompoundProof<
@@ -369,6 +369,6 @@ fn cache_porep_params(porep_config: PoRepConfig) {
             circuit,
             &public_params,
         )
-        .expect("failed to get verifying key");
+            .expect("failed to get verifying key");
     }
 }

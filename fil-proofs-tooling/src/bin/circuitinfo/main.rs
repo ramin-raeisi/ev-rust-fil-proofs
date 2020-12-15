@@ -45,7 +45,7 @@ fn get_porep_info<Tree: 'static + MerkleTreeTrait>(porep_config: PoRepConfig) ->
         porep_config.porep_id,
         porep_config.api_version,
     )
-    .expect("failed to get public params from config");
+        .expect("failed to get public params from config");
 
     let circuit = <StackedCompound<Tree, DefaultPieceHasher> as CompoundProof<
         StackedDrg<Tree, DefaultPieceHasher>,

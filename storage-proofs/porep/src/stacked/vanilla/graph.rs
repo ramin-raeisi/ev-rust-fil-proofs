@@ -540,7 +540,7 @@ mod tests {
             porep_id,
             api_version,
         )
-        .unwrap();
+            .unwrap();
 
         // If a parent index is not less than half the total node count, then
         // the parent falls in the second half of the previous layer. By the
@@ -607,7 +607,7 @@ mod tests {
             porep_id,
             ApiVersion::V1_1_0,
         )
-        .unwrap();
+            .unwrap();
 
         let mut exp_parents = [0u32; EXP_DEGREE];
         for v in 0..N_CHILDREN_SAMPLED {
@@ -655,7 +655,7 @@ mod tests {
             porep_id,
             ApiVersion::V1_1_0,
         )
-        .unwrap();
+            .unwrap();
 
         // Count the number of parents in each bin.
         let mut hist = [0usize; N_BINS];

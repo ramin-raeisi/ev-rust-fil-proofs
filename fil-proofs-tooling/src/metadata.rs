@@ -79,35 +79,35 @@ impl SystemMetadata {
 
         let (processor, base, max, features) = {
             #[cfg(target_arch = "x86_64")]
-            {
-                let cpuid = raw_cpuid::CpuId::new();
-                let processor = cpuid
-                    .get_extended_function_info()
-                    .and_then(|info| info.processor_brand_string().map(|s| s.to_string()))
-                    .unwrap_or_default();
-                let (base, max) = cpuid
-                    .get_processor_frequency_info()
-                    .map(|info| {
-                        (
-                            info.processor_base_frequency(),
-                            info.processor_max_frequency(),
-                        )
-                    })
-                    .unwrap_or_default();
-                (
-                    processor,
-                    base,
-                    max,
-                    cpuid
-                        .get_feature_info()
-                        .map(|info| format!("{:?}", info))
-                        .unwrap_or_default(),
-                )
-            }
+                {
+                    let cpuid = raw_cpuid::CpuId::new();
+                    let processor = cpuid
+                        .get_extended_function_info()
+                        .and_then(|info| info.processor_brand_string().map(|s| s.to_string()))
+                        .unwrap_or_default();
+                    let (base, max) = cpuid
+                        .get_processor_frequency_info()
+                        .map(|info| {
+                            (
+                                info.processor_base_frequency(),
+                                info.processor_max_frequency(),
+                            )
+                        })
+                        .unwrap_or_default();
+                    (
+                        processor,
+                        base,
+                        max,
+                        cpuid
+                            .get_feature_info()
+                            .map(|info| format!("{:?}", info))
+                            .unwrap_or_default(),
+                    )
+                }
             #[cfg(not(target_arch = "x86_64"))]
-            {
-                ("unknown".into(), 0, 0, "unknown".into())
-            }
+                {
+                    ("unknown".into(), 0, 0, "unknown".into())
+                }
         };
 
         Ok(SystemMetadata {

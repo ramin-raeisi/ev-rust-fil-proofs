@@ -32,9 +32,9 @@ pub fn cache_lookup<F, G>(
     identifier: String,
     generator: F,
 ) -> Result<Arc<G>>
-where
-    F: FnOnce() -> Result<G>,
-    G: Send + Sync,
+    where
+        F: FnOnce() -> Result<G>,
+        G: Send + Sync,
 {
     info!("trying parameters memory cache for: {}", &identifier);
     {
@@ -60,8 +60,8 @@ where
 
 #[inline]
 pub fn lookup_groth_params<F>(identifier: String, generator: F) -> Result<Arc<Bls12GrothParams>>
-where
-    F: FnOnce() -> Result<Bls12GrothParams>,
+    where
+        F: FnOnce() -> Result<Bls12GrothParams>,
 {
     cache_lookup(&*GROTH_PARAM_MEMORY_CACHE, identifier, generator)
 }
@@ -71,8 +71,8 @@ pub fn lookup_verifying_key<F>(
     identifier: String,
     generator: F,
 ) -> Result<Arc<Bls12PreparedVerifyingKey>>
-where
-    F: FnOnce() -> Result<Bls12PreparedVerifyingKey>,
+    where
+        F: FnOnce() -> Result<Bls12PreparedVerifyingKey>,
 {
     let vk_identifier = format!("{}-verifying-key", &identifier);
     cache_lookup(&*VERIFYING_KEY_MEMORY_CACHE, vk_identifier, generator)
@@ -93,7 +93,7 @@ pub fn get_stacked_params<Tree: 'static + MerkleTreeTrait>(
             StackedDrg<'_, Tree, DefaultPieceHasher>,
             _,
         >>::groth_params::<rand::rngs::OsRng>(None, &public_params)
-        .map_err(Into::into)
+            .map_err(Into::into)
     };
 
     Ok(lookup_groth_params(
@@ -117,7 +117,7 @@ pub fn get_post_params<Tree: 'static + MerkleTreeTrait>(
                     fallback::FallbackPoSt<'_, Tree>,
                     fallback::FallbackPoStCircuit<Tree>,
                 >>::groth_params::<rand::rngs::OsRng>(None, &post_public_params)
-                .map_err(Into::into)
+                    .map_err(Into::into)
             };
 
             Ok(lookup_groth_params(
@@ -136,7 +136,7 @@ pub fn get_post_params<Tree: 'static + MerkleTreeTrait>(
                     fallback::FallbackPoSt<'_, Tree>,
                     fallback::FallbackPoStCircuit<Tree>,
                 >>::groth_params::<rand::rngs::OsRng>(None, &post_public_params)
-                .map_err(Into::into)
+                    .map_err(Into::into)
             };
 
             Ok(lookup_groth_params(
@@ -189,7 +189,7 @@ pub fn get_post_verifying_key<Tree: 'static + MerkleTreeTrait>(
                     fallback::FallbackPoSt<'_, Tree>,
                     fallback::FallbackPoStCircuit<Tree>,
                 >>::verifying_key::<rand::rngs::OsRng>(
-                    None, &post_public_params
+                    None, &post_public_params,
                 )?;
                 Ok(bellperson::groth16::prepare_verifying_key(&vk))
             };
@@ -210,7 +210,7 @@ pub fn get_post_verifying_key<Tree: 'static + MerkleTreeTrait>(
                     fallback::FallbackPoSt<'_, Tree>,
                     fallback::FallbackPoStCircuit<Tree>,
                 >>::verifying_key::<rand::rngs::OsRng>(
-                    None, &post_public_params
+                    None, &post_public_params,
                 )?;
                 Ok(bellperson::groth16::prepare_verifying_key(&vk))
             };

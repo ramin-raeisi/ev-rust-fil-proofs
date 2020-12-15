@@ -15,9 +15,9 @@ pub fn create_label_circuit<E, CS>(
     layer_index: uint32::UInt32,
     node: uint64::UInt64,
 ) -> Result<num::AllocatedNum<E>, SynthesisError>
-where
-    E: Engine,
-    CS: ConstraintSystem<E>,
+    where
+        E: Engine,
+        CS: ConstraintSystem<E>,
 {
     assert!(replica_id.len() >= 32, "replica id is too small");
     assert!(replica_id.len() <= 256, "replica id is too large");
@@ -76,13 +76,12 @@ mod tests {
     use filecoin_hashers::sha256::Sha256Hasher;
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
-
     use storage_proofs_core::{
         api_version::ApiVersion,
         drgraph::{Graph, BASE_DEGREE},
         fr32::{bytes_into_fr, fr_into_bytes},
-        util::bytes_into_boolean_vec_be,
-        util::{data_at_node, NODE_SIZE},
+        util::{bytes_into_boolean_vec_be, data_at_node, NODE_SIZE},
+        TEST_SEED,
     };
 
     use crate::stacked::vanilla::{create_label, StackedBucketGraph, EXP_DEGREE, TOTAL_PARENTS};
@@ -90,7 +89,7 @@ mod tests {
     #[test]
     fn test_create_label() {
         let mut cs = TestConstraintSystem::<Bls12>::new();
-        let rng = &mut XorShiftRng::from_seed(crate::TEST_SEED);
+        let rng = &mut XorShiftRng::from_seed(TEST_SEED);
 
         let size = 64;
         let porep_id = [32; 32];

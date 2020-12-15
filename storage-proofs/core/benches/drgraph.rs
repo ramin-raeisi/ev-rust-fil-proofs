@@ -19,7 +19,7 @@ fn drgraph(c: &mut Criterion) {
                     [32; 32],
                     ApiVersion::V1_1_0,
                 )
-                .unwrap();
+                    .unwrap();
 
                 b.iter(|| {
                     let mut parents = vec![0; 6];

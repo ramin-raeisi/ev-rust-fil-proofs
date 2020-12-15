@@ -10,8 +10,8 @@ pub struct FuncMeasurement<T> {
 }
 
 pub fn measure<T, F>(f: F) -> Result<FuncMeasurement<T>>
-where
-    F: FnOnce() -> Result<T>,
+    where
+        F: FnOnce() -> Result<T>,
 {
     let cpu_time_start = ProcessTime::now();
     let wall_start_time = Instant::now();

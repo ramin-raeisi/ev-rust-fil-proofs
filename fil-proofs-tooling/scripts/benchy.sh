@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-which jq >/dev/null || { printf '%s\n' "error: jq" >&2; exit 1; }
+which jq >/dev/null || {
+    printf '%s\n' "error: jq" >&2
+    exit 1
+}
 
 BENCHY_STDOUT=$(mktemp)
 GTIME_STDERR=$(mktemp)
@@ -24,33 +27,33 @@ fi
 
 CMD="${GTIME_BIN} ${GTIME_ARG}"
 
-eval "RUST_BACKTRACE=1 RUSTFLAGS=\"-Awarnings -C target-cpu=native\" ${CMD}" > $BENCHY_STDOUT 2> $GTIME_STDERR
+eval "RUST_BACKTRACE=1 RUSTFLAGS=\"-Awarnings -C target-cpu=native\" ${CMD}" >$BENCHY_STDOUT 2>$GTIME_STDERR
 
 GTIME_EXIT_CODE=$?
 
-jq -s '.[0] * .[1]' $BENCHY_STDOUT $GTIME_STDERR 2> $JQ_STDERR
+jq -s '.[0] * .[1]' $BENCHY_STDOUT $GTIME_STDERR 2>$JQ_STDERR
 
 JQ_EXIT_CODE=$?
 
 if [[ ! $GTIME_EXIT_CODE -eq 0 || ! $JQ_EXIT_CODE -eq 0 ]]; then
-    >&2 echo "*********************************************"
-    >&2 echo "* benchy failed - dumping debug information *"
-    >&2 echo "*********************************************"
-    >&2 echo ""
-    >&2 echo "<COMMAND>"
-    >&2 echo "${CMD}"
-    >&2 echo "</COMMAND>"
-    >&2 echo ""
-    >&2 echo "<GTIME_STDERR>"
-    >&2 echo "$(cat $GTIME_STDERR)"
-    >&2 echo "</GTIME_STDERR>"
-    >&2 echo ""
-    >&2 echo "<BENCHY_STDOUT>"
-    >&2 echo "$(cat $BENCHY_STDOUT)"
-    >&2 echo "</BENCHY_STDOUT>"
-    >&2 echo ""
-    >&2 echo "<JQ_STDERR>"
-    >&2 echo "$(cat $JQ_STDERR)"
-    >&2 echo "</JQ_STDERR>"
+    echo >&2 "*********************************************"
+    echo >&2 "* benchy failed - dumping debug information *"
+    echo >&2 "*********************************************"
+    echo >&2 ""
+    echo >&2 "<COMMAND>"
+    echo >&2 "${CMD}"
+    echo >&2 "</COMMAND>"
+    echo >&2 ""
+    echo >&2 "<GTIME_STDERR>"
+    echo >&2 "$(cat $GTIME_STDERR)"
+    echo >&2 "</GTIME_STDERR>"
+    echo >&2 ""
+    echo >&2 "<BENCHY_STDOUT>"
+    echo >&2 "$(cat $BENCHY_STDOUT)"
+    echo >&2 "</BENCHY_STDOUT>"
+    echo >&2 ""
+    echo >&2 "<JQ_STDERR>"
+    echo >&2 "$(cat $JQ_STDERR)"
+    echo >&2 "</JQ_STDERR>"
     exit 1
 fi

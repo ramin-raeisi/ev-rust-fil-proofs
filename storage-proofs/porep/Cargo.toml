@@ -52,12 +52,13 @@ pretty_env_logger = "0.4.0"
 filecoin-hashers = { path = "../../filecoin-hashers", version = "1.0.0", default-features = false, features = ["poseidon", "sha256", "blake2s"] }
 
 [features]
-default = ["blst", "gpu"]
-gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu", "neptune/gpu"]
+default = ["blst", "gpu", "tree_c-serial-tree_r_last"]
+gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu", "neptune/gpu", "bellperson/gpu"]
 pairing = ["storage-proofs-core/pairing", "bellperson/pairing", "neptune/pairing", "filecoin-hashers/pairing"]
 blst = ["storage-proofs-core/blst", "bellperson/blst", "neptune/blst", "filecoin-hashers/blst"]
 tree_c-serial-tree_r_last = []
 tree_c-parallel-tree_r_last = []
+single-threaded = []
 
 [[bench]]
 name = "encode"

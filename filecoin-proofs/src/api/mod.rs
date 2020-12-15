@@ -135,11 +135,11 @@ pub fn unseal_range<P, R, W, Tree>(
     offset: UnpaddedByteIndex,
     num_bytes: UnpaddedBytesAmount,
 ) -> Result<UnpaddedBytesAmount>
-where
-    P: Into<PathBuf> + AsRef<Path>,
-    R: Read,
-    W: Write,
-    Tree: 'static + MerkleTreeTrait,
+    where
+        P: Into<PathBuf> + AsRef<Path>,
+        R: Read,
+        W: Write,
+        Tree: 'static + MerkleTreeTrait,
 {
     info!("unseal_range:start");
     ensure!(comm_d != [0; 32], "Invalid all zero commitment (comm_d)");
@@ -254,9 +254,9 @@ pub fn add_piece<R, W>(
     piece_size: UnpaddedBytesAmount,
     piece_lengths: &[UnpaddedBytesAmount],
 ) -> Result<(PieceInfo, UnpaddedBytesAmount)>
-where
-    R: Read,
-    W: Write,
+    where
+        R: Read,
+        W: Write,
 {
     info!("add_piece:start");
 
@@ -339,9 +339,9 @@ pub fn write_and_preprocess<R, W>(
     target: W,
     piece_size: UnpaddedBytesAmount,
 ) -> Result<(PieceInfo, UnpaddedBytesAmount)>
-where
-    R: Read,
-    W: Write,
+    where
+        R: Read,
+        W: Write,
 {
     add_piece(source, target, piece_size, Default::default())
 }
@@ -482,9 +482,9 @@ pub fn validate_cache_for_precommit_phase2<R, T, Tree: MerkleTreeTrait>(
     replica_path: T,
     seal_precommit_phase1_output: &SealPreCommitPhase1Output<Tree>,
 ) -> Result<()>
-where
-    R: AsRef<Path>,
-    T: AsRef<Path>,
+    where
+        R: AsRef<Path>,
+        T: AsRef<Path>,
 {
     info!("validate_cache_for_precommit_phase2:start");
 
@@ -526,9 +526,9 @@ pub fn validate_cache_for_commit<R, T, Tree: MerkleTreeTrait>(
     cache_path: R,
     replica_path: T,
 ) -> Result<()>
-where
-    R: AsRef<Path>,
-    T: AsRef<Path>,
+    where
+        R: AsRef<Path>,
+        T: AsRef<Path>,
 {
     info!("validate_cache_for_precommit:start");
 
