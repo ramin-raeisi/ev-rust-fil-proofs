@@ -31,7 +31,7 @@ log = "0.4.7"
 pretty_assertions = "0.6.1"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { git = "https://github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false }
+neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false }
 num_cpus = "1.10.1"
 hex = "0.4.2"
 bincode = "1.1.2"
@@ -41,7 +41,7 @@ byte-slice-cast = "1.0.0"
 hwloc = "0.5.0"
 libc = "0.2"
 fdlimit = "0.2.0"
-rust-gpu-tools = { version = "0.2.2" }
+rust-gpu-tools = { version = "0.3.0" }
 
 [dev-dependencies]
 tempfile = "3"
