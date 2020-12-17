@@ -12,6 +12,7 @@ use merkletree::store::{ReplicaConfig, StoreConfig};
 use rayon::prelude::*;
 
 use super::*;
+use std::collections::HashMap;
 
 /// Trait used to abstract over the way Merkle Trees are constructed and stored.
 pub trait MerkleTreeTrait: Send + Sync + std::fmt::Debug {
@@ -34,6 +35,24 @@ pub trait MerkleTreeTrait: Send + Sync + std::fmt::Debug {
     /// Creates a merkle proof of the node at the given index.
     fn gen_proof(&self, index: usize) -> Result<Self::Proof>;
     fn gen_cached_proof(&self, i: usize, rows_to_discard: Option<usize>) -> Result<Self::Proof>;
+
+    fn gen_cached_proof_v2(
+        &self,
+        i: usize,
+        rows_to_discard: Option<usize>,
+        buf: &[u8],
+        pos: &Vec<(u64, u64)>,
+        lstree: &HashMap<&String, (Vec<u8>, Vec<(u64, u64)>, Option<std::io::Error>)>,
+    ) -> Result<Self::Proof>;
+    fn gen_cached_proof_v2_ranges(
+        &self,
+        i: usize,
+        rows_to_discard: Option<usize>,
+        list: &mut Vec<(u64, u64)>,
+        lstree: &mut HashMap<String, Vec<(u64, u64)>>,
+    );
+    fn get_path_v2(&self) -> Option<String>;
+
     fn row_count(&self) -> usize;
     fn leaves(&self) -> usize;
     fn from_merkle(
@@ -106,6 +125,44 @@ impl<
         debug_assert!(proof.validate::<H::Function>().expect("validate failed"));
 
         MerkleProof::try_from_proof(proof)
+    }
+
+    fn gen_cached_proof_v2(
+        &self,
+        i: usize,
+        rows_to_discard: Option<usize>,
+        buf: &[u8],
+        pos: &Vec<(u64, u64)>,
+        lstree: &HashMap<&String, (Vec<u8>, Vec<(u64, u64)>, Option<std::io::Error>)>,
+    ) -> Result<Self::Proof> {
+        if rows_to_discard.is_some() && rows_to_discard.unwrap() == 0 {
+            return self.gen_proof(i);
+        }
+
+        let proof = self
+            .inner
+            .gen_cached_proof_v2(i, rows_to_discard, buf, pos, lstree)?;
+
+        debug_assert!(proof.validate::<H::Function>().expect("validate failed"));
+
+        MerkleProof::try_from_proof(proof)
+    }
+
+    fn gen_cached_proof_v2_ranges(
+        &self,
+        i: usize,
+        rows_to_discard: Option<usize>,
+        list: &mut Vec<(u64, u64)>,
+        lstree: &mut HashMap<String, Vec<(u64, u64)>>,
+    ) {
+        if rows_to_discard.is_some() && rows_to_discard.unwrap() == 0 {
+            return;
+        }
+        self.inner
+            .gen_cached_proof_v2_ranges(i, rows_to_discard, list, lstree);
+    }
+    fn get_path_v2(&self) -> Option<String> {
+        self.inner.get_path_v2()
     }
 
     fn row_count(&self) -> usize {
