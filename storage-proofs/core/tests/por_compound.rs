@@ -5,6 +5,7 @@ use bellperson::{
 };
 use ff::Field;
 use filecoin_hashers::{poseidon::PoseidonHasher, Hasher};
+use fr32::{bytes_into_fr, fr_into_bytes};
 use generic_array::typenum::{U0, U2, U4, U8};
 use merkletree::store::VecStore;
 use pretty_assertions::assert_eq;

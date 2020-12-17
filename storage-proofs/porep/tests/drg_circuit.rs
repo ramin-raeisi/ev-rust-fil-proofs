@@ -5,6 +5,7 @@ use bellperson::{
 };
 use ff::Field;
 use filecoin_hashers::poseidon::PoseidonHasher;
+use fr32::{bytes_into_fr, fr_into_bytes};
 use generic_array::typenum::U2;
 use merkletree::store::StoreConfig;
 use pretty_assertions::assert_eq;
@@ -15,7 +16,6 @@ use storage_proofs_core::{
     cache_key::CacheKey,
     compound_proof,
     drgraph::{graph_height, BucketGraph, BASE_DEGREE},
-    fr32::{bytes_into_fr, fr_into_bytes},
     gadgets::variables::Root,
     merkle::MerkleProofTrait,
     proof::ProofScheme,
@@ -186,11 +186,11 @@ fn test_drg_porep_circuit() {
             &pp,
             None,
         )
-            .unwrap();
+        .unwrap();
     let expected_inputs = cs.get_inputs();
 
     for ((input, label), generated_input) in
-    expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+        expected_inputs.iter().skip(1).zip(generated_inputs.iter())
     {
         assert_eq!(input, generated_input, "{}", label);
     }

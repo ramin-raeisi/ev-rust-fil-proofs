@@ -8,6 +8,7 @@ use ff::Field;
 use filecoin_hashers::{
     blake2s::Blake2sHasher, poseidon::PoseidonHasher, sha256::Sha256Hasher, Domain, Hasher,
 };
+use fr32::{bytes_into_fr, fr_into_bytes};
 use generic_array::typenum::{Unsigned, U0, U2, U4, U8};
 use merkletree::store::VecStore;
 use pretty_assertions::assert_eq;
@@ -227,8 +228,8 @@ fn test_por_circuit_private_root<Tree: MerkleTreeTrait>(num_constraints: usize) 
             bytes_into_fr(
                 data_at_node(data.as_slice(), pub_inputs.challenge).expect("data_at_node failure"),
             )
-                .expect("bytes_into_fr failure")
-                .into(),
+            .expect("bytes_into_fr failure")
+            .into(),
             &tree,
         );
 

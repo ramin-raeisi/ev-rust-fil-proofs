@@ -121,7 +121,7 @@ fn test_fallback_post<Tree: 'static + MerkleTreeTrait>(
         &priv_inputs,
         partitions,
     )
-        .expect("proving failed");
+    .expect("proving failed");
     assert_eq!(proofs.len(), partitions);
 
     let is_valid = FallbackPoSt::<Tree>::verify_all_partitions(&pub_params, &pub_inputs, &proofs)
@@ -182,7 +182,7 @@ fn test_fallback_post<Tree: 'static + MerkleTreeTrait>(
         let expected_inputs = cs.get_inputs();
 
         for ((input, label), generated_input) in
-        expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+            expected_inputs.iter().skip(1).zip(generated_inputs.iter())
         {
             assert_eq!(input, generated_input, "{}", label);
         }

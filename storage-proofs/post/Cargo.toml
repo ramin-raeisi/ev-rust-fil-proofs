@@ -30,6 +30,7 @@ generic-array = "0.14.4"
 anyhow = "1.0.23"
 neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false, features = ["gpu"] }
 num_cpus = "1.10.1"
+fr32 = { path = "../../fr32", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"
@@ -39,6 +40,7 @@ filecoin-hashers = { path = "../../filecoin-hashers", version = "1.0.0", default
 
 [features]
 default = ["blst", "gpu"]
-gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu", "neptune/gpu"]
-pairing = ["storage-proofs-core/pairing", "bellperson/pairing", "neptune/pairing", "filecoin-hashers/pairing"]
-blst = ["storage-proofs-core/blst", "bellperson/blst", "neptune/blst", "filecoin-hashers/blst"]
+gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu", "neptune/gpu", "fr32/gpu"]
+pairing = ["storage-proofs-core/pairing", "bellperson/pairing", "neptune/pairing", "filecoin-hashers/pairing", "fr32/pairing"]
+blst = ["storage-proofs-core/blst", "bellperson/blst", "neptune/blst", "filecoin-hashers/blst", "fr32/blst"]
+

@@ -5,6 +5,7 @@ use bellperson::{
 };
 use ff::Field;
 use filecoin_hashers::{poseidon::PoseidonHasher, Hasher};
+use fr32::fr_into_bytes;
 use merkletree::store::StoreConfig;
 use pretty_assertions::assert_eq;
 use rand::SeedableRng;
@@ -14,7 +15,6 @@ use storage_proofs_core::{
     cache_key::CacheKey,
     compound_proof::{self, CompoundProof},
     drgraph::{BucketGraph, BASE_DEGREE},
-    fr32::fr_into_bytes,
     merkle::{BinaryMerkleTree, MerkleTreeTrait},
     proof::NoRequirements,
     test_helper::setup_replica,
@@ -131,7 +131,7 @@ fn drg_porep_compound<Tree: 'static + MerkleTreeTrait>() {
             &public_inputs,
             &private_inputs,
         )
-            .unwrap();
+        .unwrap();
 
         let mut cs = TestConstraintSystem::new();
 
@@ -179,7 +179,7 @@ fn drg_porep_compound<Tree: 'static + MerkleTreeTrait>() {
             &proof,
             &NoRequirements,
         )
-            .expect("failed while verifying");
+        .expect("failed while verifying");
 
         assert!(verified);
     }

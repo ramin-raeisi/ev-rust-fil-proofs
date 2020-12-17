@@ -168,6 +168,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait> RationalPoStCircuit<Tree> {
             paths,
             _t: PhantomData,
         }
-            .synthesize(cs)
+        .synthesize(cs)
     }
 }

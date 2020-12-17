@@ -41,8 +41,8 @@ fn test_rational_post_poseidon_top_8_8_2() {
 }
 
 fn test_rational_post<Tree: MerkleTreeTrait>()
-    where
-        Tree::Store: 'static,
+where
+    Tree::Store: 'static,
 {
     let rng = &mut XorShiftRng::from_seed(TEST_SEED);
 
