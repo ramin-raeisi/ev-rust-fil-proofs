@@ -45,13 +45,12 @@ groupy = "0.3.0"
 byte-slice-cast = "1.0.0"
 sds = {path = "../sds"}
 backtrace = "0.3.50"
+fr32 = { path = "../fr32", default-features = false }
 
 [dependencies.reqwest]
 version = "0.10"
 default-features = false
 features = ["blocking", "native-tls-vendored"]
-
-fr32 = { path = "../fr32", default-features = false }
 
 [dev-dependencies]
 criterion = "0.3"
