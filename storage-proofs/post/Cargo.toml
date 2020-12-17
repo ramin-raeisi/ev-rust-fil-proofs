@@ -12,7 +12,7 @@ readme = "README.md"
 storage-proofs-core = { path = "../core", version = "^6.0.0", default-features = false }
 filecoin-hashers = { path = "../../filecoin-hashers", version = "1.0.0", default-features = false, features = ["poseidon", "sha256"] }
 rand = "0.7"
-merkletree = {path = "../../../merkle_light" }
+merkletree = { git = "ssh://git@github.com/nilfoundation/merkletree.git", branch = "1-sds-changes", default-features = false }
 byteorder = "1"
 crossbeam = "0.8"
 sha2 = "0.9.1"

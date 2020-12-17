@@ -33,7 +33,7 @@ rayon-core = "1.6.1"
 rayon-futures = "0.1.1"
 blake2s_simd = "0.5.8"
 hex = "0.4.0"
-merkletree = {path = "../../merkle_light" }
+merkletree = { git = "ssh://git@github.com/nilfoundation/merkletree.git", branch = "1-sds-changes", default-features = false }
 bincode = "1.1.2"
 anyhow = "1.0.23"
 rand_xorshift = "0.2.0"

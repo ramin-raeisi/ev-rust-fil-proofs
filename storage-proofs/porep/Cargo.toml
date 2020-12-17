@@ -15,7 +15,7 @@ storage-proofs-core = { path = "../core", version = "^6.0.0", default-features =
 sha2raw = { path = "../../sha2raw", version = "^2.0.0" }
 filecoin-hashers = { path = "../../filecoin-hashers", version = "1.0.0", default-features = false, features = ["poseidon", "sha256"] }
 rand = "0.7"
-merkletree = {path = "../../../merkle_light" }
+merkletree = { git = "ssh://git@github.com/nilfoundation/merkletree.git", branch = "1-sds-changes", default-features = false }
 mapr = "0.8.0"
 num-bigint = "0.2"
 num-traits = "0.2"
