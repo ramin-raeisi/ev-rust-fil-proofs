@@ -171,40 +171,6 @@ const FR32_PADDING_MAP: PaddingMap = PaddingMap {
     element_bits: 256,
 };
 
-pub type BitVecLEu8 = BitVec<LittleEndian, u8>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// Convenience interface for API functions – all bundling FR32_PADDING_MAP
-// parameter/return types are tuned for current caller convenience.
-
-pub fn target_unpadded_bytes<W: ?Sized>(target: &mut W) -> io::Result<u64>
-    where
-        W: Seek,
-{
-    let (_, unpadded, _) = FR32_PADDING_MAP.target_offsets(target)?;
-
-    Ok(unpadded)
-}
-
-// Leave the actual truncation to caller, since we can't do it generically.
-// Return the length to which target should be truncated.
-// We might should also handle zero-padding what will become the final byte of target.
-// Technically, this should be okay though because that byte will always be overwritten later.
-// If we decide this is unnecessary, then we don't need to pass target at all.
-pub fn almost_truncate_to_unpadded_bytes<W: ?Sized>(
-    _target: &mut W,
-    length: u64,
-) -> io::Result<usize>
-    where
-        W: Read + Write + Seek,
-{
-    let padded =
-        BitByte::from_bits(FR32_PADDING_MAP.transform_bit_offset((length * 8) as usize, true));
-    let real_length = padded.bytes_needed();
-    let _final_bit_count = padded.bits;
-    Ok(real_length)
-}
-
 pub fn to_unpadded_bytes(padded_bytes: u64) -> u64 {
     FR32_PADDING_MAP.transform_byte_offset(padded_bytes as usize, false) as u64
 }
@@ -315,36 +281,6 @@ impl PaddingMap {
         let next_element_position_bits = position_bits + remaining_data_unit_bits + self.pad_bits();
 
         (next_element_position_bits / 8, remaining_data_unit_bits)
-    }
-
-    // For a `Seek`able `target` of a byte-aligned padded layout, return:
-    // - the size in bytes
-    // - the size in bytes of raw data which corresponds to the `target` size
-    // - a BitByte representing the number of padded bits contained in the
-    //   byte-aligned padded layout
-    pub fn target_offsets<W: ?Sized>(&self, target: &mut W) -> io::Result<(u64, u64, BitByte)>
-        where
-            W: Seek,
-    {
-        // The current position in `target` is the number of padded bytes already written
-        // to the byte-aligned stream.
-        let padded_bytes = target.seek(SeekFrom::End(0))?;
-
-        // Deduce the number of input raw bytes that generated that padded byte size.
-        let raw_data_bytes = self.transform_byte_offset(padded_bytes as usize, false);
-
-        // With the number of raw data bytes elucidated it can now be specified the
-        // number of padding bits in the generated bit stream (before it was converted
-        // to a byte-aligned stream), that is, `raw_data_bytes * 8` is not necessarily
-        // `padded_bits`).
-        let padded_bits = self.transform_bit_offset(raw_data_bytes * 8, true);
-
-        Ok((
-            padded_bytes,
-            raw_data_bytes as u64,
-            BitByte::from_bits(padded_bits),
-        ))
-        // TODO: Why do we use `usize` internally and `u64` externally?
     }
 }
 
@@ -813,8 +749,6 @@ fn write_unpadded_aux<W: ?Sized>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::io::Read;
 
     use bitvec::{order::Lsb0 as LittleEndian, vec::BitVec};
@@ -823,6 +757,8 @@ mod tests {
     use rand_xorshift::XorShiftRng;
 
     use crate::Fr32Reader;
+
+    use super::*;
 
     const TEST_SEED: [u8; 16] = [
         0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc,

@@ -1,7 +1,5 @@
 use bellperson::bls::Bls12;
 use bellperson::gadgets::boolean::{self, Boolean};
-use bellperson::groth16::*;
-use bellperson::util_cs::bench_cs::BenchCS;
 use bellperson::{Circuit, ConstraintSystem, SynthesisError};
 use criterion::{black_box, criterion_group, criterion_main, Criterion, ParameterizedBenchmark};
 use rand::{thread_rng, Rng};
@@ -49,55 +47,5 @@ fn blake2s_benchmark(c: &mut Criterion) {
     );
 }
 
-fn blake2s_circuit_benchmark(c: &mut Criterion) {
-    let mut rng1 = thread_rng();
-    let groth_params =
-        generate_random_parameters::<Bls12, _, _>(Blake2sExample { data: &[None; 256] }, &mut rng1)
-            .unwrap();
-
-    let params = vec![32];
-
-    c.bench(
-        "hash-blake2s-circuit",
-        ParameterizedBenchmark::new(
-            "create-proof",
-            move |b, bytes| {
-                let mut rng = thread_rng();
-                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
-
-                b.iter(|| {
-                    let proof = create_random_proof(
-                        Blake2sExample {
-                            data: data.as_slice(),
-                        },
-                        &groth_params,
-                        &mut rng,
-                    )
-                        .unwrap();
-
-                    black_box(proof)
-                });
-            },
-            params,
-        )
-            .with_function("synthesize", move |b, bytes| {
-                let mut rng = thread_rng();
-                let data: Vec<Option<bool>> = (0..bytes * 8).map(|_| Some(rng.gen())).collect();
-                b.iter(|| {
-                    let mut cs = BenchCS::<Bls12>::new();
-
-                    Blake2sExample {
-                        data: data.as_slice(),
-                    }
-                        .synthesize(&mut cs)
-                        .unwrap();
-
-                    black_box(cs)
-                });
-            })
-            .sample_size(20),
-    );
-}
-
-criterion_group!(benches, blake2s_benchmark, blake2s_circuit_benchmark);
+criterion_group!(benches, blake2s_benchmark);
 criterion_main!(benches);

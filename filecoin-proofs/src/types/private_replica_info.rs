@@ -2,16 +2,15 @@ use std::hash::{Hash, Hasher as StdHasher};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, ensure, Result};
 use bincode::deserialize;
-use filecoin_hashers::Hasher;
 use generic_array::typenum::Unsigned;
 use log::trace;
 use merkletree::store::StoreConfig;
+
+use filecoin_hashers::Hasher;
 use storage_proofs::cache_key::CacheKey;
-use storage_proofs::merkle::{
-    create_tree, get_base_tree_count, split_config_and_replica, MerkleTreeTrait, MerkleTreeWrapper,
-};
+use storage_proofs::merkle::{get_base_tree_count, MerkleTreeTrait, MerkleTreeWrapper, split_config_and_replica, create_tree_v2};
 use storage_proofs::util::default_rows_to_discard;
 
 use crate::api::util::{as_safe_commitment, get_base_tree_leafs, get_base_tree_size};
@@ -160,6 +159,6 @@ impl<Tree: 'static + MerkleTreeTrait> PrivateReplicaInfo<Tree> {
             tree_count,
         )?;
 
-        create_tree::<Tree>(base_tree_size, &configs, Some(&replica_config))
+        create_tree_v2::<Tree>(base_tree_size, &configs, Some(&replica_config), false)
     }
 }

@@ -1,15 +1,18 @@
 use std::collections::{BTreeSet, HashMap};
 use std::marker::PhantomData;
+use std::time::SystemTime;
 
 use anyhow::ensure;
 use bellperson::bls::Fr;
 use byteorder::{ByteOrder, LittleEndian};
-use filecoin_hashers::{Domain, HashFunction, Hasher};
 use generic_array::typenum::Unsigned;
-use log::{error, warn, info, trace};
+use log::{error, info, trace, warn};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
+use filecoin_hashers::{Domain, Hasher, HashFunction};
+use sds::service::storage::download::{read_batch, sds_is_enable, total_download_duration};
 use storage_proofs_core::{
     api_version::ApiVersion,
     error::{Error, Result},
@@ -19,10 +22,6 @@ use storage_proofs_core::{
     sector::*,
     util::{default_rows_to_discard, NODE_SIZE},
 };
-
-use sds::service::storage::download::{sds_is_enable, read_batch, total_download_duration};
-
-use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
 pub struct SetupParams {
@@ -301,6 +300,11 @@ pub fn vanilla_proof<Tree: MerkleTreeTrait>(
     })
 }
 
+enum ProofOrFault<T> {
+    Proof(T),
+    Fault(SectorId),
+}
+
 impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> {
     type PublicParams = PublicParams;
     type SetupParams = SetupParams;
@@ -396,7 +400,7 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                         default_rows_to_discard(tree_leafs, Tree::Arity::to_usize());
 
                     let s = sector_id.to_string();
-                    let mut list = leaf_map
+                    let list = leaf_map
                         .entry(s)
                         .or_insert((Vec::with_capacity(leaf_size), tree.get_path_v2()));
 
@@ -477,7 +481,7 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                 let path = tree.get_path_v2();
                 if sds_enable && path.is_some() {
                     let s = sector_id.to_string();
-                    let mut opt = data_map.get(&s);
+                    let opt = data_map.get(&s);
                     trace!(
                         "Generating proof for tree leafs {} and arity {}, i {}",
                         tree_leafs,
@@ -506,7 +510,7 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                     .into_par_iter()
                     .map(|n| {
                         if replica_err.is_some() {
-                            warn!("sds compute proof {:?} error {:?}",  tree.get_path_v2(), replica_err);
+                            warn!("sds compute proof {:?} error {:?}", tree.get_path_v2(), replica_err);
                             return Ok(ProofOrFault::Fault(sector_id));
                         }
                         let challenge_index = ((j * num_sectors_per_chunk + i)
@@ -531,10 +535,10 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                                 if proof.validate(challenged_leaf_start as usize)
                                     && proof.root() == priv_sector.comm_r_last
                                     && pub_sector.comm_r
-                                        == <Tree::Hasher as Hasher>::Function::hash2(
-                                            &priv_sector.comm_c,
-                                            &priv_sector.comm_r_last,
-                                        )
+                                    == <Tree::Hasher as Hasher>::Function::hash2(
+                                    &priv_sector.comm_c,
+                                    &priv_sector.comm_r_last,
+                                )
                                 {
                                     Ok(ProofOrFault::Proof(proof))
                                 } else {
@@ -550,7 +554,7 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
                                 warn!("sds compute proof {} {} {} {:?} error {:?}", s, challenge_index,
                                       challenged_leaf_start, tree.get_path_v2(), &e);
                                 Ok(ProofOrFault::Fault(sector_id))
-                            },
+                            }
                         }
                     })
                     .collect::<Result<Vec<_>>>()?
@@ -579,7 +583,6 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
             }
 
             partition_proofs.push(Proof { sectors: proofs });
-            faulty_sectors.append(&mut faults);
         }
         info!("proof time {:?}", proof_time.elapsed());
 
@@ -743,351 +746,4 @@ fn download_ranges(path: &String, ranges: &Vec<(u64, u64)>) -> (Vec<u8>, Vec<(u6
     info!("download {} size is {:?}", path, n);
 
     (read_data, pos_list, n.err())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use generic_array::typenum::{U0, U2, U4, U8};
-    use rand::SeedableRng;
-    use rand_xorshift::XorShiftRng;
-
-    use storage_proofs_core::{
-        hasher::PoseidonHasher,
-        merkle::{generate_tree, get_base_tree_count, LCTree, MerkleTreeTrait},
-    };
-
-    fn test_fallback_post<Tree: MerkleTreeTrait>(
-        total_sector_count: usize,
-        sector_count: usize,
-        partitions: usize,
-    ) where
-        Tree::Store: 'static,
-    {
-        let rng = &mut XorShiftRng::from_seed(crate::TEST_SEED);
-
-        let leaves = 64 * get_base_tree_count::<Tree>();
-        let sector_size = leaves * NODE_SIZE;
-
-        let pub_params = PublicParams {
-            sector_size: sector_size as u64,
-            challenge_count: 10,
-            sector_count,
-        };
-
-        let randomness = <Tree::Hasher as Hasher>::Domain::random(rng);
-        let prover_id = <Tree::Hasher as Hasher>::Domain::random(rng);
-
-        let temp_dir = tempfile::tempdir().unwrap();
-        let temp_path = temp_dir.path();
-
-        let mut pub_sectors = Vec::new();
-        let mut priv_sectors = Vec::new();
-
-        let trees = (0..total_sector_count)
-            .map(|_| generate_tree::<Tree, _>(rng, leaves, Some(temp_path.to_path_buf())).1)
-            .collect::<Vec<_>>();
-
-        for (i, tree) in trees.iter().enumerate() {
-            let comm_c = <Tree::Hasher as Hasher>::Domain::random(rng);
-            let comm_r_last = tree.root();
-
-            priv_sectors.push(PrivateSector {
-                tree,
-                comm_c,
-                comm_r_last,
-            });
-
-            let comm_r = <Tree::Hasher as Hasher>::Function::hash2(&comm_c, &comm_r_last);
-            pub_sectors.push(PublicSector {
-                id: (i as u64).into(),
-                comm_r,
-            });
-        }
-
-        let pub_inputs = PublicInputs {
-            randomness,
-            prover_id,
-            sectors: &pub_sectors,
-            k: None,
-        };
-
-        let priv_inputs = PrivateInputs::<Tree> {
-            sectors: &priv_sectors[..],
-        };
-
-        let proof = FallbackPoSt::<Tree>::prove_all_partitions(
-            &pub_params,
-            &pub_inputs,
-            &priv_inputs,
-            partitions,
-        )
-        .expect("proving failed");
-
-        let is_valid =
-            FallbackPoSt::<Tree>::verify_all_partitions(&pub_params, &pub_inputs, &proof)
-                .expect("verification failed");
-
-        assert!(is_valid);
-    }
-
-    fn test_invalid_fallback_post<Tree: MerkleTreeTrait>(
-        total_sector_count: usize,
-        sector_count: usize,
-        partitions: usize,
-    ) where
-        Tree::Store: 'static,
-    {
-        let rng = &mut XorShiftRng::from_seed(crate::TEST_SEED);
-
-        let leaves = 64 * get_base_tree_count::<Tree>();
-        let sector_size = leaves * NODE_SIZE;
-
-        let pub_params = PublicParams {
-            sector_size: sector_size as u64,
-            challenge_count: 10,
-            sector_count,
-        };
-
-        let randomness = <Tree::Hasher as Hasher>::Domain::random(rng);
-        let prover_id = <Tree::Hasher as Hasher>::Domain::random(rng);
-
-        let temp_dir = tempfile::tempdir().unwrap();
-        let temp_path = temp_dir.path();
-
-        let mut pub_sectors = Vec::new();
-        let mut priv_sectors = Vec::new();
-
-        let mut trees = Vec::new();
-
-        let mut faulty_sectors = Vec::<SectorId>::new();
-
-        for _i in 0..total_sector_count {
-            let (_data, tree) =
-                generate_tree::<Tree, _>(rng, leaves, Some(temp_path.to_path_buf()));
-            trees.push(tree);
-        }
-
-        let faulty_denominator = 3;
-
-        let (_data, wrong_tree) =
-            generate_tree::<Tree, _>(rng, leaves, Some(temp_path.to_path_buf()));
-
-        for (i, tree) in trees.iter().enumerate() {
-            let make_faulty = i % faulty_denominator == 0;
-
-            let comm_c = <Tree::Hasher as Hasher>::Domain::random(rng);
-            let comm_r_last = tree.root();
-
-            priv_sectors.push(PrivateSector {
-                tree: if make_faulty { &wrong_tree } else { tree },
-                comm_c,
-                comm_r_last,
-            });
-
-            let comm_r = <Tree::Hasher as Hasher>::Function::hash2(&comm_c, &comm_r_last);
-
-            if make_faulty {
-                faulty_sectors.push((i as u64).into());
-            }
-
-            pub_sectors.push(PublicSector {
-                id: (i as u64).into(),
-                comm_r,
-            });
-        }
-
-        let pub_inputs = PublicInputs {
-            randomness,
-            prover_id,
-            sectors: &pub_sectors,
-            k: None,
-        };
-
-        let priv_inputs = PrivateInputs::<Tree> {
-            sectors: &priv_sectors[..],
-        };
-
-        let proof = FallbackPoSt::<Tree>::prove_all_partitions(
-            &pub_params,
-            &pub_inputs,
-            &priv_inputs,
-            partitions,
-        );
-
-        match proof {
-            Ok(proof) => {
-                let is_valid =
-                    FallbackPoSt::<Tree>::verify_all_partitions(&pub_params, &pub_inputs, &proof)
-                        .expect("verification failed");
-                assert!(!is_valid, "PoSt returned a valid proof with invalid input");
-            }
-            Err(e) => match e.downcast::<Error>() {
-                Err(_) => panic!("failed to downcast to Error"),
-                Ok(Error::FaultySectors(sector_ids)) => assert_eq!(faulty_sectors, sector_ids),
-                Ok(_) => panic!("PoSt failed to return FaultySectors error."),
-            },
-        };
-    }
-
-    #[test]
-    fn fallback_post_poseidon_single_partition_matching_base_8() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(5, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_single_partition_matching_base_8() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(5, 5, 1);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_single_partition_smaller_base_8() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(3, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_single_partition_smaller_base_8() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(3, 5, 1);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_matching_base_8() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(4, 2, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_matching_base_8() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(4, 2, 2);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_smaller_base_8() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(5, 3, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_smaller_base_8() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U0, U0>>(5, 3, 2);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_single_partition_matching_sub_8_4() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U4, U0>>(5, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_single_partition_matching_sub_8_4() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U4, U0>>(5, 5, 1);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_single_partition_smaller_sub_8_4() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U4, U0>>(3, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_single_partition_smaller_sub_8_4() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U4, U0>>(3, 5, 1);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_matching_sub_8_4() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U4, U0>>(4, 2, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_matching_sub_8_4() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U4, U0>>(4, 2, 2);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_matching_sub_8_8() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U8, U0>>(4, 2, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_matching_sub_8_8() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U8, U0>>(4, 2, 2);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_smaller_sub_8_4() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U4, U0>>(5, 3, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_smaller_sub_8_4() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U4, U0>>(5, 3, 2);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_smaller_sub_8_8() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U8, U0>>(5, 3, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_smaller_sub_8_8() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U8, U0>>(5, 3, 2);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_single_partition_matching_top_8_4_2() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U4, U2>>(5, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_single_partition_matching_top_8_4_2() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U4, U2>>(5, 5, 1);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_single_partition_matching_top_8_8_2() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U8, U2>>(5, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_single_partition_matching_top_8_8_2() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U8, U2>>(5, 5, 1);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_single_partition_smaller_top_8_4_2() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U4, U2>>(3, 5, 1);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_single_partition_smaller_top_8_4_2() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U4, U2>>(3, 5, 1);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_matching_top_8_4_2() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U4, U2>>(4, 2, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_matching_top_8_4_2() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U4, U2>>(4, 2, 2);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_smaller_top_8_4_2() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U4, U2>>(5, 3, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_smaller_top_8_4_2() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U4, U2>>(5, 3, 2);
-    }
-
-    #[test]
-    fn fallback_post_poseidon_two_partitions_smaller_top_8_8_2() {
-        test_fallback_post::<LCTree<PoseidonHasher, U8, U8, U2>>(5, 3, 2);
-    }
-
-    #[test]
-    fn invalid_fallback_post_poseidon_two_partitions_smaller_top_8_8_2() {
-        test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U8, U2>>(5, 3, 2);
-    }
 }

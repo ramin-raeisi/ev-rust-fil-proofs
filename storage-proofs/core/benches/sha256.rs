@@ -1,12 +1,10 @@
+use bellperson::{Circuit, ConstraintSystem, SynthesisError};
 use bellperson::bls::Bls12;
 use bellperson::gadgets::boolean::{self, Boolean};
-use bellperson::groth16::*;
-use bellperson::util_cs::bench_cs::BenchCS;
-use bellperson::{Circuit, ConstraintSystem, SynthesisError};
 use criterion::{
-    black_box, criterion_group, criterion_main, Criterion, ParameterizedBenchmark, Throughput,
+    black_box, Criterion, criterion_group, criterion_main, ParameterizedBenchmark, Throughput,
 };
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use sha2::{Digest, Sha256};
 
 struct Sha256Example<'a> {
@@ -78,7 +76,6 @@ fn sha256_raw_benchmark(c: &mut Criterion) {
 criterion_group!(
     benches,
     sha256_benchmark,
-    sha256_raw_benchmark,
-    sha256_circuit_benchmark
+    sha256_raw_benchmark
 );
 criterion_main!(benches);

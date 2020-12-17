@@ -5,7 +5,7 @@ use sha1::Sha1;
 use url::Url;
 use time::now_utc;
 use super::base64;
-use log::{debug, info, trace, warn};
+use log::{ trace};
 
 #[derive(Debug)]
 pub struct Credential {

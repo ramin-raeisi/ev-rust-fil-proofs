@@ -18,7 +18,7 @@ use std::cmp;
 
 use std::io;
 use std::io::prelude::*;
-use log::{debug, info, trace, warn};
+use log::{trace};
 use self::State::*;
 
 pub const MIN_BUF_SIZE: usize = 1024;

@@ -43,7 +43,7 @@ gperftools = { version = "0.2", optional = true }
 generic-array = "0.14.4"
 groupy = "0.3.0"
 byte-slice-cast = "1.0.0"
-sds = {path = "../sds"}
+sds = { path = "../sds" }
 backtrace = "0.3.50"
 fr32 = { path = "../fr32", default-features = false }
 

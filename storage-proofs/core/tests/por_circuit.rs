@@ -16,7 +16,6 @@ use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use storage_proofs_core::{
     compound_proof::CompoundProof,
-    fr32::{bytes_into_fr, fr_into_bytes},
     gadgets::por::{
         challenge_into_auth_path_bits, por_no_challenge_input, PoRCircuit, PoRCompound,
     },
