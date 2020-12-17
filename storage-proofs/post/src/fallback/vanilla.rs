@@ -730,8 +730,6 @@ impl<'a, Tree: 'a + MerkleTreeTrait> ProofScheme<'a> for FallbackPoSt<'a, Tree> 
         checked * public_params.challenge_count >= requirements.minimum_challenge_count
     }
 }
-<<<<<<< HEAD
-=======
 
 fn download_ranges(path: &String, ranges: &Vec<(u64, u64)>) -> (Vec<u8>, Vec<(u64, u64)>, Option<std::io::Error>) {
     let mut total_len: u64 = 0;
@@ -1093,4 +1091,3 @@ mod tests {
         test_invalid_fallback_post::<LCTree<PoseidonHasher, U8, U8, U2>>(5, 3, 2);
     }
 }
->>>>>>> sds/sds-540

@@ -3,6 +3,7 @@ use ff::{Field, PrimeField};
 use filecoin_hashers::{
     blake2s::Blake2sHasher, poseidon::PoseidonHasher, sha256::Sha256Hasher, Domain, Hasher,
 };
+use fr32::fr_into_bytes;
 use generic_array::typenum::{U0, U2, U4, U8};
 use merkletree::store::{Store, StoreConfig};
 use rand::{Rng, SeedableRng};
@@ -11,7 +12,6 @@ use storage_proofs_core::{
     api_version::ApiVersion,
     cache_key::CacheKey,
     drgraph::BASE_DEGREE,
-    fr32::fr_into_bytes,
     merkle::{get_base_tree_count, DiskTree, MerkleTreeTrait},
     proof::ProofScheme,
     table_tests,
@@ -123,7 +123,7 @@ fn test_extract_all<Tree: 'static + MerkleTreeTrait>() {
         config.clone(),
         replica_path.clone(),
     )
-        .expect("replication failed");
+    .expect("replication failed");
 
     // The layers are still in the cache dir, so rerunning the label generation should
     // not do any work.
@@ -134,7 +134,7 @@ fn test_extract_all<Tree: 'static + MerkleTreeTrait>() {
         &replica_id,
         config.clone(),
     )
-        .expect("label generation failed");
+    .expect("label generation failed");
     for state in &label_states {
         assert!(state.generated);
     }
@@ -152,7 +152,7 @@ fn test_extract_all<Tree: 'static + MerkleTreeTrait>() {
         &replica_id,
         config.clone(),
     )
-        .expect("label generation failed");
+    .expect("label generation failed");
     for state in &label_states[..off] {
         assert!(state.generated);
     }
@@ -168,7 +168,7 @@ fn test_extract_all<Tree: 'static + MerkleTreeTrait>() {
         mmapped_data.as_mut(),
         Some(config),
     )
-        .expect("failed to extract data");
+    .expect("failed to extract data");
 
     assert_eq!(data, decoded_data);
 
@@ -243,7 +243,7 @@ fn test_stacked_porep_resume_seal() {
         config.clone(),
         replica_path1.clone(),
     )
-        .expect("replication failed 1");
+    .expect("replication failed 1");
     clear_temp();
 
     // replicate a second time
@@ -255,7 +255,7 @@ fn test_stacked_porep_resume_seal() {
         config.clone(),
         replica_path2.clone(),
     )
-        .expect("replication failed 2");
+    .expect("replication failed 2");
     clear_temp();
 
     // delete last 2 layers
@@ -265,7 +265,7 @@ fn test_stacked_porep_resume_seal() {
         &replica_id,
         config.clone(),
     )
-        .expect("label generation failed");
+    .expect("label generation failed");
     let off = label_states.len() - 3;
     for label_state in &label_states[off..] {
         let config = &label_state.config;
@@ -282,7 +282,7 @@ fn test_stacked_porep_resume_seal() {
         config.clone(),
         replica_path3.clone(),
     )
-        .expect("replication failed 3");
+    .expect("replication failed 3");
     clear_temp();
 
     assert_ne!(data, &mmapped_data1[..], "replication did not change data");
@@ -296,7 +296,7 @@ fn test_stacked_porep_resume_seal() {
         mmapped_data1.as_mut(),
         Some(config),
     )
-        .expect("failed to extract data");
+    .expect("failed to extract data");
 
     assert_eq!(data, decoded_data);
 
@@ -388,7 +388,7 @@ fn test_prove_verify<Tree: 'static + MerkleTreeTrait>(n: usize, challenges: Laye
         config,
         replica_path.clone(),
     )
-        .expect("replication failed");
+    .expect("replication failed");
 
     let mut copied = vec![0; data.len()];
     copied.copy_from_slice(&mmapped_data);
@@ -419,14 +419,14 @@ fn test_prove_verify<Tree: 'static + MerkleTreeTrait>(n: usize, challenges: Laye
         &priv_inputs,
         partitions,
     )
-        .expect("failed to generate partition proofs");
+    .expect("failed to generate partition proofs");
 
     let proofs_are_valid = StackedDrg::<Tree, Blake2sHasher>::verify_all_partitions(
         &pp,
         &pub_inputs,
         all_partition_proofs,
     )
-        .expect("failed to verify partition proofs");
+    .expect("failed to verify partition proofs");
 
     // Discard cached MTs that are no longer needed.
     TemporaryAux::<Tree, Blake2sHasher>::clear_temp(t_aux_orig).expect("t_aux delete failed");
@@ -479,7 +479,7 @@ fn test_stacked_porep_generate_labels() {
             0xe3d51b9afa5ac2b3,
             0x0462f4f4f1a68d37,
         ]))
-            .unwrap(),
+        .unwrap(),
     );
 
     test_generate_labels_aux(
@@ -494,7 +494,7 @@ fn test_stacked_porep_generate_labels() {
             0xce239f3b88a894b8,
             0x234c00d1dc1d53be,
         ]))
-            .unwrap(),
+        .unwrap(),
     );
 
     test_generate_labels_aux(
@@ -509,7 +509,7 @@ fn test_stacked_porep_generate_labels() {
             0x3448959d495490bc,
             0x06021188c7a71cb5,
         ]))
-            .unwrap(),
+        .unwrap(),
     );
 
     test_generate_labels_aux(
@@ -524,7 +524,7 @@ fn test_stacked_porep_generate_labels() {
             0xc6c03d32c1e42d23,
             0x0f777c18cc2c55bd,
         ]))
-            .unwrap(),
+        .unwrap(),
     );
 }
 
@@ -553,7 +553,7 @@ fn test_generate_labels_aux(
         porep_id,
         api_version,
     )
-        .unwrap();
+    .unwrap();
 
     let unused_layer_challenges = LayerChallenges::new(layers, 0);
 
@@ -568,7 +568,7 @@ fn test_generate_labels_aux(
         &<PoseidonHasher as Hasher>::Domain::try_from_bytes(&replica_id).unwrap(),
         config,
     )
-        .unwrap();
+    .unwrap();
 
     let final_labels = labels.labels_for_last_layer().unwrap();
     let last_label = final_labels.read_at(nodes - 1).unwrap();

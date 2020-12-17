@@ -5,6 +5,7 @@ use bellperson::{
 };
 use ff::Field;
 use filecoin_hashers::poseidon::PoseidonHasher;
+use fr32::{bytes_into_fr, fr_into_bytes};
 use generic_array::typenum::U2;
 use merkletree::store::StoreConfig;
 use pretty_assertions::assert_eq;
@@ -15,7 +16,6 @@ use storage_proofs_core::{
     cache_key::CacheKey,
     compound_proof,
     drgraph::{graph_height, BucketGraph, BASE_DEGREE},
-    fr32::{bytes_into_fr, fr_into_bytes},
     gadgets::variables::Root,
     merkle::MerkleProofTrait,
     proof::ProofScheme,
@@ -60,7 +60,7 @@ fn test_drg_porep_circuit() {
         bytes_into_fr(
             data_at_node(&mmapped_data, challenge).expect("failed to read original data"),
         )
-            .unwrap(),
+        .unwrap(),
     );
 
     let sp = drg::SetupParams {
@@ -85,7 +85,7 @@ fn test_drg_porep_circuit() {
         config,
         replica_path,
     )
-        .expect("failed to replicate");
+    .expect("failed to replicate");
 
     let pub_inputs = drg::PublicInputs {
         replica_id: Some(replica_id.into()),
@@ -160,7 +160,7 @@ fn test_drg_porep_circuit() {
         replica_id,
         false,
     )
-        .expect("failed to synthesize circuit");
+    .expect("failed to synthesize circuit");
 
     if !cs.is_satisfied() {
         println!(
@@ -186,11 +186,11 @@ fn test_drg_porep_circuit() {
             &pp,
             None,
         )
-            .unwrap();
+        .unwrap();
     let expected_inputs = cs.get_inputs();
 
     for ((input, label), generated_input) in
-    expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+        expected_inputs.iter().skip(1).zip(generated_inputs.iter())
     {
         assert_eq!(input, generated_input, "{}", label);
     }
@@ -227,7 +227,7 @@ fn test_drg_porep_circuit_inputs_and_constraints() {
         Some(Fr::random(rng)),
         false,
     )
-        .expect("failed to synthesize circuit");
+    .expect("failed to synthesize circuit");
 
     assert_eq!(cs.num_inputs(), 18, "wrong number of inputs");
     assert_eq!(cs.num_constraints(), 170_924, "wrong number of constraints");

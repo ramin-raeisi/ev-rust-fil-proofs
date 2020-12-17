@@ -5,6 +5,7 @@ use bellperson::{
 };
 use ff::Field;
 use filecoin_hashers::{poseidon::PoseidonHasher, Hasher};
+use fr32::fr_into_bytes;
 use merkletree::store::StoreConfig;
 use pretty_assertions::assert_eq;
 use rand::SeedableRng;
@@ -14,7 +15,6 @@ use storage_proofs_core::{
     cache_key::CacheKey,
     compound_proof::{self, CompoundProof},
     drgraph::{BucketGraph, BASE_DEGREE},
-    fr32::fr_into_bytes,
     merkle::{BinaryMerkleTree, MerkleTreeTrait},
     proof::NoRequirements,
     test_helper::setup_replica,
@@ -91,7 +91,7 @@ fn drg_porep_compound<Tree: 'static + MerkleTreeTrait>() {
         config,
         replica_path,
     )
-        .expect("failed to replicate");
+    .expect("failed to replicate");
 
     let public_inputs = PublicInputs::<<Tree::Hasher as Hasher>::Domain> {
         replica_id: Some(replica_id.into()),
@@ -131,7 +131,7 @@ fn drg_porep_compound<Tree: 'static + MerkleTreeTrait>() {
             &public_inputs,
             &private_inputs,
         )
-            .unwrap();
+        .unwrap();
 
         let mut cs = TestConstraintSystem::new();
 
@@ -163,7 +163,7 @@ fn drg_porep_compound<Tree: 'static + MerkleTreeTrait>() {
             Some(rng),
             &public_params.vanilla_params,
         )
-            .expect("failed to get groth params");
+        .expect("failed to get groth params");
 
         let proof = DrgPoRepCompound::<Tree::Hasher, _>::prove(
             &public_params,
@@ -171,7 +171,7 @@ fn drg_porep_compound<Tree: 'static + MerkleTreeTrait>() {
             &private_inputs,
             &gparams,
         )
-            .expect("failed while proving");
+        .expect("failed while proving");
 
         let verified = DrgPoRepCompound::<Tree::Hasher, _>::verify(
             &public_params,
@@ -179,7 +179,7 @@ fn drg_porep_compound<Tree: 'static + MerkleTreeTrait>() {
             &proof,
             &NoRequirements,
         )
-            .expect("failed while verifying");
+        .expect("failed while verifying");
 
         assert!(verified);
     }

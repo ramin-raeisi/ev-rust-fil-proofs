@@ -193,7 +193,7 @@ fn fallback_post<Tree: 'static + MerkleTreeTrait>(
             minimum_challenge_count: total_sector_count * challenge_count,
         },
     )
-        .expect("failed while verifying");
+    .expect("failed while verifying");
 
     assert!(verified);
 }

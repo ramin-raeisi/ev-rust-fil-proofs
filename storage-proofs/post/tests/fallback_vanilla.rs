@@ -176,7 +176,7 @@ fn test_fallback_post<Tree: MerkleTreeTrait>(
         &priv_inputs,
         partitions,
     )
-        .expect("proving failed");
+    .expect("proving failed");
 
     let is_valid = FallbackPoSt::<Tree>::verify_all_partitions(&pub_params, &pub_inputs, &proof)
         .expect("verification failed");

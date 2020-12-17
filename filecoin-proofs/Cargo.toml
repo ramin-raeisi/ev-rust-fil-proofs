@@ -51,6 +51,8 @@ version = "0.10"
 default-features = false
 features = ["blocking", "native-tls-vendored"]
 
+fr32 = { path = "../fr32", default-features = false }
+
 [dev-dependencies]
 criterion = "0.3"
 rexpect = "0.4.0"
@@ -64,9 +66,9 @@ cpu-profile = ["gperftools"]
 heap-profile = ["gperftools/heap"]
 simd = ["storage-proofs/simd"]
 asm = ["storage-proofs/asm"]
-gpu = ["storage-proofs/gpu", "bellperson/gpu", "filecoin-hashers/gpu"]
-pairing = ["storage-proofs/pairing", "bellperson/pairing", "filecoin-hashers/pairing"]
-blst = ["storage-proofs/blst", "bellperson/blst", "filecoin-hashers/blst"]
+gpu = ["storage-proofs/gpu", "bellperson/gpu", "filecoin-hashers/gpu", "fr32/gpu"]
+pairing = ["storage-proofs/pairing", "bellperson/pairing", "filecoin-hashers/pairing", "fr32/pairing"]
+blst = ["storage-proofs/blst", "bellperson/blst", "filecoin-hashers/blst", "fr32/blst"]
 
 [[bench]]
 name = "preprocessing"

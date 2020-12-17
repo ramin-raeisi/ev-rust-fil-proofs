@@ -5,6 +5,7 @@ use bellperson::{
 };
 use ff::Field;
 use filecoin_hashers::{poseidon::PoseidonHasher, Hasher};
+use fr32::{bytes_into_fr, fr_into_bytes};
 use generic_array::typenum::{U0, U2, U4, U8};
 use merkletree::store::VecStore;
 use pretty_assertions::assert_eq;
@@ -12,7 +13,6 @@ use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use storage_proofs_core::{
     compound_proof::{self, CompoundProof},
-    fr32::{bytes_into_fr, fr_into_bytes},
     gadgets::por::PoRCompound,
     merkle::{
         create_base_merkle_tree, generate_tree, get_base_tree_count, MerkleTreeTrait,
@@ -64,8 +64,8 @@ fn por_compound<Tree: 'static + MerkleTreeTrait>() {
         bytes_into_fr(
             data_at_node(data.as_slice(), public_inputs.challenge).expect("bytes_into_fr failure"),
         )
-            .expect("failed to create Fr from node data")
-            .into(),
+        .expect("failed to create Fr from node data")
+        .into(),
         &tree,
     );
 
@@ -165,8 +165,8 @@ fn por_compound_private_root<Tree: 'static + MerkleTreeTrait>() {
                 data_at_node(data.as_slice(), public_inputs.challenge)
                     .expect("data_at_node failure"),
             )
-                .expect("failed to create Fr from node data")
-                .into(),
+            .expect("failed to create Fr from node data")
+            .into(),
             &tree,
         );
 
@@ -225,7 +225,7 @@ fn por_compound_private_root<Tree: 'static + MerkleTreeTrait>() {
             &private_inputs,
             &blank_groth_params,
         )
-            .expect("failed while proving");
+        .expect("failed while proving");
 
         let verified = PoRCompound::verify(&public_params, &public_inputs, &proof, &NoRequirements)
             .expect("failed while verifying");

@@ -5,13 +5,20 @@ use ff::Field;
 use filecoin_hashers::{
     blake2s::Blake2sHasher, poseidon::PoseidonHasher, sha256::Sha256Hasher, Domain, Hasher,
 };
+<<<<<<< HEAD
+=======
+use fr32::fr_into_bytes;
+>>>>>>> e55ae0b2e1185358423d1cfb2cd204c0f6d61b1b
 use generic_array::typenum::{U0, U2, U4};
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use storage_proofs_core::{
     api_version::ApiVersion,
     drgraph::{BucketGraph, Graph, BASE_DEGREE},
+<<<<<<< HEAD
     fr32::fr_into_bytes,
+=======
+>>>>>>> e55ae0b2e1185358423d1cfb2cd204c0f6d61b1b
     merkle::{create_base_merkle_tree, DiskStore, MerkleTreeTrait, MerkleTreeWrapper},
     por::{self, PoR},
     proof::ProofScheme,
@@ -77,7 +84,11 @@ fn test_por<Tree: MerkleTreeTrait>() {
     let leaf = <Tree::Hasher as Hasher>::Domain::try_from_bytes(
         data_at_node(data.as_slice(), pub_inputs.challenge).unwrap(),
     )
+<<<<<<< HEAD
         .unwrap();
+=======
+    .unwrap();
+>>>>>>> e55ae0b2e1185358423d1cfb2cd204c0f6d61b1b
 
     let priv_inputs = por::PrivateInputs::new(leaf, &tree);
 
@@ -147,7 +158,11 @@ fn test_por_validates_proof<Tree: MerkleTreeTrait>() {
     let leaf = <Tree::Hasher as Hasher>::Domain::try_from_bytes(
         data_at_node(data.as_slice(), pub_inputs.challenge).unwrap(),
     )
+<<<<<<< HEAD
         .unwrap();
+=======
+    .unwrap();
+>>>>>>> e55ae0b2e1185358423d1cfb2cd204c0f6d61b1b
 
     let priv_inputs = por::PrivateInputs::<Tree>::new(leaf, &tree);
 
@@ -231,7 +246,11 @@ fn test_por_validates_challenge<Tree: MerkleTreeTrait>() {
     let leaf = <Tree::Hasher as Hasher>::Domain::try_from_bytes(
         data_at_node(data.as_slice(), pub_inputs.challenge).unwrap(),
     )
+<<<<<<< HEAD
         .unwrap();
+=======
+    .unwrap();
+>>>>>>> e55ae0b2e1185358423d1cfb2cd204c0f6d61b1b
 
     let priv_inputs = por::PrivateInputs::<Tree>::new(leaf, &tree);
 

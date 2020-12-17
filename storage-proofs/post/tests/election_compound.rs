@@ -65,7 +65,7 @@ fn test_election_post_compound<Tree: 'static + MerkleTreeTrait>() {
         prover_id,
         randomness,
     )
-        .unwrap();
+    .unwrap();
 
     let candidate = &candidates[0];
     let tree = trees.remove(&candidate.sector_id).unwrap();

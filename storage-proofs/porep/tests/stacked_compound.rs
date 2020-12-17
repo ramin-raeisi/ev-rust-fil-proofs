@@ -5,6 +5,7 @@ use bellperson::{
 };
 use ff::Field;
 use filecoin_hashers::{poseidon::PoseidonHasher, sha256::Sha256Hasher, Hasher};
+use fr32::fr_into_bytes;
 use generic_array::typenum::{U0, U2, U4, U8};
 use merkletree::store::StoreConfig;
 use rand::{Rng, SeedableRng};
@@ -14,7 +15,6 @@ use storage_proofs_core::{
     cache_key::CacheKey,
     compound_proof::{self, CompoundProof},
     drgraph::BASE_DEGREE,
-    fr32::fr_into_bytes,
     merkle::{get_base_tree_count, DiskTree, MerkleTreeTrait},
     test_helper::setup_replica,
     util::default_rows_to_discard,
@@ -98,7 +98,7 @@ fn test_stacked_compound<Tree: 'static + MerkleTreeTrait>() {
         config,
         replica_path.clone(),
     )
-        .expect("replication failed");
+    .expect("replication failed");
 
     let mut copied = vec![0; data.len()];
     copied.copy_from_slice(&mmapped_data);
@@ -174,7 +174,7 @@ fn test_stacked_compound<Tree: 'static + MerkleTreeTrait>() {
         StackedDrg<'_, Tree, Sha256Hasher>,
         _,
     >>::groth_params(Some(rng), &public_params.vanilla_params)
-        .expect("failed to generate groth params");
+    .expect("failed to generate groth params");
 
     // Discard cached MTs that are no longer needed.
     TemporaryAux::<Tree, Sha256Hasher>::clear_temp(t_aux_orig).expect("t_aux delete failed");
@@ -185,7 +185,7 @@ fn test_stacked_compound<Tree: 'static + MerkleTreeTrait>() {
         &private_inputs,
         &blank_groth_params,
     )
-        .expect("failed while proving");
+    .expect("failed while proving");
 
     let verified = StackedCompound::verify(
         &public_params,
@@ -195,7 +195,7 @@ fn test_stacked_compound<Tree: 'static + MerkleTreeTrait>() {
             minimum_challenges: 1,
         },
     )
-        .expect("failed while verifying");
+    .expect("failed while verifying");
 
     assert!(verified);
 

@@ -8,6 +8,7 @@ use ff::Field;
 use filecoin_hashers::{
     blake2s::Blake2sHasher, poseidon::PoseidonHasher, sha256::Sha256Hasher, Domain, Hasher,
 };
+use fr32::{bytes_into_fr, fr_into_bytes};
 use generic_array::typenum::{Unsigned, U0, U2, U4, U8};
 use merkletree::store::VecStore;
 use pretty_assertions::assert_eq;
@@ -168,7 +169,7 @@ fn test_por_circuit<Tree: 'static + MerkleTreeTrait>(num_inputs: usize, num_cons
         let expected_inputs = cs.get_inputs();
 
         for ((input, label), generated_input) in
-        expected_inputs.iter().skip(1).zip(generated_inputs.iter())
+            expected_inputs.iter().skip(1).zip(generated_inputs.iter())
         {
             assert_eq!(input, generated_input, "{}", label);
         }
@@ -227,8 +228,8 @@ fn test_por_circuit_private_root<Tree: MerkleTreeTrait>(num_constraints: usize) 
             bytes_into_fr(
                 data_at_node(data.as_slice(), pub_inputs.challenge).expect("data_at_node failure"),
             )
-                .expect("bytes_into_fr failure")
-                .into(),
+            .expect("bytes_into_fr failure")
+            .into(),
             &tree,
         );
 
@@ -332,7 +333,7 @@ fn test_por_no_challenge_input() {
                 cs.namespace(|| format!("challenge bit {}", i)),
                 Some((challenge >> i) & 1 == 1),
             )
-                .expect("failed to allocate challenge bit")
+            .expect("failed to allocate challenge bit")
         })
         .collect();
 
@@ -352,7 +353,7 @@ fn test_por_no_challenge_input() {
                         cs.namespace(|| format!("sib {}, height {}", sib_index, height)),
                         || Ok(sib.into()),
                     )
-                        .expect("failed to allocate sibling")
+                    .expect("failed to allocate sibling")
                 })
                 .collect()
         })

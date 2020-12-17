@@ -1,6 +1,7 @@
 use bellperson::bls::Fr;
 use ff::Field;
 use filecoin_hashers::{blake2s::Blake2sHasher, sha256::Sha256Hasher, Domain, Hasher};
+use fr32::fr_into_bytes;
 use merkletree::store::StoreConfig;
 use pretty_assertions::assert_eq;
 use rand::SeedableRng;
@@ -9,7 +10,6 @@ use storage_proofs_core::{
     api_version::ApiVersion,
     cache_key::CacheKey,
     drgraph::{BucketGraph, BASE_DEGREE},
-    fr32::fr_into_bytes,
     merkle::{BinaryMerkleTree, MerkleTreeTrait},
     proof::ProofScheme,
     table_tests,
@@ -77,7 +77,7 @@ fn test_extract_all<Tree: MerkleTreeTrait>() {
         config.clone(),
         replica_path,
     )
-        .expect("replication failed");
+    .expect("replication failed");
 
     let mut copied = vec![0; data.len()];
     copied.copy_from_slice(&mmapped_data);
@@ -89,9 +89,9 @@ fn test_extract_all<Tree: MerkleTreeTrait>() {
         mmapped_data.as_mut(),
         Some(config),
     )
-        .unwrap_or_else(|e| {
-            panic!("Failed to extract data from `DrgPoRep`: {}", e);
-        });
+    .unwrap_or_else(|e| {
+        panic!("Failed to extract data from `DrgPoRep`: {}", e);
+    });
 
     assert_eq!(data, decoded_data.as_slice(), "failed to extract data");
 
@@ -151,7 +151,7 @@ fn test_extract<Tree: MerkleTreeTrait>() {
         config.clone(),
         replica_path,
     )
-        .expect("replication failed");
+    .expect("replication failed");
 
     let mut copied = vec![0; data.len()];
     copied.copy_from_slice(&mmapped_data);
@@ -247,7 +247,7 @@ fn test_prove_verify_aux<Tree: MerkleTreeTrait>(
             config,
             replica_path.clone(),
         )
-            .expect("replication failed");
+        .expect("replication failed");
 
         let mut copied = vec![0; data.len()];
         copied.copy_from_slice(&mmapped_data);
@@ -351,7 +351,7 @@ fn test_prove_verify_aux<Tree: MerkleTreeTrait>(
                 &pub_inputs_with_wrong_challenge_for_proof,
                 &proof,
             )
-                .expect("Verification failed");
+            .expect("Verification failed");
             assert!(
                 !verified,
                 "wrongly verified proof which does not match challenge in public input"

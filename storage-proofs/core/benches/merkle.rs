@@ -1,9 +1,12 @@
+use anyhow::Result;
 use criterion::{black_box, criterion_group, criterion_main, Criterion, ParameterizedBenchmark};
-use filecoin_hashers::{poseidon::PoseidonHasher, sha256::Sha256Hasher};
+use filecoin_hashers::{
+    poseidon::PoseidonDomain, poseidon::PoseidonHasher, sha256::Sha256Hasher, Domain,
+};
 use rand::{thread_rng, Rng};
 use storage_proofs_core::merkle::{create_base_merkle_tree, BinaryMerkleTree};
 
-fn merkle_benchmark(c: &mut Criterion) {
+fn merkle_benchmark_sha256(c: &mut Criterion) {
     #[cfg(feature = "big-sector-sizes-bench")]
         let params = vec![128, 1024, 1_048_576];
     #[cfg(not(feature = "big-sector-sizes-bench"))]
@@ -44,5 +47,5 @@ fn merkle_benchmark(c: &mut Criterion) {
     );
 }
 
-criterion_group!(benches, merkle_benchmark);
+criterion_group!(benches, merkle_benchmark_sha256, merkle_benchmark_poseidon);
 criterion_main!(benches);
