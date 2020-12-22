@@ -98,6 +98,18 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
         )?;
         info!("snark_proof:finish");
 
+        let inputs: Vec<_> = (0..groth_proofs.len())
+            .into_par_iter()
+            .map(|k| Self::generate_public_inputs(pub_in, &pub_params.vanilla_params, Some(k)))
+            .collect::<Result<_>>()?;
+
+        info!("snark_proof:internal_verify:start");
+        for i in 0..groth_proofs.len() {
+            let res = groth16::verify_proof(&groth_params.pvk, &groth_proofs[i], &inputs[i])?;
+            info!("Result for {} proof: {}", i, res);
+        }
+        info!("snark_proof:internal_verify:finish");
+
         Ok(MultiProof::new(groth_proofs, &groth_params.pvk))
     }
 
@@ -120,18 +132,6 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
             groth_params,
         )?;
         info!("snark_proof:finish");
-
-        let inputs: Vec<_> = (0..groth_proofs.len())
-            .into_par_iter()
-            .map(|k| Self::generate_public_inputs(pub_in, &pub_params.vanilla_params, Some(k)))
-            .collect::<Result<_>>()?;
-
-        info!("snark_proof:internal_verify:start");
-        for i in 0..groth_proofs.len() {
-            let res = groth16::verify_proof(&groth_params.pvk, &groth_proofs[i], &inputs[i])?;
-            info!("Result for {} proof: {}", i, res);
-        }
-        info!("snark_proof:internal_verify:finish");
 
         Ok(MultiProof::new(groth_proofs, &groth_params.pvk))
     }
