@@ -1,6 +1,7 @@
 use std::fs::{self, metadata, File, OpenOptions};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::error::Error;
 
 use anyhow::{ensure, Context, Result};
 use bellperson::bls::Fr;
@@ -530,7 +531,7 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
         .context("post-seal verification sanity check failed")?;
 
     if (!verify_res) {
-        return Err("commit_phase2 SNARK verification failed: proof is not correct".to_owned());
+        panic!("commit_phase2 SNARK verification failed: proof is not correct");
     }
 
     let out = SealCommitOutput { proof: buf };
