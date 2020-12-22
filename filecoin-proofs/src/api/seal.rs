@@ -517,7 +517,7 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
 
     // Verification is cheap when parameters are cached,
     // and it is never correct to return a proof which does not verify.
-    verify_seal::<Tree>(
+    let verify_res = verify_seal::<Tree>(
         porep_config,
         comm_r,
         comm_d,
@@ -528,6 +528,10 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
         &buf,
     )
         .context("post-seal verification sanity check failed")?;
+
+    if (!verify_res) {
+        return Err("commit_phase2 SNARK verification failed: proof is not correct".to_owned());
+    }
 
     let out = SealCommitOutput { proof: buf };
 
