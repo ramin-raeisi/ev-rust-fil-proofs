@@ -261,7 +261,8 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
 
         let groth_proofs = groth16::create_proof_batch(circuits, groth_params)?;
 
-        groth_proofs
+
+        let res = groth_proofs.clone()
             .into_iter()
             .map(|groth_proof| {
                 let mut proof_vec = vec![];
@@ -269,7 +270,21 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
                 let gp = groth16::Proof::<Bls12>::read(&proof_vec[..])?;
                 Ok(gp)
             })
-            .collect()
+            .collect();
+
+        let inputs: Vec<_> = (0..groth_proofs.len())
+        .into_par_iter()
+        .map(|k| Self::generate_public_inputs(pub_in, &pub_params, Some(k)))
+        .collect::<Result<_>>()?;
+
+        info!("snark_proof:internal_verify:start");
+        for i in 0..groth_proofs.len() {
+            let res = groth16::verify_proof(&groth_params.pvk, &groth_proofs[i], &inputs[i])?;
+            info!("Result for {} proof: {}", i, res);
+        }
+        info!("snark_proof:internal_verify:finish");
+
+        res
     }
 
     /// generate_public_inputs generates public inputs suitable for use as input during verification
