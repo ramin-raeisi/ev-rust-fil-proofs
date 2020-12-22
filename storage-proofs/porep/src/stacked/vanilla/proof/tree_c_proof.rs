@@ -222,7 +222,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                         // Loop until all trees for all configs have been built.
                         for i in (0..config_count).step_by(_bus_num) {
-                            info!("Config {}, gpu_index {}", i, gpu_index);
                             let i = i + gpu_index;
                             if i >= config_count {
                                 break;
