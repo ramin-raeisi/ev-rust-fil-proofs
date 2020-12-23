@@ -106,3 +106,11 @@ pub struct FallbackPoStSectorProof<Tree: MerkleTreeTrait> {
     ))]
     pub vanilla_proof: VanillaProof<Tree>, // Has comm_c, comm_r_last, inclusion_proofs
 }
+
+/// This is an error that could occur during proof generation
+#[derive(thiserror::Error, Debug)]
+pub enum ProverError {
+    /// During synthesis, we lacked knowledge of a variable assignment.
+    #[error("generated proof is not valid")]
+    IncorrectProof,
+}
