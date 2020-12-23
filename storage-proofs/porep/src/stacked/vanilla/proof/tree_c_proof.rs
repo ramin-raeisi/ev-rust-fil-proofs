@@ -94,7 +94,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             }
 
             let config_count = configs.len(); // Don't move config into closure below.
-            info!("config_count = {}", config_count);
             rayon::scope(|s| {
                 // This channel will receive the finished tree data to be written to disk.
                 let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(0);
@@ -187,7 +186,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         
                         let gpu_busy_flag = gpu_busy_flag.clone();
                         // TODO-Ryan: find_idle_gpu
-                        info!("[tree_c] begin to find idle gpu");
                         let mut find_idle_gpu: i32 = -1;
                         loop {
                             for i in 0.._bus_num {
@@ -209,7 +207,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                         assert!(find_idle_gpu >= 0);
                         let find_idle_gpu: usize = find_idle_gpu as usize;
-                        info!("[tree_c] Use multi GPUs, total_gpu={}, use_gpu_index={}", _bus_num, gpu_index);
 
                         let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
                             //Some(BatcherType::GPU),
@@ -233,7 +230,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                 // Just add non-final column batches.
                                 if !is_final {
-                                    info!("add a new column to builder");
                                     column_tree_builder
                                         .add_columns(&columns)
                                         .expect("failed to add columns");
@@ -272,7 +268,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 });
 
                 for config in &configs {
-                    info!("configs loop");
                     let (base_data, tree_data) = writer_rx
                         .recv()
                         .expect("failed to receive base_data, tree_data for tree_c");
