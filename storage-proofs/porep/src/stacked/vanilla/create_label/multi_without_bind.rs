@@ -411,10 +411,9 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let sector_size = graph.size() * NODE_SIZE;
     let node_count = graph.size() as u64;
-    let cache_window_nodes = settings::SETTINGS
-        .lock()
-        .expect("sdr_parents_cache_size settings lock failure")
-        .sdr_parents_cache_size as usize;
+    let cache_window_nodes = settings::SETTINGS.sdr_parents_cache_size as usize;
+
+    info!("xg cache_window_nodes {}", cache_window_nodes);
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
@@ -501,11 +500,7 @@ pub fn create_labels_for_decoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let sector_size = graph.size() * NODE_SIZE;
     let node_count = graph.size() as u64;
-    let cache_window_nodes = (settings::SETTINGS
-        .lock()
-        .expect("sdr_parents_cache_window_nodes settings lock failure")
-        .sdr_parents_cache_size
-        / 2) as usize;
+    let cache_window_nodes = (&settings::SETTINGS.sdr_parents_cache_size / 2) as usize;
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
