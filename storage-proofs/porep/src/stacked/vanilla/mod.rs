@@ -17,6 +17,7 @@ mod porep;
 mod proof;
 mod proof_scheme;
 mod utils;
+mod memory_handling_withoutbc;
 
 pub use self::challenges::{ChallengeRequirements, LayerChallenges};
 pub use self::column::Column;

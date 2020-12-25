@@ -25,7 +25,7 @@ use storage_proofs_core::{
 use super::super::{
     cache::ParentCache,
     graph::{StackedBucketGraph, DEGREE, EXP_DEGREE},
-    memory_handling::{setup_create_label_memory, CacheReader},
+    memory_handling_withoutbc::{setup_create_label_memory, CacheReader},
     params::{Labels, LabelsCache},
     proof::LayerState,
     utils::*,
