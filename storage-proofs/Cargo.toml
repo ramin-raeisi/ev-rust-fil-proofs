@@ -14,7 +14,7 @@ storage-proofs-post = { path = "./post", version = "^6.0.0", default-features = 
 storage-proofs-porep = { path = "./porep", version = "^6.0.0", default-features = false }
 
 [features]
-default = ["blst", "gpu", "tree_c-serial-tree_r_last"]
+default = ["blst", "gpu"]
 simd = ["storage-proofs-core/simd"]
 asm = ["storage-proofs-core/asm"]
 gpu = ["storage-proofs-core/gpu", "storage-proofs-porep/gpu", "storage-proofs-post/gpu"]
