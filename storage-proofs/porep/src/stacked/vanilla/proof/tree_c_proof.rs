@@ -31,7 +31,7 @@ use ff::Field;
 use generic_array::{sequence::GenericSequence, GenericArray};
 use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
-use storage_proofs_core::fr32::fr_into_bytes;
+use fr32::fr_into_bytes;
 
 use rust_gpu_tools::opencl;
 

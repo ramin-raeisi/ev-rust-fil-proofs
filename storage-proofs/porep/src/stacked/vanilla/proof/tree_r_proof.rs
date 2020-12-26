@@ -36,7 +36,7 @@ use super::super::{
 
 use neptune::batch_hasher::BatcherType;
 use neptune::tree_builder::{TreeBuilder, TreeBuilderTrait};
-use storage_proofs_core::fr32::fr_into_bytes;
+use fr32::fr_into_bytes;
 
 use rust_gpu_tools::opencl;
 
