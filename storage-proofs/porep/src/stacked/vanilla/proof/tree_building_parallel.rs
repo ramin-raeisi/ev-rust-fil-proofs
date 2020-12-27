@@ -1,23 +1,15 @@
-use lazy_static::lazy_static;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::marker::PhantomData;
-use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Arc, Mutex, RwLock};
-use std::thread;
-use std::time::Duration;
+use std::path::{PathBuf};
 
 use anyhow::Context;
-use bellperson::bls::Fr;
-use bincode::deserialize;
-use filecoin_hashers::{Domain, HashFunction, Hasher, PoseidonArity};
+use filecoin_hashers::{HashFunction, Hasher};
 use generic_array::typenum::{self, Unsigned};
 use log::*;
 use merkletree::merkle::{
-    get_merkle_tree_cache_size, get_merkle_tree_leafs, get_merkle_tree_len,
+    get_merkle_tree_len,
     is_merkle_tree_size_valid,
 };
-use merkletree::store::{DiskStore, StoreConfig};
+use merkletree::store::{StoreConfig};
 use rayon::prelude::*;
 use storage_proofs_core::{
     cache_key::CacheKey,
@@ -26,36 +18,22 @@ use storage_proofs_core::{
     error::Result,
     measurements::{
         measure_op,
-        Operation::{CommD, EncodeWindowTimeAll, GenerateTreeRLast},
+        Operation::{CommD, GenerateTreeRLast},
     },
     merkle::*,
-    settings,
     util::{default_rows_to_discard, NODE_SIZE},
 };
 use typenum::{U11, U2, U8};
 
 use super::super::{
     challenges::LayerChallenges,
-    column::Column,
-    create_label,
     graph::StackedBucketGraph,
     params::{
-        get_node, Labels, LabelsCache, PersistentAux, Proof, PublicInputs, PublicParams,
-        ReplicaColumnProof, Tau, TemporaryAux, TemporaryAuxCache, TransformedLayers, BINARY_ARITY,
+        Labels, LabelsCache, PersistentAux,
+        Tau, TemporaryAux, TransformedLayers, BINARY_ARITY,
     },
-    EncodingProof, LabelingProof,
     proof::StackedDrg,
 };
-
-use ff::Field;
-use neptune::batch_hasher::BatcherType;
-use neptune::tree_builder::{TreeBuilder, TreeBuilderTrait};
-use storage_proofs_core::fr32::fr_into_bytes;
-
-use rust_gpu_tools::opencl;
-
-use crate::encode::{decode, encode};
-use crate::PoRep;
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> {
     //FIXME-Ryan: tree_r_last(Only one GPU is used internally) Built in parallel with tree_c
@@ -145,88 +123,107 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         };
 
         // FIXME-Ryan: The following 2 steps in P2 can be parallel
-        //let mut tree_c_root: <Tree::Hasher as Hasher>::Domain = <Tree::Hasher as Hasher>::Domain::default();
-        //let mut tree_d_root: <G as storage_proofs_core::hasher::types::Hasher>::Domain = <G as storage_proofs_core::hasher::types::Hasher>::Domain::default();
-        //let mut tree_r_last_root: <Tree::Hasher as Hasher>::Domain = <Tree::Hasher as Hasher>::Domain::default();
+        let mut tree_c_root: <Tree::Hasher as Hasher>::Domain = <Tree::Hasher as Hasher>::Domain::default();
+        let mut tree_d_root: <G as filecoin_hashers::Hasher>::Domain = <G as filecoin_hashers::Hasher>::Domain::default();
+        let mut tree_r_last_root: <Tree::Hasher as Hasher>::Domain = <Tree::Hasher as Hasher>::Domain::default();
 
-        let tree_c_root = match layers {
-            2 => {
-                let tree_c = Self::generate_tree_c::<U2, Tree::Arity>(
-                    layers,
-                    nodes_count,
-                    tree_count,
-                    configs,
-                    &labels,
-                )?;
-                tree_c.root()
-            }
-            8 => {
-                let tree_c = Self::generate_tree_c::<U8, Tree::Arity>(
-                    layers,
-                    nodes_count,
-                    tree_count,
-                    configs,
-                    &labels,
-                )?;
-                tree_c.root()
-            }
-            11 => {
-                let tree_c = Self::generate_tree_c::<U11, Tree::Arity>(
-                    layers,
-                    nodes_count,
-                    tree_count,
-                    configs,
-                    &labels,
-                )?;
-                tree_c.root()
-            }
-            _ => panic!("Unsupported column arity"),
-        };
-        info!("tree_c done");
+        rayon::scope(|s| {
 
-        // Build the MerkleTree over the original data (if needed).
-        let tree_d = match data_tree {
-            Some(t) => {
-                trace!("using existing original data merkle tree");
-                assert_eq!(t.len(), 2 * (data.len() / NODE_SIZE) - 1);
+            // capture a shadowed version of datas.
+            let tree_c_root = &mut tree_c_root;
+            let tree_d_root = &mut tree_d_root;
+            let tree_r_last_root = &mut tree_r_last_root;
 
-                t
-            }
-            None => {
-                trace!("building merkle tree for the original data");
-                data.ensure_data()?;
-                measure_op(CommD, || {
-                    Self::build_binary_tree::<G>(data.as_ref(), tree_d_config.clone())
-                })?
-            }
-        };
-        tree_d_config.size = Some(tree_d.len());
-        assert_eq!(
-            tree_d_config.size.expect("config size failure"),
-            tree_d.len()
-        );
-        let tree_d_root = tree_d.root();
-        drop(tree_d);
+            let labels = &labels;
+            let tree_d_config = &mut tree_d_config;
+            let tree_r_last_config = &tree_r_last_config;
 
-        // Encode original data into the last layer.
-        info!("building tree_r_last");
-        let tree_r_last = measure_op(GenerateTreeRLast, || {
-            Self::generate_tree_r_last::<Tree::Arity>(
-                &mut data,
-                nodes_count,
-                tree_count,
-                tree_r_last_config.clone(),
-                replica_path.clone(),
-                &labels,
-            )
-            .context("failed to generate tree_r_last")
-        })?;
-        info!("tree_r_last done");
+            // 1)[gpu] Column Hash calculation
+            s.spawn(move |_| {
+                info!("[tree_c] building tree_c in parallel with tree_r");
+                *tree_c_root = match layers {
+                    2 => {
+                        let tree_c = Self::generate_tree_c::<U2, Tree::Arity>(
+                            layers,
+                            nodes_count,
+                            tree_count,
+                            configs,
+                            &labels,
+                        ).expect("failed to generate_tree_c U2");
+                        tree_c.root()
+                    }
+                    8 => {
+                        let tree_c = Self::generate_tree_c::<U8, Tree::Arity>(
+                            layers,
+                            nodes_count,
+                            tree_count,
+                            configs,
+                            &labels,
+                        ).expect("failed to generate_tree_c U8");
+                        tree_c.root()
+                    }
+                    11 => {
+                        let tree_c = Self::generate_tree_c::<U11, Tree::Arity>(
+                            layers,
+                            nodes_count,
+                            tree_count,
+                            configs,
+                            &labels,
+                        ).expect("failed to generate_tree_c U11");
+                        tree_c.root()
+                    }
+                    _ => panic!("Unsupported column arity"),
+                };
+                info!("tree_c done");
+            });
 
-        let tree_r_last_root = tree_r_last.root();
-        drop(tree_r_last);
+            s.spawn(move |_| {
+                // 2) [cpu] Build the MerkleTree over the original data (if needed).
+                let tree_d = match data_tree {
+                    Some(t) => {
+                        trace!("using existing original data merkle tree");
+                        assert_eq!(t.len(), 2 * (data.len() / NODE_SIZE) - 1);
 
-        data.drop_data();
+                        t
+                    }
+                    None => {
+                        trace!("building merkle tree for the original data");
+                        data.ensure_data().expect("failed to data.ensure_data");
+                        measure_op(CommD, || {
+                            Self::build_binary_tree::<G>(data.as_ref(), tree_d_config.clone())
+                        }).expect("failed to tree_d measure_op")
+                    }
+                };
+                tree_d_config.size = Some(tree_d.len());
+                assert_eq!(
+                    tree_d_config.size.expect("config size failure"),
+                    tree_d.len()
+                );
+                *tree_d_root = tree_d.root();
+                drop(tree_d);
+
+                // You have to wait for the second step to be executed before the third step
+                // 3) [gpu] Encode original data into the last layer.
+                info!("[tree_r_last] building tree_r_last in parallel with tree_c");
+                let tree_r_last = measure_op(GenerateTreeRLast, || {
+                    Self::generate_tree_r_last::<Tree::Arity>(
+                        &mut data,
+                        nodes_count,
+                        tree_count,
+                        tree_r_last_config.clone(),
+                        replica_path.clone(),
+                        &labels,
+                    )
+                    .context("failed to generate tree_r_last")
+                }).expect("failed to generate tree_r_last");
+                info!("tree_r_last done");
+
+                *tree_r_last_root = tree_r_last.root();
+                drop(tree_r_last);
+
+                data.drop_data(); 
+            });
+        });
 
         // comm_r = H(comm_c || comm_r_last)
         let comm_r: <Tree::Hasher as Hasher>::Domain =
