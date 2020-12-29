@@ -9,7 +9,7 @@ repository = "https://github.com/filecoin-project/rust-fil-proofs"
 
 [dependencies]
 anyhow = "1.0.23"
-bellperson = { git = "ssh://git@github.com/nilfoundation/fil-zk.git", branch = "develop", default-features = false }
+bellperson = { package = "bellperson", path = "../../fil-zk", default-features = false }
 byte-slice-cast = "1.0.0"
 byteorder = "1"
 ff = { version = "0.2.3", package = "fff" }
@@ -24,7 +24,7 @@ rand = "0.7"
 rand_xorshift = "0.2.0"
 
 [features]
-default = ["pairing"]
+default = ["blst"]
 blst = ["bellperson/blst"]
 gpu = ["bellperson/gpu"]
 pairing = ["bellperson/pairing"]
