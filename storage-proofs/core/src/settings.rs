@@ -37,10 +37,10 @@ impl Default for Settings {
         Settings {
             verify_cache: false,
             verify_production_params: false,
-            use_gpu_column_builder: false,
+            use_gpu_column_builder: true,
             max_gpu_column_batch_size: 400_000,
             column_write_batch_size: 262_144,
-            use_gpu_tree_builder: false,
+            use_gpu_tree_builder: true,
             max_gpu_tree_batch_size: 700_000,
             rows_to_discard: 2,
             sdr_parents_cache_size: 2_048,
@@ -50,7 +50,7 @@ impl Default for Settings {
             // The name is retained for backwards compatibility.
             parameter_cache: "/var/tmp/filecoin-proof-parameters/".to_string(),
             parent_cache: cache("filecoin-parents"),
-            use_multicore_sdr: false,
+            use_multicore_sdr: true,
             multicore_sdr_producers: 3,
             multicore_sdr_producer_stride: 128,
             multicore_sdr_lookahead: 800,
