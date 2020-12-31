@@ -48,7 +48,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         ColumnArity: 'static + PoseidonArity,
         TreeArity: PoseidonArity,
     {
-        info!("generating tree c using the GPU (local version)");
+        info!("generating tree c using the GPU");
         // Build the tree for CommC
         measure_op(GenerateTreeC, || {
             info!("Building column hashes");
