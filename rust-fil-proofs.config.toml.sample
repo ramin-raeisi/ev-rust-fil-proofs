@@ -10,6 +10,12 @@ sdr_parents_cache_size = 2_048
 
 # This enables the use of the GPU for column tree building.
 use_gpu_column_builder = false
+
+# This enables the calculation of tree_c and tree_r in parallel.
+# If the value equals to 0, then trees are calculated in serial mode.
+# In other case, gpu_for_parallel_tree_r GPU are used for calculation of tree_r.
+gpu_for_parallel_tree_r = 0
+
 # If the GPU is used for column building, this is the batch size to send to the GPU at a time.
 max_gpu_column_batch_size = 400_000
 # This is the batch size for writing out the column tree elements to disk after it's generated.
