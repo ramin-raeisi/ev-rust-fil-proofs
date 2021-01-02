@@ -78,16 +78,37 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             .collect::<Vec<_>>();
         let _bus_num = all_bus_ids.len();
         assert!(_bus_num > 0);
-        for gpu_index in 0.._bus_num {
-            batchertype_gpus.push(Some(BatcherType::CustomGPU
-                (opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
 
-            // These channels will receive batches of leaf nodes and add them to the TreeBuilder.
-            // Each GPU has own channel
-            let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
-            builders_tx.push(builder_tx);
-            builders_rx.push(builder_rx);
-        };
+        let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
+        if (tree_r_gpu > 0) { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
+            assert!(tree_r_gpu < _bus_num, 
+                "tree_r_last are calculating in parallel with tree_c. There is not free GPU for tree_c. Try to decrease gpu_for_parallel_tree_r constant.");
+            info!("[tree_r_last] are calculating in paralle with tree_c. It uses {}/{} GPU", tree_r_gpu, _bus_num);
+
+            // tree_r_last uses last indexes of the GPU list
+            let start_idx = _bus_num - tree_r_gpu;
+            for gpu_index in start_idx.._bus_num {
+                batchertype_gpus.push(Some(BatcherType::CustomGPU
+                    (opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
+    
+                // These channels will receive batches of leaf nodes and add them to the TreeBuilder.
+                // Each GPU has own channel
+                let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
+                builders_tx.push(builder_tx);
+                builders_rx.push(builder_rx);
+            };
+        } else {
+            for gpu_index in 0.._bus_num {
+                batchertype_gpus.push(Some(BatcherType::CustomGPU
+                    (opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
+    
+                // These channels will receive batches of leaf nodes and add them to the TreeBuilder.
+                // Each GPU has own channel
+                let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
+                builders_tx.push(builder_tx);
+                builders_rx.push(builder_rx);
+            };
+        }
 
         let _bus_num = batchertype_gpus.len();
         assert!(_bus_num > 0);
