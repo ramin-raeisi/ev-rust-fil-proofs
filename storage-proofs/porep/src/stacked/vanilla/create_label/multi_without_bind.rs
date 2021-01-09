@@ -16,11 +16,12 @@ use merkletree::store::{DiskStore, StoreConfig};
 use storage_proofs_core::{
     cache_key::CacheKey,
     drgraph::{Graph, BASE_DEGREE},
-    hasher::Hasher,
     merkle::*,
     settings,
     util::NODE_SIZE,
 };
+
+use filecoin_hashers::Hasher;
 
 use super::super::{
     cache::ParentCache,
