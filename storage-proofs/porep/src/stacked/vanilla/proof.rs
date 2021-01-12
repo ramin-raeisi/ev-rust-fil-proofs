@@ -58,6 +58,7 @@ use crate::PoRep;
 
 mod tree_c_proof;
 mod tree_r_proof;
+mod tree_building_parallel;
 
 pub const TOTAL_PARENTS: usize = 37;
 
@@ -463,16 +464,29 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         })?
         .0;
 
-        Self::transform_and_replicate_layers_inner(
-            graph,
-            layer_challenges,
-            data,
-            data_tree,
-            config,
-            replica_path,
-            labels,
-        )
-        .context("failed to transform")
+        if settings::SETTINGS.gpu_for_parallel_tree_r == 0 {
+            Self::transform_and_replicate_layers_inner(
+                graph,
+                layer_challenges,
+                data,
+                data_tree,
+                config,
+                replica_path,
+                labels,
+            )
+            .context("failed to transform")
+        } else {
+            Self::transform_and_replicate_layers_inner_parallel(
+                graph,
+                layer_challenges,
+                data,
+                data_tree,
+                config,
+                replica_path,
+                labels,
+            )
+            .context("failed to transform")
+        }
     }
 
     pub(crate) fn transform_and_replicate_layers_inner(
