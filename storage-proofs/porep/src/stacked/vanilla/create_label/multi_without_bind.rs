@@ -50,8 +50,8 @@ fn fill_buffer(
     cur_node: u64,
     cur_consumer: &AtomicU64,
     mut cur_parent: &[u32], // parents for this node
-    layer_labels: &UnsafeSlice<u32>,
-    exp_labels: Option<&UnsafeSlice<u32>>, // None for layer0
+    layer_labels: &UnsafeSlice<'_, u32>,
+    exp_labels: Option<&UnsafeSlice<'_, u32>>, // None for layer0
     buf: &mut [u8],
     base_parent_missing: &mut BitMask,
 ) {
@@ -130,8 +130,8 @@ fn fill_buffer(
 #[allow(clippy::too_many_arguments)]
 fn create_label_runner(
     parents_cache: &CacheReader<u32>,
-    layer_labels: &UnsafeSlice<u32>,
-    exp_labels: Option<&UnsafeSlice<u32>>, // None for layer 0
+    layer_labels: &UnsafeSlice<'_, u32>,
+    exp_labels: Option<&UnsafeSlice<'_, u32>>, // None for layer 0
     num_nodes: u64,
     cur_consumer: &AtomicU64,
     cur_producer: &AtomicU64,
@@ -139,7 +139,7 @@ fn create_label_runner(
     stride: u64,
     lookahead: u64,
     ring_buf: &RingBuf,
-    base_parent_missing: &UnsafeSlice<BitMask>,
+    base_parent_missing: &UnsafeSlice<'_, BitMask>,
 ) -> Result<()> {
     info!("created label runner");
     // Label data bytes per node
