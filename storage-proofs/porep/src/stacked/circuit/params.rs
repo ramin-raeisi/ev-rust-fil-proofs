@@ -1,4 +1,7 @@
 use std::marker::PhantomData;
+use std::sync::Mutex;
+
+use rayon::prelude::*;
 
 use bellperson::bls::{Bls12, Fr};
 use bellperson::gadgets::{boolean::Boolean, num, uint32};
@@ -118,42 +121,45 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
         // Private Inputs for the DRG parent nodes.
         let mut drg_parents = Vec::with_capacity(layers);
 
-        for (i, parent) in drg_parents_proofs.into_iter().enumerate() {
+        let arcs = Mutex::new(&mut cs);
+
+        drg_parents_proofs.into_par_iter().enumerate().map(|(i, parent)| {
             let (parent_col, inclusion_path) =
-                parent.alloc(cs.namespace(|| format!("drg_parent_{}_num", i)))?;
+                parent.alloc(arcs.lock().unwrap().namespace(|| format!("drg_parent_{}_num", i))).unwrap();
             assert_eq!(layers, parent_col.len());
 
             // calculate column hash
-            let val = parent_col.hash(cs.namespace(|| format!("drg_parent_{}_constraint", i)))?;
+            let val = parent_col.hash(arcs.lock().unwrap().namespace(|| format!("drg_parent_{}_constraint", i))).unwrap();
             // enforce inclusion of the column hash in the tree C
             enforce_inclusion(
-                cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
+                arcs.lock().unwrap().namespace(|| format!("drg_parent_{}_inclusion", i)),
                 inclusion_path,
                 comm_c,
                 &val,
-            )?;
-            drg_parents.push(parent_col);
-        }
+            ).unwrap();
+            parent_col
+
+        }).collect_into_vec(&mut drg_parents);
 
         // Private Inputs for the Expander parent nodes.
-        let mut exp_parents = Vec::new();
+        let mut exp_parents = Vec::with_capacity(exp_parents_proofs.len());
 
-        for (i, parent) in exp_parents_proofs.into_iter().enumerate() {
+        exp_parents_proofs.into_par_iter().enumerate().map(|(i, parent)| {
             let (parent_col, inclusion_path) =
-                parent.alloc(cs.namespace(|| format!("exp_parent_{}_num", i)))?;
+                parent.alloc(arcs.lock().unwrap().namespace(|| format!("exp_parent_{}_num", i))).unwrap();
             assert_eq!(layers, parent_col.len());
 
             // calculate column hash
-            let val = parent_col.hash(cs.namespace(|| format!("exp_parent_{}_constraint", i)))?;
+            let val = parent_col.hash(arcs.lock().unwrap().namespace(|| format!("exp_parent_{}_constraint", i))).unwrap();
             // enforce inclusion of the column hash in the tree C
             enforce_inclusion(
-                cs.namespace(|| format!("exp_parent_{}_inclusion", i)),
+                arcs.lock().unwrap().namespace(|| format!("exp_parent_{}_inclusion", i)),
                 inclusion_path,
                 comm_c,
                 &val,
-            )?;
-            exp_parents.push(parent_col);
-        }
+            ).unwrap();
+            parent_col
+        }).collect_into_vec(&mut exp_parents);
 
         // -- Verify labeling and encoding
 
