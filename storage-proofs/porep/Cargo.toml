@@ -31,7 +31,7 @@ log = "0.4.7"
 pretty_assertions = "0.6.1"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false }
+neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false, features = ["opencl"] }
 num_cpus = "1.10.1"
 hex = "0.4.2"
 bincode = "1.1.2"
