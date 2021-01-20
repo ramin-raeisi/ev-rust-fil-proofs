@@ -2,7 +2,7 @@ use anyhow::{ensure, Context};
 use bellperson::bls::{Bls12, Fr};
 use bellperson::{groth16, Circuit};
 use log::info;
-use rand::{rngs::OsRng, RngCore};
+use rand::RngCore;
 use rayon::prelude::*;
 
 use crate::error::Result;
@@ -95,7 +95,6 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
             vanilla_proofs,
             &pub_params.vanilla_params,
             groth_params,
-            pub_params.priority,
         )?;
         info!("snark_proof:finish");
 
@@ -119,7 +118,6 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
             vanilla_proofs,
             &pub_params.vanilla_params,
             groth_params,
-            pub_params.priority,
         )?;
         info!("snark_proof:finish");
 
@@ -229,9 +227,7 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
         vanilla_proofs: Vec<S::Proof>,
         pub_params: &S::PublicParams,
         groth_params: &groth16::MappedParameters<Bls12>,
-        priority: bool,
     ) -> Result<Vec<groth16::Proof<Bls12>>> {
-        let mut rng = OsRng;
         ensure!(
             !vanilla_proofs.is_empty(),
             "cannot create a circuit proof over missing vanilla proofs"
@@ -251,9 +247,10 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let groth_proofs =  groth16::create_proof_batch(circuits, groth_params)?;
+        let groth_proofs = groth16::create_proof_batch(circuits, groth_params)?;
 
-        groth_proofs
+
+        groth_proofs.clone()
             .into_iter()
             .map(|groth_proof| {
                 let mut proof_vec = vec![];

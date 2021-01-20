@@ -7,13 +7,13 @@
 #[macro_use]
 pub mod test_helper;
 
+pub mod api_version;
 pub mod cache_key;
 pub mod compound_proof;
 pub mod crypto;
 pub mod data;
 pub mod drgraph;
 pub mod error;
-pub mod fr32;
 pub mod gadgets;
 pub mod measurements;
 pub mod merkle;
@@ -29,14 +29,14 @@ pub mod util;
 
 pub use self::data::Data;
 
-#[cfg(test)]
-pub(crate) const TEST_SEED: [u8; 16] = [
+pub const TEST_SEED: [u8; 16] = [
     0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06, 0xbc, 0xe5,
 ];
 
 pub const MAX_LEGACY_POREP_REGISTERED_PROOF_ID: u64 = 4;
 
 pub type PoRepID = [u8; 32];
+
 pub fn is_legacy_porep_id(porep_id: PoRepID) -> bool {
     use std::convert::TryInto;
 

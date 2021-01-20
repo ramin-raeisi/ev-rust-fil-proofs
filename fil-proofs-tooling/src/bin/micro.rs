@@ -63,7 +63,7 @@ fn parse_criterion_out(s: impl AsRef<str>) -> Result<Vec<CriterionResult>> {
     let med_abs_dev_re = make_detail_re(r"med\. abs\. dev\.");
 
     #[allow(clippy::type_complexity)]
-    let mut current: Option<(
+        let mut current: Option<(
         String,
         Option<u32>,
         Option<Point>,
@@ -268,7 +268,7 @@ fn run_benches(mut args: Vec<String>) -> Result<()> {
     ",
         args = args
     )
-    .map_err(|err| anyhow!("{:?}", err))?;
+        .map_err(|err| anyhow!("{:?}", err))?;
 
     let process = cmd.stdout(std::process::Stdio::piped()).spawn()?;
 
@@ -352,39 +352,39 @@ median [138.33 us 143.23 us] med. abs. dev. [1.7507 ms 8.4109 ms]";
                 time: Interval {
                     start: 141.11,
                     end: 159.66,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 },
                 throughput: None,
                 throughput_med: None,
                 slope: Some(Interval {
                     start: 141.11,
                     end: 159.66,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
                 mean: Some(Interval {
                     start: 140.55,
                     end: 150.62,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
                 median: Some(Interval {
                     start: 138.33,
                     end: 143.23,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
                 r_2: Some(Interval {
                     start: 0.812_491_4,
                     end: 0.832_015_4,
-                    unit: None
+                    unit: None,
                 }),
                 std_dev: Some(Interval {
                     start: 5.6028,
                     end: 15.213,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
                 med_abs_dev: Some(Interval {
                     start: 1750.7,
                     end: 8410.9,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
             }]
         );
@@ -424,46 +424,46 @@ median [138.33 us 143.23 us] med. abs. dev. [1.7507 ms 8.4109 ms]";
                 time: Interval {
                     start: 141.11,
                     end: 159.66,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 },
                 throughput: Some(Interval {
                     start: 68.055,
                     end: 68.644,
-                    unit: Some("MiB/s".to_string())
+                    unit: Some("MiB/s".to_string()),
                 }),
                 throughput_med: Some(Point {
                     value: 68.172,
-                    unit: Some("MiB/s".to_string())
+                    unit: Some("MiB/s".to_string()),
                 }),
                 slope: Some(Interval {
                     start: 141.11,
                     end: 159.66,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
                 mean: Some(Interval {
                     start: 140.55,
                     end: 150.62,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
                 median: Some(Interval {
                     start: 138.33,
                     end: 143.23,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
                 r_2: Some(Interval {
                     start: 0.812_491_4,
                     end: 0.832_015_4,
-                    unit: None
+                    unit: None,
                 }),
                 std_dev: Some(Interval {
                     start: 5.6028,
                     end: 15.213,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
                 med_abs_dev: Some(Interval {
                     start: 1750.7,
                     end: 8410.9,
-                    unit: Some("us".to_string())
+                    unit: Some("us".to_string()),
                 }),
             }]
         );

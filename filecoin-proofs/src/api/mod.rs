@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{ensure, Context, Result};
 use bincode::deserialize;
 use filecoin_hashers::Hasher;
-use log::info;
+use fr32::{write_unpadded, Fr32Reader};
+use log::{info, trace};
 use merkletree::store::{DiskStore, LevelCacheStore, StoreConfig};
 use storage_proofs::cache_key::CacheKey;
 use storage_proofs::measurements::{measure_op, Operation};
@@ -24,7 +25,6 @@ use crate::constants::{
     DefaultBinaryTree, DefaultOctTree, DefaultPieceDomain, DefaultPieceHasher,
     MINIMUM_RESERVED_BYTES_FOR_PIECE_IN_FULLY_ALIGNED_SECTOR as MINIMUM_PIECE_SIZE,
 };
-use crate::fr32::write_unpadded;
 use crate::parameters::public_params;
 use crate::types::{
     Commitment, MerkleTreeTrait, PaddedBytesAmount, PieceInfo, PoRepConfig, PoRepProofPartitions,
@@ -135,11 +135,11 @@ pub fn unseal_range<P, R, W, Tree>(
     offset: UnpaddedByteIndex,
     num_bytes: UnpaddedBytesAmount,
 ) -> Result<UnpaddedBytesAmount>
-where
-    P: Into<PathBuf> + AsRef<Path>,
-    R: Read,
-    W: Write,
-    Tree: 'static + MerkleTreeTrait,
+    where
+        P: Into<PathBuf> + AsRef<Path>,
+        R: Read,
+        W: Write,
+        Tree: 'static + MerkleTreeTrait,
 {
     info!("unseal_range:start");
     ensure!(comm_d != [0; 32], "Invalid all zero commitment (comm_d)");
@@ -174,6 +174,7 @@ where
         PaddedBytesAmount::from(porep_config),
         usize::from(PoRepProofPartitions::from(porep_config)),
         porep_config.porep_id,
+        porep_config.api_version,
     )?;
 
     let offset_padded: PaddedBytesAmount = UnpaddedBytesAmount::from(offset).into();
@@ -209,14 +210,14 @@ pub fn generate_piece_commitment<T: std::io::Read>(
     source: T,
     piece_size: UnpaddedBytesAmount,
 ) -> Result<PieceInfo> {
-    info!("generate_piece_commitment:start");
+    trace!("generate_piece_commitment:start");
 
     let result = measure_op(Operation::GeneratePieceCommitment, || {
         ensure_piece_size(piece_size)?;
 
         // send the source through the preprocessor
         let source = std::io::BufReader::new(source);
-        let mut fr32_reader = crate::fr32_reader::Fr32Reader::new(source);
+        let mut fr32_reader = Fr32Reader::new(source);
 
         let commitment = generate_piece_commitment_bytes_from_source::<DefaultPieceHasher>(
             &mut fr32_reader,
@@ -226,7 +227,7 @@ pub fn generate_piece_commitment<T: std::io::Read>(
         PieceInfo::new(commitment, piece_size)
     });
 
-    info!("generate_piece_commitment:finish");
+    trace!("generate_piece_commitment:finish");
     result
 }
 
@@ -255,9 +256,9 @@ pub fn add_piece<R, W>(
     piece_size: UnpaddedBytesAmount,
     piece_lengths: &[UnpaddedBytesAmount],
 ) -> Result<(PieceInfo, UnpaddedBytesAmount)>
-where
-    R: Read,
-    W: Write,
+    where
+        R: Read,
+        W: Write,
 {
     info!("add_piece:start");
 
@@ -269,7 +270,7 @@ where
 
         let written_bytes = crate::pieces::sum_piece_bytes_with_alignment(&piece_lengths);
         let piece_alignment = crate::pieces::get_piece_alignment(written_bytes, piece_size);
-        let fr32_reader = crate::fr32_reader::Fr32Reader::new(source);
+        let fr32_reader = Fr32Reader::new(source);
 
         // write left alignment
         for _ in 0..usize::from(PaddedBytesAmount::from(piece_alignment.left_bytes)) {
@@ -340,9 +341,9 @@ pub fn write_and_preprocess<R, W>(
     target: W,
     piece_size: UnpaddedBytesAmount,
 ) -> Result<(PieceInfo, UnpaddedBytesAmount)>
-where
-    R: Read,
-    W: Write,
+    where
+        R: Read,
+        W: Write,
 {
     add_piece(source, target, piece_size, Default::default())
 }
@@ -483,9 +484,9 @@ pub fn validate_cache_for_precommit_phase2<R, T, Tree: MerkleTreeTrait>(
     replica_path: T,
     seal_precommit_phase1_output: &SealPreCommitPhase1Output<Tree>,
 ) -> Result<()>
-where
-    R: AsRef<Path>,
-    T: AsRef<Path>,
+    where
+        R: AsRef<Path>,
+        T: AsRef<Path>,
 {
     info!("validate_cache_for_precommit_phase2:start");
 
@@ -527,9 +528,9 @@ pub fn validate_cache_for_commit<R, T, Tree: MerkleTreeTrait>(
     cache_path: R,
     replica_path: T,
 ) -> Result<()>
-where
-    R: AsRef<Path>,
-    T: AsRef<Path>,
+    where
+        R: AsRef<Path>,
+        T: AsRef<Path>,
 {
     info!("validate_cache_for_precommit:start");
 

@@ -2,7 +2,8 @@ use std::io::{self, Read};
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion, ParameterizedBenchmark, Throughput};
-use filecoin_proofs::{add_piece, fr32_reader::Fr32Reader, PaddedBytesAmount, UnpaddedBytesAmount};
+use filecoin_proofs::{add_piece, PaddedBytesAmount, UnpaddedBytesAmount};
+use fr32::Fr32Reader;
 use rand::{thread_rng, Rng};
 
 #[cfg(feature = "cpu-profile")]
@@ -58,9 +59,9 @@ fn preprocessing_benchmark(c: &mut Criterion) {
             },
             vec![128, 256, 512, 256_000, 512_000, 1_024_000, 2_048_000],
         )
-        .sample_size(10)
-        .throughput(|s| Throughput::Bytes(*s as u64))
-        .warm_up_time(Duration::from_secs(1)),
+            .sample_size(10)
+            .throughput(|s| Throughput::Bytes(*s as u64))
+            .warm_up_time(Duration::from_secs(1)),
     );
 }
 
@@ -83,16 +84,16 @@ fn add_piece_benchmark(c: &mut Criterion) {
                         unpadded_size,
                         &[unpadded_size][..],
                     )
-                    .unwrap();
+                        .unwrap();
                     buf.clear();
                 });
                 stop_profile();
             },
             vec![512, 256 * 1024, 512 * 1024, 1024 * 1024, 2 * 1024 * 1024],
         )
-        .sample_size(10)
-        .throughput(|s| Throughput::Bytes(*s as u64))
-        .warm_up_time(Duration::from_secs(1)),
+            .sample_size(10)
+            .throughput(|s| Throughput::Bytes(*s as u64))
+            .warm_up_time(Duration::from_secs(1)),
     );
 }
 

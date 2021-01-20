@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-CMDS=$(cat <<EOF
+CMDS=$(
+    cat <<EOF
 
 set -e
 

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use bellperson::bls::Fr;
 use filecoin_hashers::{Domain, Hasher};
+use fr32::{bytes_into_fr, fr_into_bytes};
 use merkletree::merkle::{get_merkle_tree_leafs, get_merkle_tree_len};
-use storage_proofs::fr32::{bytes_into_fr, fr_into_bytes};
 use storage_proofs::merkle::{get_base_tree_count, MerkleTreeTrait};
 use typenum::Unsigned;
 
@@ -14,7 +14,7 @@ pub fn as_safe_commitment<H: Domain, T: AsRef<str>>(
 ) -> Result<H> {
     bytes_into_fr(comm)
         .map(Into::into)
-        .with_context(|| format!("Invalid commitment ({})", commitment_name.as_ref(),))
+        .with_context(|| format!("Invalid commitment ({})", commitment_name.as_ref(), ))
 }
 
 pub fn commitment_from_fr(fr: Fr) -> Commitment {

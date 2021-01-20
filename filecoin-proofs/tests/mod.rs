@@ -1,9 +1,10 @@
 use bellperson::bls::Fr;
 use ff::Field;
+use fr32::bytes_into_fr;
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 
-use storage_proofs::fr32::bytes_into_fr;
+use storage_proofs::api_version::ApiVersion;
 use storage_proofs::sector::SectorId;
 
 use filecoin_proofs::as_safe_commitment;
@@ -34,6 +35,7 @@ fn test_verify_seal_fr32_validation() {
                         .expect("unknown sector size"),
                 ),
                 porep_id: arbitrary_porep_id,
+                api_version: ApiVersion::V1_1_0,
             },
             not_convertible_to_fr_bytes,
             convertible_to_fr_bytes,
@@ -69,6 +71,7 @@ fn test_verify_seal_fr32_validation() {
                         .expect("unknown sector size"),
                 ),
                 porep_id: arbitrary_porep_id,
+                api_version: ApiVersion::V1_1_0,
             },
             convertible_to_fr_bytes,
             not_convertible_to_fr_bytes,

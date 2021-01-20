@@ -272,11 +272,11 @@ fn ensure_ipget(is_verbose: bool, version: &str) -> Result<()> {
     } else {
         download_ipget(is_verbose, version)
     }
-    .map(|_| {
-        if is_verbose {
-            println!("ipget installed: {}", ipget_bin);
-        }
-    })
+        .map(|_| {
+            if is_verbose {
+                println!("ipget installed: {}", ipget_bin);
+            }
+        })
 }
 
 /// Download a version of ipget.

@@ -8,7 +8,8 @@ members = [
   "storage-proofs/post",
   "fil-proofs-tooling",
   "fil-proofs-param",
+  "fr32",
   "sha2raw",
-  "phase2",
   "filecoin-hashers",
 ]
+

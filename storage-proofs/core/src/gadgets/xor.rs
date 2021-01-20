@@ -6,9 +6,9 @@ pub fn xor<E, CS>(
     key: &[Boolean],
     input: &[Boolean],
 ) -> Result<Vec<Boolean>, SynthesisError>
-where
-    E: Engine,
-    CS: ConstraintSystem<E>,
+    where
+        E: Engine,
+        CS: ConstraintSystem<E>,
 {
     let key_len = key.len();
     assert_eq!(key_len, 32 * 8);
@@ -39,7 +39,7 @@ mod tests {
     use rand_xorshift::XorShiftRng;
 
     #[test]
-    fn test_xor_input_circut() {
+    fn test_xor_input_circuit() {
         let mut rng = XorShiftRng::from_seed(crate::TEST_SEED);
 
         for i in 0..10 {

@@ -362,8 +362,10 @@ impl LightAlgorithm<PoseidonDomain> for PoseidonFunction {
             1 | 2 | 4 | 8 | 16 => shared_hash_frs(
                 &parts
                     .iter()
-                    .map(|x| {
-                        <Bls12 as ff::ScalarEngine>::Fr::from_repr(x.0).expect("from_repr failure")
+                    .enumerate()
+                    .map(|(i, x)| {
+                        <Bls12 as ff::ScalarEngine>::Fr::from_repr(x.0)
+                            .unwrap_or_else(|_| panic!("from_repr failure at {}", i))
                     })
                     .collect::<Vec<_>>(),
             )
@@ -415,7 +417,7 @@ mod tests {
         let t = MerkleTree::<PoseidonDomain, PoseidonFunction, VecStore<_>, typenum::U2>::new(
             values.iter().copied(),
         )
-        .expect("merkle tree new failure");
+            .expect("merkle tree new failure");
 
         let p = t.gen_proof(0).expect("gen_proof failure"); // create a proof for the first value =k Fr::one()
 
@@ -446,7 +448,7 @@ mod tests {
         let t = MerkleTree::<PoseidonDomain, PoseidonFunction, VecStore<_>, typenum::U2>::new(
             leaves.iter().copied(),
         )
-        .expect("merkle tree new failure");
+            .expect("merkle tree new failure");
 
         assert_eq!(t.leafs(), 4);
 

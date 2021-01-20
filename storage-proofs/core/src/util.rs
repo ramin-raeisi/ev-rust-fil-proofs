@@ -178,7 +178,6 @@ pub fn default_rows_to_discard(leafs: usize, arity: usize) -> usize {
 mod tests {
     use super::*;
 
-    use crate::fr32::fr_into_bytes;
     use bellperson::bls::*;
     use bellperson::gadgets::boolean::Boolean;
     use bellperson::gadgets::num;
@@ -186,6 +185,7 @@ mod tests {
     use bellperson::ConstraintSystem;
     use ff::Field;
     use filecoin_hashers::{sha256::*, HashFunction};
+    use fr32::fr_into_bytes;
     use merkletree::hash::Algorithm;
     use rand::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
@@ -314,7 +314,7 @@ mod tests {
             &right_bits,
             height,
         )
-        .expect("key derivation function failed");
+            .expect("key derivation function failed");
 
         assert!(cs.is_satisfied(), "constraints not satisfied");
         assert_eq!(cs.num_constraints(), 45_387);

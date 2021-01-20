@@ -34,7 +34,6 @@ pub type QuadMerkleTree<H> = MerkleTree<H, U4>;
 pub type QuadLCMerkleTree<H> = LCMerkleTree<H, U4>;
 
 pub type OctMerkleTree<H> = DiskTree<H, U8, U0, U0>;
-// 通用的Merkle树库   8叉树
 pub type OctSubMerkleTree<H> = DiskTree<H, U8, U2, U0>;
 pub type OctTopMerkleTree<H> = DiskTree<H, U8, U8, U2>;
 

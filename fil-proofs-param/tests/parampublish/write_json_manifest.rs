@@ -51,7 +51,7 @@ fn writes_json_manifest() -> Result<(), FailureError> {
     // cid matches that which was produced from the `ipfs add` command
     for filename in filenames.iter().cloned() {
         if let (Some(m_entry), Some(expected)) =
-            (manifest_map.get(filename), cache_checksums.get(filename))
+        (manifest_map.get(filename), cache_checksums.get(filename))
         {
             assert_eq!(
                 &m_entry.cid, expected,

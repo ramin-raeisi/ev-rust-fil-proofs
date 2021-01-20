@@ -34,23 +34,23 @@ echo "checking $INPUT_DIR"
 
 # Grab the version number from the files in the dir.
 # Fail if more than 1 version or doesnt match a version string like vNN, e.g v12
-if ls -A $INPUT_DIR &> /dev/null; then
-  # version will be a list if there is more than one...
-  VERSION=$(ls $INPUT_DIR | sort -r | cut -c 1-3 | uniq)
-  echo found $VERSION
+if ls -A $INPUT_DIR &>/dev/null; then
+    # version will be a list if there is more than one...
+    VERSION=$(ls $INPUT_DIR | sort -r | cut -c 1-3 | uniq)
+    echo found $VERSION
 
-  if [[ $(echo $VERSION | wc -w) -eq 1 && $VERSION =~ ^v[0-9]+ ]]; then
-    # we have 1 version, lets go...
-    COUNT=$(ls -l $INPUT_DIR | wc -l | xargs echo -n)
-    echo "adding $COUNT files to ipfs..."
+    if [[ $(echo $VERSION | wc -w) -eq 1 && $VERSION =~ ^v[0-9]+ ]]; then
+        # we have 1 version, lets go...
+        COUNT=$(ls -l $INPUT_DIR | wc -l | xargs echo -n)
+        echo "adding $COUNT files to ipfs..."
 
-  else
-    echo "Error: input dir should contain just the current version of the params"
-    exit 1
-  fi
+    else
+        echo "Error: input dir should contain just the current version of the params"
+        exit 1
+    fi
 else
-  echo "Error: input dir '$INPUT_DIR' should contain the params"
-  exit 1
+    echo "Error: input dir '$INPUT_DIR' should contain the params"
+    exit 1
 fi
 
 CLUSTER_HOST="/dnsaddr/filecoin.collab.ipfscluster.io"
@@ -61,12 +61,12 @@ DNSLINK_DOMAIN="proofs.filecoin.io"
 # Add and pin to collab cluster. After this it will be on 1 peer and pin requests
 # will have been triggered for the others.
 ROOT_CID=$(ipfs-cluster-ctl \
-  --host $CLUSTER_HOST \
-  --basic-auth $CLUSTER_TOKEN \
-  add --quieter \
-  --local \
-  --name $CLUSTER_PIN_NAME \
-  --recursive $INPUT_DIR )
+    --host $CLUSTER_HOST \
+    --basic-auth $CLUSTER_TOKEN \
+    add --quieter \
+    --local \
+    --name $CLUSTER_PIN_NAME \
+    --recursive $INPUT_DIR)
 
 echo "ok! root cid is $ROOT_CID"
 
