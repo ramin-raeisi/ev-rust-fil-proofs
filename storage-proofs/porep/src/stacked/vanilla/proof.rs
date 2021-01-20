@@ -753,7 +753,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let _gpu_lock = GPU_LOCK.lock().unwrap();
             let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
-                Some(BatcherType::GPU),
+                Some(BatcherType::OpenCL),
                 nodes_count,
                 max_gpu_tree_batch_size,
                 tree_r_last_config.rows_to_discard,
