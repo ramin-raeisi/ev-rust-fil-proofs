@@ -44,7 +44,6 @@ use crate::encode::{encode};
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     // Internally, it has been changed to use GPU in parallel (after tree_c is built in parallel, tree_r_last is built in parallel)
-    //#[cfg(feature = "tree_c-serial-tree_r_last")]
     pub fn generate_tree_r_last_gpu<TreeArity>(
         data: &mut Data<'_>,
         nodes_count: usize,
@@ -88,7 +87,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             info!("[tree_r_last] are calculating in paralle with tree_c. It uses {}/{} GPU", tree_r_gpu, _bus_num);
 
             // tree_r_last uses last indexes of the GPU list
-            let start_idx = _bus_num - tree_r_gpu; 
+            start_idx = _bus_num - tree_r_gpu; 
         }
 
         for gpu_index in start_idx.._bus_num {

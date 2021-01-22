@@ -31,7 +31,7 @@ log = "0.4.7"
 pretty_assertions = "0.6.1"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { package = "neptune", path = "../../../crusty3-neptune", default-features = false, features = ["gpu"] }
+neptune = { package = "neptune", path = "../../../crusty3-neptune", default-features = false, features = ["opencl"] }
 num_cpus = "1.10.1"
 hex = "0.4.2"
 bincode = "1.1.2"
@@ -54,11 +54,9 @@ filecoin-hashers = { path = "../../filecoin-hashers", version = "1.0.0", default
 
 [features]
 default = ["blst", "gpu"]
-gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu", "neptune/gpu", "bellperson/gpu", "fr32/gpu"]
+gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu", "neptune/opencl", "bellperson/gpu", "fr32/gpu"]
 pairing = ["storage-proofs-core/pairing", "bellperson/pairing", "neptune/pairing", "filecoin-hashers/pairing", "fr32/pairing"]
 blst = ["storage-proofs-core/blst", "bellperson/blst", "neptune/blst", "filecoin-hashers/blst", "fr32/blst"]
-tree_c-serial-tree_r_last = []
-tree_c-parallel-tree_r_last = []
 single-threaded = []
 
 [[bench]]
