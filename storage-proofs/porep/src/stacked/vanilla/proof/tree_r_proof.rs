@@ -44,7 +44,6 @@ use crate::encode::{encode};
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     // Internally, it has been changed to use GPU in parallel (after tree_c is built in parallel, tree_r_last is built in parallel)
-    //#[cfg(feature = "tree_c-serial-tree_r_last")]
     pub fn generate_tree_r_last_gpu<TreeArity>(
         data: &mut Data<'_>,
         nodes_count: usize,
@@ -81,34 +80,25 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         assert!(_bus_num > 0);
 
         let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
+        let mut start_idx = 0;
         if (tree_r_gpu > 0) { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
             assert!(tree_r_gpu < _bus_num, 
                 "tree_r_last are calculating in parallel with tree_c. There is not free GPU for tree_c. Try to decrease gpu_for_parallel_tree_r constant.");
             info!("[tree_r_last] are calculating in paralle with tree_c. It uses {}/{} GPU", tree_r_gpu, _bus_num);
 
             // tree_r_last uses last indexes of the GPU list
-            let start_idx = _bus_num - tree_r_gpu;
-            for gpu_index in start_idx.._bus_num {
-                batchertype_gpus.push(Some(BatcherType::CustomGPU
-                    (opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
-    
-                // These channels will receive batches of leaf nodes and add them to the TreeBuilder.
-                // Each GPU has own channel
-                let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
-                builders_tx.push(builder_tx);
-                builders_rx.push(builder_rx);
-            };
-        } else {
-            for gpu_index in 0.._bus_num {
-                batchertype_gpus.push(Some(BatcherType::CustomGPU
-                    (opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
-    
-                // These channels will receive batches of leaf nodes and add them to the TreeBuilder.
-                // Each GPU has own channel
-                let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
-                builders_tx.push(builder_tx);
-                builders_rx.push(builder_rx);
-            };
+            let start_idx = _bus_num - tree_r_gpu; 
+        }
+
+        for gpu_index in start_idx.._bus_num {
+            batchertype_gpus.push(BatcherType::CustomGPU
+                (opencl::GPUSelector::BusId(all_bus_ids[gpu_index])));
+
+            // These channels will receive batches of leaf nodes and add them to the TreeBuilder.
+            // Each GPU has own channel
+            let (builder_tx, builder_rx) = mpsc::sync_channel::<(Vec<Fr>, bool)>(0);
+            builders_tx.push(builder_tx);
+            builders_rx.push(builder_rx);
         }
 
         let _bus_num = batchertype_gpus.len();
@@ -231,16 +221,26 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                     assert!(find_idle_gpu >= 0);
                     let find_idle_gpu: usize = find_idle_gpu as usize;
-                    info!("[tree_r_last] Use multi GPUs, total_gpu={}, use_gpu_index={}", _bus_num, gpu_index);
                     
                     let tree_r_last_config = &tree_r_last_config;
                     let batchertype_gpus = &batchertype_gpus;
                     
                     let writer_tx = writer_tx.clone();
 
-                    info!("[tree_r_last] Use multi GPUs, total_gpu={}, use_gpu_index={}", _bus_num, gpu_index);
+                    match &batchertype_gpus[find_idle_gpu] {
+                        BatcherType::CustomGPU(selector) => {
+                            info!("[tree_r_last] Run TreeBuilder over indexes i*{} on {} (buis_id: {})",
+                            gpu_index,
+                            selector.get_device().unwrap().name(),
+                            selector.get_device().unwrap().bus_id().unwrap(),
+                            );
+                        }
+                        default => {
+                            info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                        }
+                    }
                     let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
-                        batchertype_gpus[find_idle_gpu].clone(),
+                        Some(batchertype_gpus[find_idle_gpu].clone()),
                         nodes_count,
                         max_gpu_tree_batch_size,
                         tree_r_last_config.rows_to_discard,

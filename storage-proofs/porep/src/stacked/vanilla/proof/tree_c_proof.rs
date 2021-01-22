@@ -77,30 +77,23 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             assert!(_bus_num > 0);
 
             let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
+            let mut last_idx = _bus_num;
             if tree_r_gpu > 0 { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
                 assert!(tree_r_gpu < _bus_num, 
                     "tree_r_last are calculating in parallel with tree_c. There is not free GPU for tree_c. Try to decrease gpu_for_parallel_tree_r constant.");
                 info!("[tree_c] are calculating in paralle with tree_r_last. It uses {}/{} GPU", _bus_num - tree_r_gpu, _bus_num);
     
                 // tree_c uses first indexes of the GPU list
-                let last_idx = _bus_num - tree_r_gpu;
-                for gpu_index in 0..last_idx {
-                    batchertype_gpus.push(Some(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
-                    // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
-                    // Each GPU has own channel
-                    let (builder_tx, builder_rx) = mpsc::sync_channel(0);
-                    builders_tx.push(builder_tx);
-                    builders_rx.push(builder_rx);
-                };
-            } else {
-                for gpu_index in 0.._bus_num {
-                    batchertype_gpus.push(Some(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_index]))));
-                    // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
-                    // Each GPU has own channel
-                    let (builder_tx, builder_rx) = mpsc::sync_channel(0);
-                    builders_tx.push(builder_tx);
-                    builders_rx.push(builder_rx);
-                };
+                last_idx = _bus_num - tree_r_gpu;
+            }
+
+            for gpu_index in 0..last_idx {
+                batchertype_gpus.push(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_index])));
+                // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
+                // Each GPU has own channel
+                let (builder_tx, builder_rx) = mpsc::sync_channel(0);
+                builders_tx.push(builder_tx);
+                builders_rx.push(builder_rx);
             }
 
             let _bus_num = batchertype_gpus.len();
@@ -227,9 +220,21 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         assert!(find_idle_gpu >= 0);
                         let find_idle_gpu: usize = find_idle_gpu as usize;
 
+                        match &batchertype_gpus[find_idle_gpu] {
+                            BatcherType::CustomGPU(selector) => {
+                                info!("[tree_c] Run ColumnTreeBuilder over indexes i*{} on {} (buis_id: {})",
+                                gpu_index,
+                                selector.get_device().unwrap().name(),
+                                selector.get_device().unwrap().bus_id().unwrap(),
+                                );
+                            }
+                            default => {
+                                info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                            }
+                        }
+
                         let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
-                            //Some(BatcherType::GPU),
-                            batchertype_gpus[find_idle_gpu].clone(), // TODO-Ryan: Use multi GPUs
+                            Some(batchertype_gpus[find_idle_gpu].clone()),
                             nodes_count,
                             max_gpu_column_batch_size,
                             max_gpu_tree_batch_size,

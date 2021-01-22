@@ -307,7 +307,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     }
 
     /// Generates the layers as needed for encoding.
-    fn generate_labels_for_encoding(
+    pub fn generate_labels_for_encoding(
         graph: &StackedBucketGraph<Tree::Hasher>,
         layer_challenges: &LayerChallenges,
         replica_id: &<Tree::Hasher as Hasher>::Domain,
@@ -427,7 +427,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     where
         TreeArity: PoseidonArity,
     {
-        if settings::SETTINGS.use_gpu_column_builder {
+        if settings::SETTINGS.use_gpu_tree_builder {
             Self::generate_tree_r_last_gpu::<TreeArity>(
                 data,
                 nodes_count,
@@ -753,7 +753,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let _gpu_lock = GPU_LOCK.lock().unwrap();
             let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
-                Some(BatcherType::GPU),
+                Some(BatcherType::OpenCL),
                 nodes_count,
                 max_gpu_tree_batch_size,
                 tree_r_last_config.rows_to_discard,
