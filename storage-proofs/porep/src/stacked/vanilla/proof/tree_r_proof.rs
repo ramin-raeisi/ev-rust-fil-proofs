@@ -18,10 +18,6 @@ use rayon::prelude::*;
 use storage_proofs_core::{
     data::Data,
     error::Result,
-    measurements::{
-        measure_op,
-        Operation::{GenerateTreeRLast},
-    },
     merkle::*,
     settings,
     util::{NODE_SIZE},
@@ -81,7 +77,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
         let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
         let mut start_idx = 0;
-        if (tree_r_gpu > 0) { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
+        if tree_r_gpu > 0 { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
             assert!(tree_r_gpu < _bus_num, 
                 "tree_r_last are calculating in parallel with tree_c. There is not free GPU for tree_c. Try to decrease gpu_for_parallel_tree_r constant.");
             info!("[tree_r_last] are calculating in paralle with tree_c. It uses {}/{} GPU", tree_r_gpu, _bus_num);
@@ -235,7 +231,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             selector.get_device().unwrap().bus_id().unwrap(),
                             );
                         }
-                        default => {
+                        _default => {
                             info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
                         }
                     }
