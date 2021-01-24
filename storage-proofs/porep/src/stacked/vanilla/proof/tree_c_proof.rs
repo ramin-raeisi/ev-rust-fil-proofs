@@ -1,4 +1,4 @@
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::{mpsc, Arc, RwLock, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -228,63 +228,64 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 selector.get_device().unwrap().bus_id().unwrap(),
                                 );
                             }
-                            default => {
+                            _default => {
                                 info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
                             }
                         }
 
-                        let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
-                            Some(batchertype_gpus[find_idle_gpu].clone()),
-                            nodes_count,
-                            max_gpu_column_batch_size,
-                            max_gpu_tree_batch_size,
-                        )
-                        .expect("failed to create ColumnTreeBuilder");
-
                         // Loop until all trees for all configs have been built.
-                        for i in (0..config_count).step_by(_bus_num) {
-                            let i = i + gpu_index;
-                            if i >= config_count {
-                                break;
+                        let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(_bus_num).collect();
+
+                        let builder_rx_mx = Mutex::new(builder_rx);
+                        
+                        config_ids.par_iter().for_each( |&i| {
+                            if i < config_count {
+                                let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
+                                    Some(batchertype_gpus[find_idle_gpu].clone()),
+                                    nodes_count,
+                                    max_gpu_column_batch_size,
+                                    max_gpu_tree_batch_size,
+                                )
+                                .expect("failed to create ColumnTreeBuilder");
+                                
+                                loop {
+                                    let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
+                                        builder_rx_mx.lock().unwrap().recv().expect("failed to recv columns");
+    
+                                    // Just add non-final column batches.
+                                    if !is_final {
+                                        column_tree_builder
+                                            .add_columns(&columns)
+                                            .expect("failed to add columns");
+                                        continue;
+                                    };
+    
+                                    // If we get here, this is a final column: build a sub-tree.
+                                    let (base_data, tree_data) = column_tree_builder
+                                        .add_final_columns(&columns)
+                                        .expect("failed to add final columns");
+                                    trace!(
+                                        "base data len {}, tree data len {}",
+                                        base_data.len(),
+                                        tree_data.len()
+                                    );
+    
+                                    let tree_len = base_data.len() + tree_data.len();
+    
+                                    info!(
+                                        "persisting base tree_c {}/{} of length {}",
+                                        i + 1,
+                                        tree_count,
+                                        tree_len,
+                                    );
+    
+                                    writer_tx
+                                        .send((base_data, tree_data))
+                                        .expect("failed to send base_data, tree_data");
+                                    break;
+                                }
                             }
-
-                            loop {
-                                let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
-                                    builder_rx.recv().expect("failed to recv columns");
-
-                                // Just add non-final column batches.
-                                if !is_final {
-                                    column_tree_builder
-                                        .add_columns(&columns)
-                                        .expect("failed to add columns");
-                                    continue;
-                                };
-
-                                // If we get here, this is a final column: build a sub-tree.
-                                let (base_data, tree_data) = column_tree_builder
-                                    .add_final_columns(&columns)
-                                    .expect("failed to add final columns");
-                                trace!(
-                                    "base data len {}, tree data len {}",
-                                    base_data.len(),
-                                    tree_data.len()
-                                );
-
-                                let tree_len = base_data.len() + tree_data.len();
-
-                                info!(
-                                    "persisting base tree_c {}/{} of length {}",
-                                    i + 1,
-                                    tree_count,
-                                    tree_len,
-                                );
-
-                                writer_tx
-                                    .send((base_data, tree_data))
-                                    .expect("failed to send base_data, tree_data");
-                                break;
-                            }
-                        }
+                        });
 
                         *gpu_busy_flag[find_idle_gpu].write().unwrap() = 0; // TODO-Ryan: After the store is completed, enter the preparation for the next tree (adopted by the amd platform)
                         trace!("[tree_c] set gpu idle={}", find_idle_gpu);
