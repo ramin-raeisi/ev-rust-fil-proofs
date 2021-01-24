@@ -83,7 +83,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             info!("[tree_r_last] are calculating in paralle with tree_c. It uses {}/{} GPU", tree_r_gpu, _bus_num);
 
             // tree_r_last uses last indexes of the GPU list
-            start_idx = _bus_num - tree_r_gpu; 
+            let start_idx = _bus_num - tree_r_gpu; 
         }
 
         for gpu_index in start_idx.._bus_num {

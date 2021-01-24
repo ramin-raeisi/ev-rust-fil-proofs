@@ -1,9 +1,14 @@
 use lazy_static::lazy_static;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex};
+use std::sync::{mpsc, Arc, Mutex, RwLock};
+use std::thread;
+use std::time::Duration;
 
 use anyhow::Context;
+use bellperson::bls::Fr;
 use bincode::deserialize;
 use filecoin_hashers::{Domain, HashFunction, Hasher, PoseidonArity};
 use generic_array::typenum::{self, Unsigned};
@@ -41,6 +46,7 @@ use super::{
     EncodingProof, LabelingProof,
 };
 
+use ff::Field;
 use neptune::batch_hasher::BatcherType;
 use fr32::fr_into_bytes;
 
