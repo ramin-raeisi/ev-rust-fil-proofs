@@ -177,18 +177,25 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 let mut layer_data: Vec<Vec<Fr>> =
                                     vec![Vec::with_capacity(chunked_nodes_count); layers];
 
+                                rayon::scope(|s| {
+                                    // capture a shadowed version of layer_data.
+                                    let layer_data: &mut Vec<_> = &mut layer_data;
 
-                                for (layer_index, layer_elements) in
-                                    layer_data.iter_mut().enumerate()
-                                {
-                                    let store = labels.labels_for_layer(layer_index + 1);
-                                    let start = (i * nodes_count) + node_index;
-                                    let end = start + chunked_nodes_count;
-                                    let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
-                                        .read_range(std::ops::Range { start, end })
-                                        .expect("failed to read store range");
-                                    layer_elements.extend(elements.into_iter().map(Into::into));
-                                }
+                                    // gather all layer data in parallel.
+                                    s.spawn(move |_| {
+                                        for (layer_index, layer_elements) in
+                                            layer_data.iter_mut().enumerate()
+                                        {
+                                            let store = labels.labels_for_layer(layer_index + 1);
+                                            let start = (i * nodes_count) + node_index;
+                                            let end = start + chunked_nodes_count;
+                                            let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
+                                                .read_range(std::ops::Range { start, end })
+                                                .expect("failed to read store range");
+                                            layer_elements.extend(elements.into_iter().map(Into::into));
+                                        }
+                                    });
+                                });
 
                                 // Copy out all layer data arranged into columns.
                                 for layer_index in 0..layers {
