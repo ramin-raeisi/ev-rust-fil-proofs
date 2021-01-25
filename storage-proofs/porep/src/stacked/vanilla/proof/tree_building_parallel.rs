@@ -10,7 +10,6 @@ use merkletree::merkle::{
     is_merkle_tree_size_valid,
 };
 use merkletree::store::{StoreConfig};
-use rayon::prelude::*;
 use storage_proofs_core::{
     cache_key::CacheKey,
     data::Data,

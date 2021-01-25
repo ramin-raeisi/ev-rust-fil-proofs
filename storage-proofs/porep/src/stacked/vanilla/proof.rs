@@ -1,23 +1,18 @@
 use lazy_static::lazy_static;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Arc, Mutex, RwLock};
-use std::thread;
-use std::time::Duration;
+use std::sync::{Mutex};
 
 use anyhow::Context;
-use bellperson::bls::Fr;
 use bincode::deserialize;
 use filecoin_hashers::{Domain, HashFunction, Hasher, PoseidonArity};
 use generic_array::typenum::{self, Unsigned};
 use log::*;
 use merkletree::merkle::{
-    get_merkle_tree_cache_size, get_merkle_tree_leafs, get_merkle_tree_len,
+    get_merkle_tree_len,
     is_merkle_tree_size_valid,
 };
-use merkletree::store::{DiskStore, StoreConfig};
+use merkletree::store::{StoreConfig};
 use rayon::prelude::*;
 use storage_proofs_core::{
     cache_key::CacheKey,
@@ -46,14 +41,10 @@ use super::{
     EncodingProof, LabelingProof,
 };
 
-use ff::Field;
 use neptune::batch_hasher::BatcherType;
-use neptune::tree_builder::{TreeBuilder, TreeBuilderTrait};
 use fr32::fr_into_bytes;
 
-use rust_gpu_tools::opencl;
-
-use crate::encode::{decode, encode};
+use crate::encode::{decode};
 use crate::PoRep;
 
 mod tree_c_proof;
@@ -733,9 +724,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     {
         use bellperson::bls::Fr;
         use ff::Field;
-        use fr32::fr_into_bytes;
         use merkletree::merkle::{get_merkle_tree_cache_size, get_merkle_tree_leafs};
-        use neptune::batch_hasher::BatcherType;
         use neptune::tree_builder::{TreeBuilder, TreeBuilderTrait};
         use std::fs::OpenOptions;
         use std::io::Write;
