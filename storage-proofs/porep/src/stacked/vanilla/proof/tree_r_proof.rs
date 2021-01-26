@@ -1,7 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{PathBuf};
-use std::sync::{mpsc, Arc, RwLock, Mutex};
+use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
@@ -66,7 +66,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
         // Ryan 
         let mut batchertype_gpus = Vec::new();
-        let mut builders_rx = Vec::new();
         let mut builders_tx = Vec::new();
         let all_bus_ids = opencl::Device::all()
             .iter()
@@ -91,12 +90,17 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 (opencl::GPUSelector::BusId(all_bus_ids[gpu_index])));
         }
         
-        for _config_idx in 0..configs.len() {
+        let mut builders_rx_by_gpu = Vec::new();
+        for _i in 0.._bus_num {
+            builders_rx_by_gpu.push(Vec::new());
+        }
+
+        for config_idx in 0..configs.len() {
             // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
             // Each config has own channel
             let (builder_tx, builder_rx) = mpsc::sync_channel(0);
             builders_tx.push(builder_tx);
-            builders_rx.push(builder_rx);
+            builders_rx_by_gpu[config_idx % _bus_num].push(builder_rx);
         }
 
         let _bus_num = batchertype_gpus.len();
@@ -118,13 +122,14 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             
             s.spawn(move |_| {
                 for i in (0..config_count).step_by(_bus_num) {
-                    let builder_tx = builders_tx[i].clone();
                     // loop over _bus_num sync channels
                     for gpu_index in 0.._bus_num {
                         let i = i + gpu_index;
                         if i >= config_count {
                             break;
                         }
+
+                        let builder_tx = builders_tx[i].clone();
 
                         let mut node_index = 0;
                         while node_index != nodes_count {
@@ -185,14 +190,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 } // outer loop
             });
             let batchertype_gpus = &batchertype_gpus;
-            let builders_rx_mx = Mutex::new(builders_rx);
             let gpu_indexes: Vec<usize> = (0.. _bus_num).collect();
 
             //Parallel tuning GPU computing
             s.spawn(move |_| {
                 gpu_indexes.par_iter()
-                    .map(|gpu_index| { *gpu_index } )
-                    .for_each( |gpu_index| {
+                    .zip(builders_rx_by_gpu.into_par_iter())
+                    .for_each( |(&gpu_index, builders_rx)| {
                     
                     let gpu_busy_flag = gpu_busy_flag.clone();
                     // TODO-Ryan: find_idle_gpu
@@ -240,43 +244,45 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(_bus_num).collect();
 
                     // Loop until all trees for all configs have been built.
-                    config_ids.par_iter().for_each( |&i| {
-                        if i < config_count {
-                            let builder_rx = &builders_rx_mx.lock().unwrap()[i];
-                            let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
-                                Some(batchertype_gpus[find_idle_gpu].clone()),
-                                nodes_count,
-                                max_gpu_tree_batch_size,
-                                tree_r_last_config.rows_to_discard,
-                            )
-                            .expect("failed to create TreeBuilder");
+                    config_ids.par_iter()
+                        .zip(builders_rx.into_par_iter())
+                        .for_each( |(&i, builder_rx)| {
 
-                            loop {
-                                let (encoded, is_final) =
-                                    builder_rx.recv().expect("failed to recv encoded data");
+                        let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
+                            Some(batchertype_gpus[find_idle_gpu].clone()),
+                            nodes_count,
+                            max_gpu_tree_batch_size,
+                            tree_r_last_config.rows_to_discard,
+                        )
+                        .expect("failed to create TreeBuilder");
 
-                                // Just add non-final leaf batches.
-                                if !is_final {
-                                    tree_builder
-                                        .add_leaves(&encoded)
-                                        .expect("failed to add leaves");
-                                    continue;
-                                };
+                        info!("Run builder for tree_r_last {}/{}", i + 1, tree_count);
 
-                                // If we get here, this is a final leaf batch: build a sub-tree.
-                                info!(
-                                    "building base tree_r_last with GPU {}/{}",
-                                    i + 1,
-                                    tree_count
-                                );
+                        loop {
+                            let (encoded, is_final) =
+                                builder_rx.recv().expect("failed to recv encoded data");
 
-                                let (_, tree_data) = tree_builder
-                                    .add_final_leaves(&encoded)
-                                    .expect("failed to add final leaves");
+                            // Just add non-final leaf batches.
+                            if !is_final {
+                                tree_builder
+                                    .add_leaves(&encoded)
+                                    .expect("failed to add leaves");
+                                continue;
+                            };
 
-                                writer_tx.send(tree_data).expect("failed to send tree_data");
-                                break;
-                            }
+                            // If we get here, this is a final leaf batch: build a sub-tree.
+                            info!(
+                                "building base tree_r_last with GPU {}/{}",
+                                i + 1,
+                                tree_count
+                            );
+
+                            let (_, tree_data) = tree_builder
+                                .add_final_leaves(&encoded)
+                                .expect("failed to add final leaves");
+
+                            writer_tx.send(tree_data).expect("failed to send tree_data");
+                            break;
                         }
                     });
 
