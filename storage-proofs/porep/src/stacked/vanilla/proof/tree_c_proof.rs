@@ -69,7 +69,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let column_write_batch_size = settings::SETTINGS.column_write_batch_size as usize;
 
             let mut batchertype_gpus = Vec::new();
-            let mut builders_tx = Vec::new();
             //let mut builders_rx = Vec::new();
             let all_bus_ids = opencl::Device::all()
                 .iter()
@@ -94,7 +93,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             }
 
             let mut builders_rx_by_gpu = Vec::new();
+            let mut builders_tx_by_gpu = Vec::new();
             for _i in 0.._bus_num {
+                builders_tx_by_gpu.push(Vec::new());
                 builders_rx_by_gpu.push(Vec::new());
             }
 
@@ -102,7 +103,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
                 // Each config has own channel
                 let (builder_tx, builder_rx) = mpsc::sync_channel(0);
-                builders_tx.push(builder_tx);
+                builders_tx_by_gpu[config_idx % _bus_num].push(builder_tx);
                 builders_rx_by_gpu[config_idx % _bus_num].push(builder_rx);
             }
 
@@ -120,17 +121,19 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 // This channel will receive the finished tree data to be written to disk.
                 let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(0);
 
+                let gpu_indexes: Vec<usize> = (0.. _bus_num).collect();
+
                 s.spawn(move |_| {
-                    for i in (0..config_count).step_by(_bus_num) {
+                    gpu_indexes.par_iter()
+                        .zip(builders_tx_by_gpu.into_par_iter())
+                        .for_each( |(&gpu_index, builders_tx)| {
+
+                        let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(_bus_num).collect();
+
                         // loop over _bus_num sync channels
-                        for gpu_index in 0.._bus_num {
-                            let i = i + gpu_index;
-                            if i >= config_count {
-                                break;
-                            }
-
-                            let builder_tx = builders_tx[i].clone();
-
+                        config_ids.par_iter()
+                            .zip(builders_tx.into_par_iter())
+                            .for_each( |(&i, builder_tx)| {
                             
                             let mut node_index = 0;
                             while node_index != nodes_count {
@@ -193,8 +196,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     .send((columns, is_final))
                                     .expect("failed to send columns");
                             }
-                        }
-                    }
+                        });
+                    });
                 }); // spawn
 
                 let batchertype_gpus = &batchertype_gpus;

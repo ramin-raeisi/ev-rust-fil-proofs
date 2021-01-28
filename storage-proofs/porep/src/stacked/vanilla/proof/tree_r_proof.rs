@@ -1,7 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{PathBuf};
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::{mpsc, Arc, RwLock, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -39,7 +39,6 @@ use rust_gpu_tools::opencl;
 use crate::encode::{encode};
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
-    // Internally, it has been changed to use GPU in parallel (after tree_c is built in parallel, tree_r_last is built in parallel)
     pub fn generate_tree_r_last_gpu<TreeArity>(
         data: &mut Data<'_>,
         nodes_count: usize,
@@ -66,7 +65,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
         // Ryan 
         let mut batchertype_gpus = Vec::new();
-        let mut builders_tx = Vec::new();
         let all_bus_ids = opencl::Device::all()
             .iter()
             .map(|d| d.bus_id().unwrap())
@@ -91,7 +89,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         }
         
         let mut builders_rx_by_gpu = Vec::new();
+        let mut builders_tx_by_gpu = Vec::new();
         for _i in 0.._bus_num {
+            builders_tx_by_gpu.push(Vec::new());
             builders_rx_by_gpu.push(Vec::new());
         }
 
@@ -99,7 +99,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
             // Each config has own channel
             let (builder_tx, builder_rx) = mpsc::sync_channel(0);
-            builders_tx.push(builder_tx);
+            builders_tx_by_gpu[config_idx % _bus_num].push(builder_tx);
             builders_rx_by_gpu[config_idx % _bus_num].push(builder_rx);
         }
 
@@ -116,21 +116,26 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let config_count = configs.len(); // Don't move config into closure below.
         let configs = &configs;
         let tree_r_last_config = &tree_r_last_config;
+        let data = Mutex::new(data);
         rayon::scope(|s| {
             // This channel will receive the finished tree data to be written to disk.
             let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(0);
+
+            let gpu_indexes: Vec<usize> = (0.. _bus_num).collect();
             
             s.spawn(move |_| {
-                for i in (0..config_count).step_by(_bus_num) {
-                    // loop over _bus_num sync channels
-                    for gpu_index in 0.._bus_num {
-                        let i = i + gpu_index;
-                        if i >= config_count {
-                            break;
-                        }
+                // split configs processing among several GPU
+                gpu_indexes.par_iter()
+                    .zip(builders_tx_by_gpu.into_par_iter())
+                    .for_each( |(&gpu_index, builders_tx)| {
 
-                        let builder_tx = builders_tx[i].clone();
+                    let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(_bus_num).collect();
 
+                    // parallel input for tree_builder
+                    config_ids.par_iter()
+                        .zip(builders_tx.into_par_iter())
+                        .for_each( |(&i, builder_tx)| {
+                            
                         let mut node_index = 0;
                         while node_index != nodes_count {
                             let chunked_nodes_count =
@@ -148,6 +153,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 end,
                             );
 
+                            let mut data = data.lock().unwrap();
                             let encoded_data = last_layer_labels
                                 .read_range(start..end)
                                 .expect("failed to read layer range")
@@ -186,8 +192,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 .send((encoded, is_final))
                                 .expect("failed to send encoded");
                         }
-                    } // gpu loop
-                } // outer loop
+                    }); // gpu loop
+                }); // outer loop
             });
             let batchertype_gpus = &batchertype_gpus;
             let gpu_indexes: Vec<usize> = (0.. _bus_num).collect();
