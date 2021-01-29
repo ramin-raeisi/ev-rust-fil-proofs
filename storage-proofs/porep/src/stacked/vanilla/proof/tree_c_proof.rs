@@ -93,9 +93,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             }
 
             let mut builders_rx_by_gpu = Vec::new();
-            let mut builders_tx_by_gpu = Vec::new();
+            let mut builders_tx = Vec::new();
             for _i in 0.._bus_num {
-                builders_tx_by_gpu.push(Vec::new());
                 builders_rx_by_gpu.push(Vec::new());
             }
 
@@ -103,7 +102,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
                 // Each config has own channel
                 let (builder_tx, builder_rx) = mpsc::sync_channel(0);
-                builders_tx_by_gpu[config_idx % _bus_num].push(builder_tx);
+                builders_tx.push(builder_tx);
                 builders_rx_by_gpu[config_idx % _bus_num].push(builder_rx);
             }
 
@@ -121,82 +120,72 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 // This channel will receive the finished tree data to be written to disk.
                 let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(0);
 
-                let gpu_indexes: Vec<usize> = (0.. _bus_num).collect();
-
                 s.spawn(move |_| {
-                    gpu_indexes.par_iter()
-                        .zip(builders_tx_by_gpu.into_par_iter())
-                        .for_each( |(&gpu_index, builders_tx)| {
+                    (0..config_count).collect::<Vec<_>>().par_iter()
+                        .zip(builders_tx.into_par_iter())
+                        .for_each( |(&i, builder_tx)| {
+                        
+                        let mut node_index = 0;
+                        while node_index != nodes_count {
+                            let chunked_nodes_count =
+                                std::cmp::min(nodes_count - node_index, max_gpu_column_batch_size);
+                            trace!(
+                                "processing config {}/{} with column nodes {}",
+                                i + 1,
+                                tree_count,
+                                chunked_nodes_count,
+                            );
+                            let mut columns: Vec<GenericArray<Fr, ColumnArity>> = vec![
+                                GenericArray::<Fr, ColumnArity>::generate(|_i: usize| Fr::zero());
+                                chunked_nodes_count
+                            ];
 
-                        let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(_bus_num).collect();
+                            // Allocate layer data array and insert a placeholder for each layer.
+                            let mut layer_data: Vec<Vec<Fr>> =
+                                vec![Vec::with_capacity(chunked_nodes_count); layers];
 
-                        // loop over _bus_num sync channels
-                        config_ids.par_iter()
-                            .zip(builders_tx.into_par_iter())
-                            .for_each( |(&i, builder_tx)| {
-                            
-                            let mut node_index = 0;
-                            while node_index != nodes_count {
-                                let chunked_nodes_count =
-                                    std::cmp::min(nodes_count - node_index, max_gpu_column_batch_size);
-                                trace!(
-                                    "processing config {}/{} with column nodes {}",
-                                    i + 1,
-                                    tree_count,
-                                    chunked_nodes_count,
-                                );
-                                let mut columns: Vec<GenericArray<Fr, ColumnArity>> = vec![
-                                    GenericArray::<Fr, ColumnArity>::generate(|_i: usize| Fr::zero());
-                                    chunked_nodes_count
-                                ];
+                            rayon::scope(|s| {
+                                // capture a shadowed version of layer_data.
+                                let layer_data: &mut Vec<_> = &mut layer_data;
 
-                                // Allocate layer data array and insert a placeholder for each layer.
-                                let mut layer_data: Vec<Vec<Fr>> =
-                                    vec![Vec::with_capacity(chunked_nodes_count); layers];
-
-                                rayon::scope(|s| {
-                                    // capture a shadowed version of layer_data.
-                                    let layer_data: &mut Vec<_> = &mut layer_data;
-
-                                    // gather all layer data in parallel.
-                                    s.spawn(move |_| {
-                                        for (layer_index, layer_elements) in
-                                            layer_data.iter_mut().enumerate()
-                                        {
-                                            let store = labels.labels_for_layer(layer_index + 1);
-                                            let start = (i * nodes_count) + node_index;
-                                            let end = start + chunked_nodes_count;
-                                            let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
-                                                .read_range(std::ops::Range { start, end })
-                                                .expect("failed to read store range");
-                                            layer_elements.extend(elements.into_iter().map(Into::into));
-                                        }
-                                    });
-                                });
-
-                                // Copy out all layer data arranged into columns.
-                                for layer_index in 0..layers {
-                                    for index in 0..chunked_nodes_count {
-                                        columns[index][layer_index] = layer_data[layer_index][index];
+                                // gather all layer data in parallel.
+                                s.spawn(move |_| {
+                                    for (layer_index, layer_elements) in
+                                        layer_data.iter_mut().enumerate()
+                                    {
+                                        let store = labels.labels_for_layer(layer_index + 1);
+                                        let start = (i * nodes_count) + node_index;
+                                        let end = start + chunked_nodes_count;
+                                        let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
+                                            .read_range(std::ops::Range { start, end })
+                                            .expect("failed to read store range");
+                                        layer_elements.extend(elements.into_iter().map(Into::into));
                                     }
+                                });
+                            });
+
+                            // Copy out all layer data arranged into columns.
+                            for layer_index in 0..layers {
+                                for index in 0..chunked_nodes_count {
+                                    columns[index][layer_index] = layer_data[layer_index][index];
                                 }
-
-                                drop(layer_data);
-
-                                node_index += chunked_nodes_count;
-                                trace!(
-                                    "node index {}/{}/{}",
-                                    node_index,
-                                    chunked_nodes_count,
-                                    nodes_count,
-                                );
-
-                                let is_final = node_index == nodes_count;
-                                builder_tx
-                                    .send((columns, is_final))
-                                    .expect("failed to send columns");
                             }
-                        });
+
+                            drop(layer_data);
+
+                            node_index += chunked_nodes_count;
+                            trace!(
+                                "node index {}/{}/{}",
+                                node_index,
+                                chunked_nodes_count,
+                                nodes_count,
+                            );
+
+                            let is_final = node_index == nodes_count;
+                            builder_tx
+                                .send((columns, is_final))
+                                .expect("failed to send columns");
+                        }
                     });
                 }); // spawn
 
