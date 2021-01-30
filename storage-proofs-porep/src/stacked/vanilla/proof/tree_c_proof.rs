@@ -118,7 +118,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let config_count = configs.len(); // Don't move config into closure below.
             rayon::scope(|s| {
                 // This channel will receive the finished tree data to be written to disk.
-                let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(0);
+                let mut writers_tx = Vec::new();
+                let mut writers_rx = Vec::new();
+                for _i in 0..config_count {
+                    let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(0);
+                    writers_tx.push(writer_tx);
+                    writers_rx.push(writer_rx);
+                }
 
                 s.spawn(move |_| {
                     (0..config_count).collect::<Vec<_>>().par_iter()
@@ -283,6 +289,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     tree_len,
                                 );
 
+                                let writer_tx = writers_tx[i].clone();
+
                                 writer_tx
                                     .send((base_data, tree_data))
                                     .expect("failed to send base_data, tree_data");
@@ -295,7 +303,10 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     }); // gpu loop
                 });
 
-                for config in &configs {
+                configs.par_iter()
+                    .zip(writers_rx.into_par_iter())
+                    .for_each(|(config, writer_rx)| {
+
                     let (base_data, tree_data) = writer_rx
                         .recv()
                         .expect("failed to receive base_data, tree_data for tree_c");
@@ -354,7 +365,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         .sync()
                         .expect("store sync failure");
                     trace!("done writing tree_c store data");
-                }
+                });
             }); // rayon::scope
 
             create_disk_tree::<
