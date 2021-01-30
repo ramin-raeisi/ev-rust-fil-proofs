@@ -124,7 +124,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             s.spawn(move |_| {
                 (0..config_count).collect::<Vec<_>>().par_iter()
                     .zip(builders_tx.into_par_iter())
-                    .zip(data_raw.par_chunks_mut(nodes_count))
+                    .zip(data_raw.par_chunks_mut(nodes_count * NODE_SIZE))
                     .for_each( |((&i, builder_tx), data)| {
 
                     let mut node_index = 0;
