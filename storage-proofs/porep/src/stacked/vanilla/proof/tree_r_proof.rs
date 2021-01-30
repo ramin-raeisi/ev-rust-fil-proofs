@@ -117,7 +117,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let tree_r_last_config = &tree_r_last_config;
         rayon::scope(|s| {
             // This channel will receive the finished tree data to be written to disk.
-            let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(0);
+            let mut writers_tx = Vec::new();
+            let mut writers_rx = Vec::new();
+            for _i in 0..config_count {
+                let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(0);
+                writers_tx.push(writer_tx);
+                writers_rx.push(writer_rx);
+            }
 
             let data_raw = data.as_mut();
             
@@ -219,8 +225,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     
                     let tree_r_last_config = &tree_r_last_config;
                     let batchertype_gpus = &batchertype_gpus;
-                    
-                    let writer_tx = writer_tx.clone();
 
                     match &batchertype_gpus[find_idle_gpu] {
                         BatcherType::CustomGPU(selector) => {
@@ -276,6 +280,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 .add_final_leaves(&encoded)
                                 .expect("failed to add final leaves");
 
+                            let writer_tx = writers_tx[i].clone();
                             writer_tx.send(tree_data).expect("failed to send tree_data");
                             break;
                         }
@@ -286,7 +291,10 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 }); // gpu loop
             });
 
-            for config in configs.iter() {
+            configs.par_iter()
+                .zip(writers_rx.into_par_iter())
+                .for_each(|(config, writer_rx)| {
+
                 let tree_data = writer_rx
                     .recv()
                     .expect("failed to receive tree_data for tree_r_last");
@@ -324,7 +332,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     .expect("failed to open file for tree_r_last");
                 f.write_all(&flat_tree_data)
                     .expect("failed to wrote tree_r_last data");
-            }
+            });
         });
 
         create_lc_tree::<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>(
