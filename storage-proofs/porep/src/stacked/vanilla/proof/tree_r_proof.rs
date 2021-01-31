@@ -106,7 +106,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let mut writers_tx = Vec::new();
         let mut writers_rx = Vec::new();
         for _i in 0..configs.len() {
-            let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(0);
+            let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(1);
             writers_tx.push(writer_tx);
             writers_rx.push(writer_rx);
         }
