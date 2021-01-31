@@ -126,70 +126,76 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let configs = &configs;
         let tree_r_last_config = &tree_r_last_config;
         rayon::scope(|s| {
-            let data_raw = data.as_mut();
+            //let data_raw = data.as_mut();
             
             s.spawn(move |_| {
-                (0..config_count).collect::<Vec<_>>().par_iter()
-                    .zip(builders_tx.into_par_iter())
-                    .zip(data_raw.par_chunks_mut(nodes_count * NODE_SIZE))
-                    .for_each( |((&i, builder_tx), data)| {
+                for i in (0..config_count).step_by(_bus_num) {
+                    // loop over _bus_num sync channels
+                    for gpu_index in 0.._bus_num {
+                        let i = i + gpu_index;
+                        if i >= config_count {
+                            break;
+                        }
 
-                    let mut node_index = 0;
-                    while node_index != nodes_count {
-                        let chunked_nodes_count =
-                            std::cmp::min(nodes_count - node_index, max_gpu_tree_batch_size);
-                        let start = node_index;
-                        let end = start + chunked_nodes_count;
-                        trace!(
-                            "processing config {}/{} with leaf nodes {} [{}, {}, {}-{}]",
-                            i + 1,
-                            tree_count,
-                            chunked_nodes_count,
-                            node_index,
-                            nodes_count,
-                            start,
-                            end,
-                        );
+                        let builder_tx = builders_tx[i].clone();
 
-                        let encoded_data = last_layer_labels
-                            .read_range(start..end)
-                            .expect("failed to read layer range")
-                            .into_par_iter()
-                            .zip(
-                                data[(start * NODE_SIZE)..(end * NODE_SIZE)]
-                                    .par_chunks_mut(NODE_SIZE),
-                            )
-                            .map(|(key, data_node_bytes)| {
-                                let data_node =
-                                    <Tree::Hasher as Hasher>::Domain::try_from_bytes(
-                                        data_node_bytes,
-                                    )
-                                    .expect("try_from_bytes failed");
-                                let encoded_node =
-                                    encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
-                                data_node_bytes
-                                    .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
+                        let mut node_index = 0;
+                        while node_index != nodes_count {
+                            let chunked_nodes_count =
+                                std::cmp::min(nodes_count - node_index, max_gpu_tree_batch_size);
+                            let start = (i * nodes_count) + node_index;
+                            let end = start + chunked_nodes_count;
+                            trace!(
+                                "processing config {}/{} with leaf nodes {} [{}, {}, {}-{}]",
+                                i + 1,
+                                tree_count,
+                                chunked_nodes_count,
+                                node_index,
+                                nodes_count,
+                                start,
+                                end,
+                            );
 
-                                encoded_node
-                            });
+                            let encoded_data = last_layer_labels
+                                .read_range(start..end)
+                                .expect("failed to read layer range")
+                                .into_par_iter()
+                                .zip(
+                                    data.as_mut()[(start * NODE_SIZE)..(end * NODE_SIZE)]
+                                        .par_chunks_mut(NODE_SIZE),
+                                )
+                                .map(|(key, data_node_bytes)| {
+                                    let data_node =
+                                        <Tree::Hasher as Hasher>::Domain::try_from_bytes(
+                                            data_node_bytes,
+                                        )
+                                        .expect("try_from_bytes failed");
+                                    let encoded_node =
+                                        encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
+                                    data_node_bytes
+                                        .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
 
-                        node_index += chunked_nodes_count;
-                        trace!(
-                            "node index {}/{}/{}",
-                            node_index,
-                            chunked_nodes_count,
-                            nodes_count,
-                        );
+                                    encoded_node
+                                });
 
-                        let encoded: Vec<_> =
-                            encoded_data.into_par_iter().map(|x| x.into()).collect();
+                            node_index += chunked_nodes_count;
+                            trace!(
+                                "node index {}/{}/{}",
+                                node_index,
+                                chunked_nodes_count,
+                                nodes_count,
+                            );
 
-                        let is_final = node_index == nodes_count;
-                        builder_tx
-                            .send((encoded, is_final))
-                            .expect("failed to send encoded");
-                    }
-                }); // loop
+                            let encoded: Vec<_> =
+                                encoded_data.into_par_iter().map(|x| x.into()).collect();
+
+                            let is_final = node_index == nodes_count;
+                            builder_tx
+                                .send((encoded, is_final))
+                                .expect("failed to send encoded");
+                        }
+                    } // gpu loop
+                } // outer loop
             }); // spawn
             let batchertype_gpus = &batchertype_gpus;
             let gpu_indexes: Vec<usize> = (0.. _bus_num).collect();
