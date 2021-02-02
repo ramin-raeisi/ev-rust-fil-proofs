@@ -151,8 +151,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             end,
                         );
 
+                        let labels_start = i * nodes_count + node_index;
+                        let labels_end = labels_start + chunked_nodes_count;
+
                         let encoded_data = last_layer_labels
-                            .read_range(start..end)
+                            .read_range(labels_start..labels_end)
                             .expect("failed to read layer range")
                             .into_par_iter()
                             .zip(
