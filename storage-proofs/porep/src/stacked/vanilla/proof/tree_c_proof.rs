@@ -74,18 +74,18 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 .iter()
                 .map(|d| d.bus_id().unwrap())
                 .collect::<Vec<_>>();
-            let _bus_num = all_bus_ids.len();
-            assert!(_bus_num > 0);
+            let bus_num = all_bus_ids.len();
+            assert!(bus_num > 0);
 
             let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
-            let mut last_idx = _bus_num;
+            let mut last_idx = bus_num;
             if tree_r_gpu > 0 { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
-                assert!(tree_r_gpu < _bus_num, 
+                assert!(tree_r_gpu < bus_num, 
                     "tree_r_last are calculating in parallel with tree_c. There is not free GPU for tree_c. Try to decrease gpu_for_parallel_tree_r constant.");
-                info!("[tree_c] are calculating in paralle with tree_r_last. It uses {}/{} GPU", _bus_num - tree_r_gpu, _bus_num);
+                info!("[tree_c] are calculating in paralle with tree_r_last. It uses {}/{} GPU", bus_num - tree_r_gpu, bus_num);
     
                 // tree_c uses first indexes of the GPU list
-                last_idx = _bus_num - tree_r_gpu;
+                last_idx = bus_num - tree_r_gpu;
             }
 
             for gpu_idx in 0..last_idx {
@@ -94,7 +94,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let mut builders_rx_by_gpu = Vec::new();
             let mut builders_tx = Vec::new();
-            for _i in 0.._bus_num {
+            for _i in 0..bus_num {
                 builders_rx_by_gpu.push(Vec::new());
             }
 
@@ -103,7 +103,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 // Each config has own channel
                 let (builder_tx, builder_rx) = mpsc::sync_channel(0);
                 builders_tx.push(builder_tx);
-                builders_rx_by_gpu[config_idx % _bus_num].push(builder_rx);
+                builders_rx_by_gpu[config_idx % bus_num].push(builder_rx);
             }
 
             // This channel will receive the finished tree data to be written to disk.
@@ -115,12 +115,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 writers_rx.push(writer_rx);
             }
 
-            let _bus_num = batchertype_gpus.len();
-            assert!(_bus_num > 0);
+            let bus_num = batchertype_gpus.len();
+            assert!(bus_num > 0);
 
             // Use this set of read-write locks to control GPU threads
             let mut gpu_busy_flag = Vec::new();
-            for _ in 0.._bus_num {
+            for _ in 0..bus_num {
                 gpu_busy_flag.push(Arc::new(RwLock::new(0)))
             }
 
@@ -196,7 +196,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 }); // spawn
 
                 let batchertype_gpus = &batchertype_gpus;
-                let gpu_indexes: Vec<usize> = (0.. _bus_num).collect();
+                let gpu_indexes: Vec<usize> = (0.. bus_num).collect();
 
                 //Parallel tuning GPU computing
                 s.spawn(move |_| {
@@ -208,7 +208,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         // TODO-Ryan: find_idle_gpu
                         let mut find_idle_gpu: i32 = -1;
                         loop {
-                            for i in 0.._bus_num {
+                            for i in 0..bus_num {
                                 if *gpu_busy_flag[i].read().unwrap() == 0 {
                                     *gpu_busy_flag[i].write().unwrap() = 1;
                                     find_idle_gpu = i as i32;
@@ -242,7 +242,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         }
 
                         // Loop until all trees for all configs have been built.
-                        let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(_bus_num).collect();
+                        let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
 
                         config_ids.par_iter()
                             .zip(builders_rx.into_par_iter())
