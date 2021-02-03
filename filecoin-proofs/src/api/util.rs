@@ -1,9 +1,11 @@
+use std::mem::size_of;
+
 use anyhow::{Context, Result};
 use bellperson::bls::Fr;
 use filecoin_hashers::{Domain, Hasher};
 use fr32::{bytes_into_fr, fr_into_bytes};
 use merkletree::merkle::{get_merkle_tree_leafs, get_merkle_tree_len};
-use storage_proofs::merkle::{get_base_tree_count, MerkleTreeTrait};
+use storage_proofs_core::merkle::{get_base_tree_count, MerkleTreeTrait};
 use typenum::Unsigned;
 
 use crate::types::{Commitment, SectorSize};
@@ -25,14 +27,14 @@ pub fn commitment_from_fr(fr: Fr) -> Commitment {
     commitment
 }
 
-pub(crate) fn get_base_tree_size<Tree: MerkleTreeTrait>(sector_size: SectorSize) -> Result<usize> {
+pub fn get_base_tree_size<Tree: MerkleTreeTrait>(sector_size: SectorSize) -> Result<usize> {
     let base_tree_leaves = u64::from(sector_size) as usize
-        / std::mem::size_of::<<Tree::Hasher as Hasher>::Domain>()
+        / size_of::<<Tree::Hasher as Hasher>::Domain>()
         / get_base_tree_count::<Tree>();
 
     get_merkle_tree_len(base_tree_leaves, Tree::Arity::to_usize())
 }
 
-pub(crate) fn get_base_tree_leafs<Tree: MerkleTreeTrait>(base_tree_size: usize) -> Result<usize> {
+pub fn get_base_tree_leafs<Tree: MerkleTreeTrait>(base_tree_size: usize) -> Result<usize> {
     get_merkle_tree_leafs(base_tree_size, Tree::Arity::to_usize())
 }

@@ -1,14 +1,12 @@
-use std::fs::File;
-use std::io::{Read, Write};
+use std::fs::{read_dir, File};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use failure::SyncFailure;
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use rexpect::session::PtyReplSession;
-use tempfile;
-use tempfile::TempDir;
-
-use storage_proofs::parameter_cache::CacheEntryMetadata;
+use storage_proofs_core::parameter_cache::CacheEntryMetadata;
+use tempfile::{tempdir, TempDir};
 
 use crate::support::{cargo_bin, spawn_bash_with_retries, FakeIpfsBin};
 
@@ -18,12 +16,12 @@ pub struct ParamPublishSessionBuilder {
     session_timeout_ms: u64,
     manifest: PathBuf,
     ipfs_bin_path: PathBuf,
-    prompt_enabled: bool,
+    list_all_files: bool,
 }
 
 impl ParamPublishSessionBuilder {
     pub fn new() -> ParamPublishSessionBuilder {
-        let temp_dir = tempfile::tempdir().expect("could not create temp dir");
+        let temp_dir = tempdir().expect("could not create temp dir");
 
         let mut pbuf = temp_dir.path().to_path_buf();
         pbuf.push("parameters.json");
@@ -36,7 +34,7 @@ impl ParamPublishSessionBuilder {
             session_timeout_ms: 1000,
             manifest: pbuf,
             ipfs_bin_path: cargo_bin("fakeipfsadd"),
-            prompt_enabled: true,
+            list_all_files: false,
         }
     }
 
@@ -60,7 +58,7 @@ impl ParamPublishSessionBuilder {
 
         let mut file = File::create(&pbuf).expect("failed to create file in temp dir");
 
-        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        let random_bytes = thread_rng().gen::<[u8; 32]>();
         file.write_all(&random_bytes)
             .expect("failed to write bytes");
 
@@ -79,7 +77,7 @@ impl ParamPublishSessionBuilder {
 
         let mut file = File::create(&pbuf).expect("failed to create file in temp dir");
 
-        std::io::copy(r, &mut file).expect("failed to copy bytes to file");
+        io::copy(r, &mut file).expect("failed to copy bytes to file");
 
         self.cached_file_pbufs.push(pbuf);
         self
@@ -103,9 +101,9 @@ impl ParamPublishSessionBuilder {
         self
     }
 
-    /// If prompt is disabled, `--all` flag will be passed to parampublish.
-    pub fn with_prompt_disabled(mut self) -> ParamPublishSessionBuilder {
-        self.prompt_enabled = false;
+    /// Prompts the user to filter by param version.
+    pub fn list_all_files(mut self) -> ParamPublishSessionBuilder {
+        self.list_all_files = true;
         self
     }
 
@@ -122,7 +120,7 @@ impl ParamPublishSessionBuilder {
 
         let cache_dir_path = format!("{:?}", self.cache_dir.path());
 
-        let cache_contents: Vec<PathBuf> = std::fs::read_dir(&self.cache_dir)
+        let cache_contents: Vec<PathBuf> = read_dir(&self.cache_dir)
             .unwrap_or_else(|_| panic!("failed to read cache dir {:?}", self.cache_dir))
             .map(|x| x.expect("failed to get dir entry"))
             .map(|x| x.path())
@@ -135,7 +133,7 @@ impl ParamPublishSessionBuilder {
             "FIL_PROOFS_PARAMETER_CACHE", // related to var name in core/src/settings.rs
             cache_dir_path,
             parampublish_path,
-            if self.prompt_enabled { "" } else { "--all" },
+            if self.list_all_files { "-a" } else { "" },
             self.ipfs_bin_path,
             self.manifest
         );
