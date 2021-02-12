@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use log::*;
 
 use bellperson::{
     bls::{Bls12, Fr},
@@ -138,7 +139,11 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
         // Private Inputs for the DRG parent nodes.
         let mut drg_parents = Vec::with_capacity(layers);
 
-        for (i, parent) in drg_parents_proofs.into_iter().enumerate() {
+        let mut drg_cs = cs.make_vector(drg_parents_proofs.len())?;
+
+        info!("use several CSs for synthesize");
+        for ((i, parent), cs) in drg_parents_proofs.into_iter().enumerate()
+            .zip(drg_cs.iter_mut()) {
             let (parent_col, inclusion_path) =
                 parent.alloc(cs.namespace(|| format!("drg_parent_{}_num", i)))?;
             assert_eq!(layers, parent_col.len());
@@ -154,6 +159,8 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             )?;
             drg_parents.push(parent_col);
         }
+
+        cs.aggregate(drg_cs);
 
         // Private Inputs for the Expander parent nodes.
         let mut exp_parents = Vec::new();
