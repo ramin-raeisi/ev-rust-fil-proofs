@@ -302,72 +302,71 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         trace!("[tree_c] set gpu idle={}", find_idle_gpu);
                     }); // gpu loop
                 });
+
+                configs.iter()
+                    .zip(writers_rx.iter())
+                    .for_each(|(config, writer_rx)| {
+
+                    let (base_data, tree_data) = writer_rx
+                        .recv()
+                        .expect("failed to receive base_data, tree_data for tree_c");
+                    let tree_len = base_data.len() + tree_data.len();
+
+                    assert_eq!(base_data.len(), nodes_count);
+                    assert_eq!(tree_len, config.size.expect("config size failure"));
+
+                    // Persist the base and tree data to disk based using the current store config.
+                    let tree_c_store =
+                        DiskStore::<<Tree::Hasher as Hasher>::Domain>::new_with_config(
+                            tree_len,
+                            Tree::Arity::to_usize(),
+                            config.clone(),
+                        )
+                        .expect("failed to create DiskStore for base tree data");
+
+                    let store = Arc::new(RwLock::new(tree_c_store));
+                    let batch_size = std::cmp::min(base_data.len(), column_write_batch_size);
+                    let flatten_and_write_store = |data: &Vec<Fr>, offset| {
+                        data.into_par_iter()
+                            .chunks(batch_size)
+                            .enumerate()
+                            .try_for_each(|(index, fr_elements)| {
+                                let mut buf = Vec::with_capacity(batch_size * NODE_SIZE);
+
+                                for fr in fr_elements {
+                                    buf.extend(fr_into_bytes(&fr));
+                                }
+                                store
+                                    .write()
+                                    .expect("failed to access store for write")
+                                    .copy_from_slice(&buf[..], offset + (batch_size * index))
+                            })
+                    };
+
+                    trace!(
+                        "flattening tree_c base data of {} nodes using batch size {}",
+                        base_data.len(),
+                        batch_size
+                    );
+                    flatten_and_write_store(&base_data, 0)
+                        .expect("failed to flatten and write store");
+                    trace!("done flattening tree_c base data");
+
+                    let base_offset = base_data.len();
+                    trace!("flattening tree_c tree data of {} nodes using batch size {} and base offset {}", tree_data.len(), batch_size, base_offset);
+                    flatten_and_write_store(&tree_data, base_offset)
+                        .expect("failed to flatten and write store");
+                    trace!("done flattening tree_c tree data");
+
+                    trace!("writing tree_c store data");
+                    store
+                        .write()
+                        .expect("failed to access store for sync")
+                        .sync()
+                        .expect("store sync failure");
+                    trace!("done writing tree_c store data");
+                });
             }); // rayon::scope
-
-            
-            configs.iter()
-                .zip(writers_rx.iter())
-                .for_each(|(config, writer_rx)| {
-
-                let (base_data, tree_data) = writer_rx
-                    .recv()
-                    .expect("failed to receive base_data, tree_data for tree_c");
-                let tree_len = base_data.len() + tree_data.len();
-
-                assert_eq!(base_data.len(), nodes_count);
-                assert_eq!(tree_len, config.size.expect("config size failure"));
-
-                // Persist the base and tree data to disk based using the current store config.
-                let tree_c_store =
-                    DiskStore::<<Tree::Hasher as Hasher>::Domain>::new_with_config(
-                        tree_len,
-                        Tree::Arity::to_usize(),
-                        config.clone(),
-                    )
-                    .expect("failed to create DiskStore for base tree data");
-
-                let store = Arc::new(RwLock::new(tree_c_store));
-                let batch_size = std::cmp::min(base_data.len(), column_write_batch_size);
-                let flatten_and_write_store = |data: &Vec<Fr>, offset| {
-                    data.into_par_iter()
-                        .chunks(batch_size)
-                        .enumerate()
-                        .try_for_each(|(index, fr_elements)| {
-                            let mut buf = Vec::with_capacity(batch_size * NODE_SIZE);
-
-                            for fr in fr_elements {
-                                buf.extend(fr_into_bytes(&fr));
-                            }
-                            store
-                                .write()
-                                .expect("failed to access store for write")
-                                .copy_from_slice(&buf[..], offset + (batch_size * index))
-                        })
-                };
-
-                trace!(
-                    "flattening tree_c base data of {} nodes using batch size {}",
-                    base_data.len(),
-                    batch_size
-                );
-                flatten_and_write_store(&base_data, 0)
-                    .expect("failed to flatten and write store");
-                trace!("done flattening tree_c base data");
-
-                let base_offset = base_data.len();
-                trace!("flattening tree_c tree data of {} nodes using batch size {} and base offset {}", tree_data.len(), batch_size, base_offset);
-                flatten_and_write_store(&tree_data, base_offset)
-                    .expect("failed to flatten and write store");
-                trace!("done flattening tree_c tree data");
-
-                trace!("writing tree_c store data");
-                store
-                    .write()
-                    .expect("failed to access store for sync")
-                    .sync()
-                    .expect("store sync failure");
-                trace!("done writing tree_c store data");
-            });
             
             create_disk_tree::<
                 DiskTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,
