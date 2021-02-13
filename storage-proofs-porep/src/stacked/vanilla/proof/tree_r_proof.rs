@@ -102,15 +102,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             builders_rx_by_gpu[config_idx % bus_num].push(builder_rx);
         }
 
-        // This channel will receive the finished tree data to be written to disk.
-        let mut writers_tx = Vec::new();
-        let mut writers_rx = Vec::new();
-        for _i in 0..configs.len() {
-            let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(1);
-            writers_tx.push(writer_tx);
-            writers_rx.push(writer_rx);
-        }
-
 
         let bus_num = batchertype_gpus.len();
         assert!(bus_num > 0);
@@ -126,6 +117,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let configs = &configs;
         let tree_r_last_config = &tree_r_last_config;
         rayon::scope(|s| {
+            // This channel will receive the finished tree data to be written to disk.
+            let mut writers_tx = Vec::new();
+            let mut writers_rx = Vec::new();
+            for _i in 0..configs.len() {
+                let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(1);
+                writers_tx.push(writer_tx);
+                writers_rx.push(writer_rx);
+            }
+
             let data_raw = data.as_mut();
             
             s.spawn(move |_| {
