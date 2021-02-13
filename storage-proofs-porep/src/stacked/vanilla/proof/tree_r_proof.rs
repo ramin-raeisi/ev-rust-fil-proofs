@@ -102,15 +102,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             builders_rx_by_gpu[config_idx % bus_num].push(builder_rx);
         }
 
-        // This channel will receive the finished tree data to be written to disk.
-        let mut writers_tx = Vec::new();
-        let mut writers_rx = Vec::new();
-        for _i in 0..configs.len() {
-            let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(1);
-            writers_tx.push(writer_tx);
-            writers_rx.push(writer_rx);
-        }
-
 
         let bus_num = batchertype_gpus.len();
         assert!(bus_num > 0);
@@ -126,6 +117,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let configs = &configs;
         let tree_r_last_config = &tree_r_last_config;
         rayon::scope(|s| {
+            // This channel will receive the finished tree data to be written to disk.
+            let mut writers_tx = Vec::new();
+            let mut writers_rx = Vec::new();
+            for _i in 0..configs.len() {
+                let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(1);
+                writers_tx.push(writer_tx);
+                writers_rx.push(writer_rx);
+            }
+
             let data_raw = data.as_mut();
             
             s.spawn(move |_| {
@@ -294,49 +294,49 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     trace!("[tree_c] set gpu idle={}", find_idle_gpu);
                 }); // gpu loop
             });
-        });
 
-        configs.iter()
-            .zip(writers_rx.iter())
-            .for_each(|(config, writer_rx)| {
+            configs.iter()
+                .zip(writers_rx.iter())
+                .for_each(|(config, writer_rx)| {
 
-            let tree_data = writer_rx
-                .recv()
-                .expect("failed to receive tree_data for tree_r_last");
+                let tree_data = writer_rx
+                    .recv()
+                    .expect("failed to receive tree_data for tree_r_last");
 
-            let tree_data_len = tree_data.len();
-            let cache_size = get_merkle_tree_cache_size(
-                get_merkle_tree_leafs(
-                    config.size.expect("config size failure"),
+                let tree_data_len = tree_data.len();
+                let cache_size = get_merkle_tree_cache_size(
+                    get_merkle_tree_leafs(
+                        config.size.expect("config size failure"),
+                        Tree::Arity::to_usize(),
+                    )
+                    .expect("failed to get merkle tree leaves"),
                     Tree::Arity::to_usize(),
+                    config.rows_to_discard,
                 )
-                .expect("failed to get merkle tree leaves"),
-                Tree::Arity::to_usize(),
-                config.rows_to_discard,
-            )
-            .expect("failed to get merkle tree cache size");
-            assert_eq!(tree_data_len, cache_size);
+                .expect("failed to get merkle tree cache size");
+                assert_eq!(tree_data_len, cache_size);
 
-            let flat_tree_data: Vec<_> = tree_data
-                .into_par_iter()
-                .flat_map(|el| fr_into_bytes(&el))
-                .collect();
+                let flat_tree_data: Vec<_> = tree_data
+                    .into_par_iter()
+                    .flat_map(|el| fr_into_bytes(&el))
+                    .collect();
 
-            // Persist the data to the store based on the current config.
-            let tree_r_last_path = StoreConfig::data_path(&config.path, &config.id);
-            trace!(
-                "persisting tree r of len {} with {} rows to discard at path {:?}",
-                tree_data_len,
-                config.rows_to_discard,
-                tree_r_last_path
-            );
-            let mut f = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open(&tree_r_last_path)
-                .expect("failed to open file for tree_r_last");
-            f.write_all(&flat_tree_data)
-                .expect("failed to wrote tree_r_last data");
+                // Persist the data to the store based on the current config.
+                let tree_r_last_path = StoreConfig::data_path(&config.path, &config.id);
+                trace!(
+                    "persisting tree r of len {} with {} rows to discard at path {:?}",
+                    tree_data_len,
+                    config.rows_to_discard,
+                    tree_r_last_path
+                );
+                let mut f = OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open(&tree_r_last_path)
+                    .expect("failed to open file for tree_r_last");
+                f.write_all(&flat_tree_data)
+                    .expect("failed to wrote tree_r_last data");
+            });
         });
 
         create_lc_tree::<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>(
