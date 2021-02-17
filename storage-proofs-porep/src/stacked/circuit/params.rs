@@ -160,12 +160,21 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             drg_parents.push(parent_col);
         }
 
-        cs.aggregate(drg_cs);
+        for (i, other_cs) in drg_cs.into_iter().enumerate() {
+            let col = &drg_parents[i];
+            for layer in 1..=layers {
+                let row = col.get_value(layer);
+                let mut v = row.get_variable();
+                cs.align_variable(&mut v);
+            }
+            cs.aggregate(vec![other_cs]);
+        }
 
         // Private Inputs for the Expander parent nodes.
         let mut exp_parents = Vec::new();
 
         for (i, parent) in exp_parents_proofs.into_iter().enumerate() {
+
             let (parent_col, inclusion_path) =
                 parent.alloc(cs.namespace(|| format!("exp_parent_{}_num", i)))?;
             assert_eq!(layers, parent_col.len());
