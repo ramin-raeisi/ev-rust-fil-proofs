@@ -232,7 +232,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                     match &batchertype_gpus[find_idle_gpu] {
                         BatcherType::CustomGPU(selector) => {
-                            info!("[tree_r_last] Run TreeBuilder over indexes i*{} on {} (buis_id: {})",
+                            info!("[tree_r_last] Run TreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {})",
                             gpu_index,
                             selector.get_device().unwrap().name(),
                             selector.get_device().unwrap().bus_id().unwrap(),
@@ -274,15 +274,16 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             };
 
                             // If we get here, this is a final leaf batch: build a sub-tree.
-                            info!(
-                                "building base tree_r_last with GPU {}/{}",
-                                i + 1,
-                                tree_count
-                            );
-
                             let (_, tree_data) = tree_builder
                                 .add_final_leaves(&encoded)
                                 .expect("failed to add final leaves");
+
+                            info!(
+                                "persisting base tree_r {}/{}",
+                                i + 1,
+                                tree_count,
+                            );
+    
 
                             let writer_tx = writers_tx[i].clone();
                             writer_tx.send(tree_data).expect("failed to send tree_data");
@@ -295,13 +296,17 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 }); // gpu loop
             });
 
-            configs.iter()
+            configs.iter().enumerate()
                 .zip(writers_rx.iter())
-                .for_each(|(config, writer_rx)| {
+                .for_each(|((i, config), writer_rx)| {
+
+                info!("writing tree_r_last {}", i);
 
                 let tree_data = writer_rx
                     .recv()
                     .expect("failed to receive tree_data for tree_r_last");
+
+                info!("tree data for tree_r_last {} has been recieved", i);
 
                 let tree_data_len = tree_data.len();
                 let cache_size = get_merkle_tree_cache_size(
@@ -336,6 +341,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     .expect("failed to open file for tree_r_last");
                 f.write_all(&flat_tree_data)
                     .expect("failed to wrote tree_r_last data");
+
+                info!("done writing tree_r_last {}", i);
             });
         });
 

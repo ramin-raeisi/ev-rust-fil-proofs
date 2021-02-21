@@ -231,7 +231,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                         match &batchertype_gpus[find_idle_gpu] {
                             BatcherType::CustomGPU(selector) => {
-                                info!("[tree_c] Run ColumnTreeBuilder over indexes i*{} on {} (buis_id: {})",
+                                info!("[tree_c] Run ColumnTreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {})",
                                 gpu_index,
                                 selector.get_device().unwrap().name(),
                                 selector.get_device().unwrap().bus_id().unwrap(),
@@ -304,9 +304,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     }); // gpu loop
                 });
 
-                configs.iter()
+                configs.iter().enumerate()
                     .zip(writers_rx.iter())
-                    .for_each(|(config, writer_rx)| {
+                    .for_each(|((i, config), writer_rx)| {
+
+                    info!("writing tree_c {}", i);
 
                     let (base_data, tree_data) = writer_rx
                         .recv()
@@ -315,6 +317,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                     assert_eq!(base_data.len(), nodes_count);
                     assert_eq!(tree_len, config.size.expect("config size failure"));
+
+                    info!("tree data for tree_r_last {} has been recieved", i);
 
                     // Persist the base and tree data to disk based using the current store config.
                     let tree_c_store =
@@ -366,6 +370,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         .sync()
                         .expect("store sync failure");
                     trace!("done writing tree_c store data");
+
+                    info!("done writing tree_c {}", i);
                 });
             }); // rayon::scope
             
