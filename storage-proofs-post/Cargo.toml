@@ -22,13 +22,13 @@ rayon-futures = "0.1.1"
 serde = { version = "1.0", features = ["derive"] }
 blake2b_simd = "0.5"
 blake2s_simd = "0.5"
-bellperson = { path = "../../../fil-zk", default-features = false }
+bellperson = { path = "../../fil-zk", default-features = false }
 ff = { version = "0.2.3", package = "fff" }
 log = "0.4.7"
 hex = "0.4.0"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { path = "../../../crusty3-neptune", default-features = false, features = ["gpu"] }
+neptune = { path = "../../crusty3-neptune", default-features = false, features = ["opencl"] }
 num_cpus = "1.10.1"
 fr32 = { path = "../fr32", default-features = false }
 
