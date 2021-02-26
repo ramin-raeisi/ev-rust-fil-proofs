@@ -38,6 +38,8 @@ use rust_gpu_tools::opencl;
 
 use crate::encode::{encode};
 
+use bellperson::gpu::scheduler;
+
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     pub fn generate_tree_r_last_gpu<TreeArity>(
         data: &mut Data<'_>,
@@ -106,13 +108,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
         let bus_num = batchertype_gpus.len();
         assert!(bus_num > 0);
-
-        // Use this set of read-write locks to control GPU threads
-        let mut gpu_busy_flag = Vec::new();
-        for _ in 0..bus_num {
-            gpu_busy_flag.push(Arc::new(RwLock::new(0)))
-        }
-        // Ryan End
 
         let config_count = configs.len(); // Don't move config into closure below.
         let configs = &configs;
@@ -216,36 +211,34 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     .zip(builders_rx_by_gpu.into_par_iter())
                     .for_each( |(&gpu_index, builders_rx)| {
                     
-                    let gpu_busy_flag = gpu_busy_flag.clone();
-                    // TODO-Ryan: find_idle_gpu
-                    let mut find_idle_gpu: i32 = -1;
-                    loop {
-                        for i in 0..bus_num {
-                            if *gpu_busy_flag[i].read().unwrap() == 0 {
-                                *gpu_busy_flag[i].write().unwrap() = 1;
-                                find_idle_gpu = i as i32;
+                    let lock = scheduler::get_next_device().lock().unwrap();
+                    let target_bus_id = lock.device().bus_id().unwrap();
 
-                                trace!("[tree_c] find_idle_gpu={}, gpu_index={}", find_idle_gpu, gpu_index);
-                                break;
+                    let mut locked_gpu: i32 = -1;
+                    for idx in 0..batchertype_gpus.len() {
+                        match &batchertype_gpus[idx] {
+                            BatcherType::CustomGPU(selector) => {
+                                let bus_id = selector.get_device().unwrap().bus_id().unwrap();
+                                if bus_id == target_bus_id {
+                                    locked_gpu = idx as i32;
+                                }
+
                             }
-                        }
-
-                        if find_idle_gpu == -1 {
-                            thread::sleep(Duration::from_millis(1));
-                        } else {
-                            break;
+                            _default => {
+                                info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                            }
                         }
                     }
 
-                    assert!(find_idle_gpu >= 0);
-                    let find_idle_gpu: usize = find_idle_gpu as usize;
+                    assert!(locked_gpu >= 0);
+                    let locked_gpu: usize = locked_gpu as usize;
                     
                     let tree_r_last_config = &tree_r_last_config;
                     let batchertype_gpus = &batchertype_gpus;
 
-                    match &batchertype_gpus[find_idle_gpu] {
+                    match &batchertype_gpus[locked_gpu] {
                         BatcherType::CustomGPU(selector) => {
-                            info!("[tree_r_last] Run TreeBuilder over indexes i*{} on {} (buis_id: {})",
+                            info!("[tree_r_last] Run TreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {})",
                             gpu_index,
                             selector.get_device().unwrap().name(),
                             selector.get_device().unwrap().bus_id().unwrap(),
@@ -265,7 +258,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         .for_each( |(&i, builder_rx)| {
 
                         let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
-                            Some(batchertype_gpus[find_idle_gpu].clone()),
+                            Some(batchertype_gpus[locked_gpu].clone()),
                             nodes_count,
                             max_gpu_tree_batch_size,
                             tree_r_last_config.rows_to_discard,
@@ -287,15 +280,16 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             };
 
                             // If we get here, this is a final leaf batch: build a sub-tree.
-                            info!(
-                                "building base tree_r_last with GPU {}/{}",
-                                i + 1,
-                                tree_count
-                            );
-
                             let (_, tree_data) = tree_builder
                                 .add_final_leaves(&encoded)
                                 .expect("failed to add final leaves");
+
+                            info!(
+                                "persisting base tree_r {}/{}",
+                                i + 1,
+                                tree_count,
+                            );
+    
 
                             let writer_tx = writers_tx[i].clone();
                             writer_tx.send(tree_data).expect("failed to send tree_data");
@@ -303,18 +297,22 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         }
                     });
 
-                    *gpu_busy_flag[find_idle_gpu].write().unwrap() = 0; // TODO-Ryan: After the store is completed, enter the preparation for the next tree (adopted by the amd platform)
-                    trace!("[tree_c] set gpu idle={}", find_idle_gpu);
+                    drop(lock);
+                    trace!("[tree_c] set gpu idle={}", locked_gpu);
                 }); // gpu loop
             });
 
-            configs.iter()
+            configs.iter().enumerate()
                 .zip(writers_rx.iter())
-                .for_each(|(config, writer_rx)| {
+                .for_each(|((i, config), writer_rx)| {
+
+                info!("writing tree_r_last {}", i);
 
                 let tree_data = writer_rx
                     .recv()
                     .expect("failed to receive tree_data for tree_r_last");
+
+                info!("tree data for tree_r_last {} has been recieved", i);
 
                 let tree_data_len = tree_data.len();
                 let cache_size = get_merkle_tree_cache_size(
@@ -349,6 +347,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     .expect("failed to open file for tree_r_last");
                 f.write_all(&flat_tree_data)
                     .expect("failed to wrote tree_r_last data");
+
+                info!("done writing tree_r_last {}", i);
             });
         });
 
