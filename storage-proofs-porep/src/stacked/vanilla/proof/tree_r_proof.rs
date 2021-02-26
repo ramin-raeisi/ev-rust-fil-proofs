@@ -94,10 +94,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             builders_rx_by_gpu.push(Vec::new());
         }
 
+        let channel_capacity = nodes_count / max_gpu_tree_batch_size + 1;
         for config_idx in 0..configs.len() {
             // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
             // Each config has own channel
-            let (builder_tx, builder_rx) = mpsc::sync_channel(0);
+            let (builder_tx, builder_rx) = mpsc::sync_channel(channel_capacity);
             builders_tx.push(builder_tx);
             builders_rx_by_gpu[config_idx % bus_num].push(builder_rx);
         }
@@ -121,7 +122,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let mut writers_tx = Vec::new();
             let mut writers_rx = Vec::new();
             for _i in 0..configs.len() {
-                let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(1);
+                let (writer_tx, writer_rx) = mpsc::sync_channel::<Vec<Fr>>(config_count);
                 writers_tx.push(writer_tx);
                 writers_rx.push(writer_rx);
             }
@@ -154,10 +155,22 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         let labels_start = i * nodes_count + node_index;
                         let labels_end = labels_start + chunked_nodes_count;
 
-                        let encoded_data = last_layer_labels
-                            .read_range(labels_start..labels_end)
-                            .expect("failed to read layer range")
-                            .into_par_iter()
+                        let mut layer_bytes = vec![0u8; (labels_end - labels_start) * std::mem::size_of::<Fr>()];
+                        last_layer_labels
+                            .read_range_into(labels_start, labels_end, &mut layer_bytes)
+                            .expect("failed to read layer range");
+                        let encoded_data  = layer_bytes.into_par_iter()
+                            .chunks(std::mem::size_of::<Fr>())
+                            .map(|chunk| {
+                                let mut buf = [0u8; std::mem::size_of::<Fr>()];
+                                buf.copy_from_slice(&chunk);
+
+                                unsafe {
+                                    // SAFETY: We know the underlying elements of the layer in `LabelsCache`
+                                    // were stored on disk with the same memory layout as `Fr`.
+                                    std::mem::transmute::<[u8; std::mem::size_of::<Fr>()], Fr>(buf)
+                                }
+                            })
                             .zip(
                                 data[(start * NODE_SIZE)..(end * NODE_SIZE)]
                                     .par_chunks_mut(NODE_SIZE),
@@ -169,7 +182,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     )
                                     .expect("try_from_bytes failed");
                                 let encoded_node =
-                                    encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
+                                    encode::<<Tree::Hasher as Hasher>::Domain>(key.into(), data_node);
                                 data_node_bytes
                                     .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
 
