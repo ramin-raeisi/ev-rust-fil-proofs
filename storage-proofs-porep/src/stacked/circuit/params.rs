@@ -141,9 +141,11 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
 
         let mut drg_cs = cs.make_vector(drg_parents_proofs.len())?;
 
-        info!("use several CSs for synthesize");
         for ((i, parent), cs) in drg_parents_proofs.into_iter().enumerate()
             .zip(drg_cs.iter_mut()) {
+            let comm_c_local = AllocatedNum::alloc(cs.namespace(|| format!("comm_c_{}_num", i)), 
+                || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
+
             let (parent_col, inclusion_path) =
                 parent.alloc(cs.namespace(|| format!("drg_parent_{}_num", i)))?;
             assert_eq!(layers, parent_col.len());
@@ -157,13 +159,16 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                 comm_c,
                 &val,
             )?;
+            cs.deallocate(comm_c_local.get_variable()).unwrap();
             drg_parents.push(parent_col);
         }
 
+        cs.set_var_density(comm_c.get_variable(), true);
+
         for (i, other_cs) in drg_cs.into_iter().enumerate() {
             let col = &drg_parents[i];
-            for layer in 1..=layers {
-                let row = col.get_value(layer);
+            for j in 1..=col.len() {
+                let row = col.get_value(j);
                 let mut v = row.get_variable();
                 cs.align_variable(&mut v);
             }
