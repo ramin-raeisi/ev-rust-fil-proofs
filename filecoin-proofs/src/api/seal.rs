@@ -27,7 +27,7 @@ use storage_proofs_porep::stacked::{
 };
 
 use crate::{
-    api::{as_safe_commitment, commitment_from_fr, get_base_tree_leafs, get_base_tree_size},
+    api::{as_safe_commitment, commitment_from_fr, get_base_tree_leafs, get_base_tree_size, calibrate_filsettings},
     caches::{get_stacked_params, get_stacked_verifying_key},
     constants::{
         DefaultBinaryTree, DefaultPieceDomain, DefaultPieceHasher, POREP_MINIMUM_CHALLENGES,
@@ -162,10 +162,10 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
 
     info!("verifying pieces");
 
-    ensure!(
+    /*ensure!(
         verify_pieces(&comm_d, piece_infos, porep_config.into())?,
         "pieces and comm_d do not match"
-    );
+    );*/
 
     let replica_id = generate_replica_id::<Tree::Hasher, _>(
         &prover_id,
@@ -538,6 +538,74 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
     let out = SealCommitOutput { proof: buf };
 
     info!("seal_commit_phase2:finish: {:?}", sector_id);
+    Ok(out)
+}
+
+pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
+    porep_config: PoRepConfig,
+    phase1_output: SealCommitPhase1Output<Tree>,
+    prover_id: ProverId,
+    sector_id: SectorId,
+) -> Result<SealCommitOutput> {
+    info!("seal_commit_phase2:start: {:?}", sector_id);
+
+    let SealCommitPhase1Output {
+        vanilla_proofs,
+        comm_d,
+        comm_r,
+        replica_id,
+        seed,
+        ticket,
+    } = phase1_output;
+
+    ensure!(comm_d != [0; 32], "Invalid all zero commitment (comm_d)");
+    ensure!(comm_r != [0; 32], "Invalid all zero commitment (comm_r)");
+
+    let comm_r_safe = as_safe_commitment(&comm_r, "comm_r")?;
+    let comm_d_safe = DefaultPieceDomain::try_from_bytes(&comm_d)?;
+
+    let public_inputs = stacked::PublicInputs {
+        replica_id,
+        tau: Some(stacked::Tau {
+            comm_d: comm_d_safe,
+            comm_r: comm_r_safe,
+        }),
+        k: None,
+        seed,
+    };
+
+    let groth_params = get_stacked_params::<Tree>(porep_config)?;
+
+    info!(
+        "got groth params ({}) while sealing",
+        u64::from(PaddedBytesAmount::from(porep_config))
+    );
+
+    let compound_setup_params = compound_proof::SetupParams {
+        vanilla_params: setup_params(
+            PaddedBytesAmount::from(porep_config),
+            usize::from(PoRepProofPartitions::from(porep_config)),
+            porep_config.porep_id,
+            porep_config.api_version,
+        )?,
+        partitions: Some(usize::from(PoRepProofPartitions::from(porep_config))),
+        priority: false,
+    };
+
+    let compound_public_params = <StackedCompound<Tree, DefaultPieceHasher> as CompoundProof<
+        StackedDrg<'_, Tree, DefaultPieceHasher>,
+        _,
+    >>::setup(&compound_setup_params)?;
+
+    info!("snark_proof calibration: start"); 
+    calibrate_filsettings::<StackedDrg<'_, Tree, DefaultPieceHasher>>(&public_inputs, vanilla_proofs, &compound_public_params.vanilla_params, &groth_params,
+         &StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs);
+
+    info!("snark_proof calibration: finish"); 
+    let mut tmp_vec = Vec::new();
+    tmp_vec.push(0);
+    let out = SealCommitOutput { proof: tmp_vec};
+
     Ok(out)
 }
 
