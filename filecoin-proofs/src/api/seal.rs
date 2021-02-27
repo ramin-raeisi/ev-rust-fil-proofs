@@ -597,7 +597,6 @@ pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
         _,
     >>::setup(&compound_setup_params)?;
 
-    fs::remove_file("./fil-zk.config.toml")?;
     info!("snark_proof calibration: start"); 
     calibrate_filsettings::<StackedDrg<'_, Tree, DefaultPieceHasher>>(&public_inputs, vanilla_proofs, &compound_public_params.vanilla_params, &groth_params,
          &StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs);
