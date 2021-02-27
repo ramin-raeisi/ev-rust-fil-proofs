@@ -71,6 +71,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let column_write_batch_size = settings::SETTINGS.column_write_batch_size as usize;
 
             let mut batchertype_gpus = Vec::new();
+            //let mut builders_rx = Vec::new();
             let all_bus_ids = opencl::Device::all()
                 .iter()
                 .map(|d| d.bus_id().unwrap())
@@ -99,11 +100,10 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 builders_rx_by_gpu.push(Vec::new());
             }
 
-            let channel_capacity = nodes_count / max_gpu_column_batch_size + 1;
             for config_idx in 0..configs.len() {
                 // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
                 // Each config has own channel
-                let (builder_tx, builder_rx) = mpsc::sync_channel(channel_capacity);
+                let (builder_tx, builder_rx) = mpsc::sync_channel(0);
                 builders_tx.push(builder_tx);
                 builders_rx_by_gpu[config_idx % bus_num].push(builder_rx);
             }
@@ -144,11 +144,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             ];
 
                             // Allocate layer data array and insert a placeholder for each layer.
-                            let mut layer_data: Vec<Vec<u8>> = 
-                                vec![
-                                    vec![0u8; chunked_nodes_count * std::mem::size_of::<Fr>()];
-                                    layers
-                                ];
+                            let mut layer_data: Vec<Vec<Fr>> =
+                                vec![Vec::with_capacity(chunked_nodes_count); layers];
 
                             rayon::scope(|s| {
                                 // capture a shadowed version of layer_data.
@@ -156,34 +153,24 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                 // gather all layer data in parallel.
                                 s.spawn(move |_| {
-                                    for (layer_index, mut layer_bytes) in
+                                    for (layer_index, layer_elements) in
                                         layer_data.iter_mut().enumerate()
                                     {
                                         let store = labels.labels_for_layer(layer_index + 1);
                                         let start = (i * nodes_count) + node_index;
                                         let end = start + chunked_nodes_count;
-                                        store
-                                            .read_range_into(start, end, &mut layer_bytes)
+                                        let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
+                                            .read_range(std::ops::Range { start, end })
                                             .expect("failed to read store range");
+                                        layer_elements.extend(elements.into_iter().map(Into::into));
                                     }
                                 });
                             });
 
-                            let mut buf = [0u8; std::mem::size_of::<Fr>()];
+                            // Copy out all layer data arranged into columns.
                             for layer_index in 0..layers {
                                 for index in 0..chunked_nodes_count {
-                                    buf.copy_from_slice(
-                                        &layer_data[layer_index][std::mem::size_of::<Fr>() * index
-                                            ..std::mem::size_of::<Fr>() * (index + 1)],
-                                    );
-                                    let fr = unsafe {
-                                        // SAFETY: We know the underlying elements of the layers in `LabelsCache`
-                                        // were stored on disk with the same memory layout as `Fr`.
-                                        std::mem::transmute::<[u8; std::mem::size_of::<Fr>()], Fr>(
-                                            buf,
-                                        )
-                                    };
-                                    columns[index][layer_index] = fr;
+                                    columns[index][layer_index] = layer_data[layer_index][index];
                                 }
                             }
 
@@ -316,7 +303,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     .zip(writers_rx.iter())
                     .for_each(|((i, config), writer_rx)| {
 
-                    info!("writing tree_c {}", i);
+                    info!("writing tree_c {}", i + 1);
 
                     let (base_data, tree_data) = writer_rx
                         .recv()
@@ -326,7 +313,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     assert_eq!(base_data.len(), nodes_count);
                     assert_eq!(tree_len, config.size.expect("config size failure"));
 
-                    info!("tree data for tree_c {} has been recieved", i);
+                    info!("tree data for tree_c {} has been recieved", i + 1);
 
                     // Persist the base and tree data to disk based using the current store config.
                     let tree_c_store =
@@ -379,7 +366,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         .expect("store sync failure");
                     trace!("done writing tree_c store data");
 
-                    info!("done writing tree_c {}", i);
+                    info!("done writing tree_c {}", i + 1);
                 });
             }); // rayon::scope
             
