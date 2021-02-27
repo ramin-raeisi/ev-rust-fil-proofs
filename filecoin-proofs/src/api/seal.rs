@@ -27,7 +27,7 @@ use storage_proofs_porep::stacked::{
 };
 
 use crate::{
-    api::{as_safe_commitment, commitment_from_fr, get_base_tree_leafs, get_base_tree_size, calibrate_cpu_utilization},
+    api::{as_safe_commitment, commitment_from_fr, get_base_tree_leafs, get_base_tree_size, calibrate_filsettings},
     caches::{get_stacked_params, get_stacked_verifying_key},
     constants::{
         DefaultBinaryTree, DefaultPieceDomain, DefaultPieceHasher, POREP_MINIMUM_CHALLENGES,
@@ -598,7 +598,7 @@ pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
     >>::setup(&compound_setup_params)?;
 
     info!("snark_proof calibration: start"); 
-    calibrate_cpu_utilization::<StackedDrg<'_, Tree, DefaultPieceHasher>>(&public_inputs, vanilla_proofs, &compound_public_params.vanilla_params, &groth_params,
+    calibrate_filsettings::<StackedDrg<'_, Tree, DefaultPieceHasher>>(&public_inputs, vanilla_proofs, &compound_public_params.vanilla_params, &groth_params,
          &StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs);
 
     info!("snark_proof calibration: finish"); 
