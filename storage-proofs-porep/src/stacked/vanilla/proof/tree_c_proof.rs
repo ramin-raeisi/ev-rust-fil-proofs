@@ -316,7 +316,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     .zip(writers_rx.iter())
                     .for_each(|((i, config), writer_rx)| {
 
-                    info!("writing tree_c {}", i);
+                    info!("writing tree_c {}", i + 1);
 
                     let (base_data, tree_data) = writer_rx
                         .recv()
@@ -326,7 +326,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     assert_eq!(base_data.len(), nodes_count);
                     assert_eq!(tree_len, config.size.expect("config size failure"));
 
-                    info!("tree data for tree_c {} has been recieved", i);
+                    info!("tree data for tree_c {} has been recieved", i + 1);
 
                     // Persist the base and tree data to disk based using the current store config.
                     let tree_c_store =
@@ -379,7 +379,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         .expect("store sync failure");
                     trace!("done writing tree_c store data");
 
-                    info!("done writing tree_c {}", i);
+                    info!("done writing tree_c {}", i + 1);
                 });
             }); // rayon::scope
             

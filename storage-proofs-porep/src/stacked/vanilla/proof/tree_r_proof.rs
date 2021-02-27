@@ -306,13 +306,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 .zip(writers_rx.iter())
                 .for_each(|((i, config), writer_rx)| {
 
-                info!("writing tree_r_last {}", i);
+                info!("writing tree_r_last {}", i + 1);
 
                 let tree_data = writer_rx
                     .recv()
                     .expect("failed to receive tree_data for tree_r_last");
 
-                info!("tree data for tree_r_last {} has been recieved", i);
+                info!("tree data for tree_r_last {} has been recieved", i + 1);
 
                 let tree_data_len = tree_data.len();
                 let cache_size = get_merkle_tree_cache_size(
@@ -348,7 +348,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 f.write_all(&flat_tree_data)
                     .expect("failed to wrote tree_r_last data");
 
-                info!("done writing tree_r_last {}", i);
+                info!("done writing tree_r_last {}", i + 1);
             });
         });
 
