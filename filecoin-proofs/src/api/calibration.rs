@@ -4,7 +4,7 @@ use storage_proofs_core::{proof::ProofScheme};
 use log::{info};
 use anyhow::{Result};
 use std::fs;
-use std::cmp::max;
+use std::collections::HashMap;
 
 pub fn calibrate_filsettings<'a, S: ProofScheme<'a>>(pub_in: &S::PublicInputs, vanilla_proofs: Vec<S::Proof>, pub_params: &S::PublicParams,
      groth_params: &groth16::MappedParameters<Bls12>, function: &dyn Fn(&S::PublicInputs, Vec<S::Proof>,
@@ -20,7 +20,7 @@ pub fn calibrate_filsettings<'a, S: ProofScheme<'a>>(pub_in: &S::PublicInputs, v
         let tol = vec![0.1_f64, 1_f64, 1_f64, 1_f64];
         let mut filsettings = settings::Settings::new().unwrap();
         filsettings.size = 1;
-        golden_section_search::<'_, S>(&f, &g, &tol, 2, &mut filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function);
+        golden_section_search::<'_, S>(&f, &g, &tol, 0, &mut filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function);
         Ok(())
     }
 
@@ -41,8 +41,9 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
 
     let mut c = (((a + phi2 * h) / tol).round())*tol;
     let mut d = (((a + phi * h) / tol).round())*tol;
+    let mut timings= HashMap::new();
     
-    filsettings.set_value(index, a); 
+    /*filsettings.set_value(index, a); 
     let mut enc_filsettings = serde_json::to_string(&filsettings)?;
     info!("parameter  = {}", a);
     fs::write("./fil-zk.config.toml", &enc_filsettings);
@@ -66,7 +67,7 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
     } 
     let now = Instant::now();
     function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
-    let mut yb = now.elapsed();
+    let mut yb = now.elapsed();*/
 
     filsettings.set_value(index, c); 
     let mut enc_filsettings = serde_json::to_string(&filsettings)?;
@@ -79,8 +80,8 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
     } 
     let now = Instant::now();
     function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
-    let mut yc = now.elapsed();
-    let mut yd;
+    let mut t = now.elapsed();
+    timings.insert((c/tol) as usize, std::time::Duration::from(t));
    
     if d!=c {
         filsettings.set_value(index, d);
@@ -94,18 +95,35 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
         } 
         let now = Instant::now();
         function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
-        yd = now.elapsed();
-    }
-    else {
-        yd = yc;
+        t = now.elapsed();
+        timings.insert((d/tol) as usize, t);
     }
     let mut k = -1;
     loop {
         k +=1;
         info!("k  = {}", k);
-        if yc < yd {
+        if timings.get(&((c/tol) as usize)) < timings.get(&((d/tol) as usize)) {
             if d - a - tol <= tol * 0.1_f64 {
-                if ya > yd {
+                let at = timings.get(&((a/tol) as usize));
+                match at {
+                    Some(_) => {}
+                    None => {
+                        filsettings.set_value(index, a);
+                        enc_filsettings = serde_json::to_string(&filsettings)?;
+                        info!("parameter  = {}", a); 
+                        fs::write("./fil-zk.config.toml", &enc_filsettings);
+                        if filsettings.size != 1 {
+                            filsettings.size -= 1;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function);
+                            filsettings.size += 1;
+                        } 
+                        let now = Instant::now();
+                        function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
+                        t = now.elapsed();
+                        timings.insert((a/tol) as usize, t);
+                    }
+                }
+                if timings.get(&((a/tol) as usize)) > timings.get(&((d/tol) as usize)) {
                     filsettings.set_value(index, d);
                     info!("parameter  = {}", d);
                     enc_filsettings = serde_json::to_string(&filsettings)?;  
@@ -121,15 +139,10 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 }
             }
             b = d;
-            yb = yd;
             d = c;
-            yd = yc;
             h = b - a;
             c = (((a + phi2 * h)/tol).round()) * tol;
-            if c == d {
-                yc = yd;
-            }
-            else {
+            if c != d {
                 filsettings.set_value(index, c);
                 info!("parameter  = {}", c);
                 enc_filsettings = serde_json::to_string(&filsettings)?;  
@@ -141,19 +154,58 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 } 
                 let now = Instant::now();
                 function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
-                yc = now.elapsed();
+                t = now.elapsed();
+                timings.insert((c/tol) as usize,t);
             }
         }
-        else if yc == yd {
-                if yc < yb {
-                    if yc < ya {
+        else if timings.get(&((c/tol) as usize)) == timings.get(&((d/tol) as usize)) {
+            let at = timings.get(&((a/tol) as usize));
+            match at {
+                Some(_) => {}
+                None => {
+                    filsettings.set_value(index, a);
+                    enc_filsettings = serde_json::to_string(&filsettings)?;
+                    info!("parameter  = {}", a); 
+                    fs::write("./fil-zk.config.toml", &enc_filsettings);
+                    if filsettings.size != 1 {
+                        filsettings.size -= 1;
+                        golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function);
+                        filsettings.size += 1;
+                    } 
+                    let now = Instant::now();
+                    function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
+                    t = now.elapsed();
+                    timings.insert((a/tol) as usize, t);
+                }
+            }
+            let bt = timings.get(&((b/tol) as usize));
+                match bt {
+                    Some(_) => {}
+                    None => {
+                        filsettings.set_value(index, b);
+                        enc_filsettings = serde_json::to_string(&filsettings)?;
+                        info!("parameter  = {}", b); 
+                        fs::write("./fil-zk.config.toml", &enc_filsettings);
+                        if filsettings.size != 1 {
+                            filsettings.size -= 1;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function);
+                            filsettings.size += 1;
+                        } 
+                        let now = Instant::now();
+                        function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
+                        t = now.elapsed();
+                        timings.insert((b/ tol) as usize, t);
+                    }
+                }
+                if timings.get(&((c/tol) as usize)) < timings.get(&((b/tol) as usize)) {
+                    if timings.get(&((c/tol) as usize)) < timings.get(&((a/tol) as usize)) {
                         filsettings.set_value(index, c);
                         info!("parameter  = {}", c);
                         enc_filsettings = serde_json::to_string(&filsettings)?;  
                         fs::write("./fil-zk.config.toml", &enc_filsettings);
                         break;
                     }
-                    else if ya > yb {
+                    else if timings.get(&((a/tol) as usize)) > timings.get(&((b/tol) as usize)) {
                         filsettings.set_value(index, b);
                         info!("parameter  = {}", b);
                         enc_filsettings = serde_json::to_string(&filsettings)?;  
@@ -165,12 +217,32 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                         info!("parameter  = {}", a);
                         enc_filsettings = serde_json::to_string(&filsettings)?;  
                         fs::write("./fil-zk.config.toml", &enc_filsettings);
+                        break;
                     }
                 }
         } 
         else {
             if b - c - tol <= tol * 0.1_f64 {
-                if yb > yc {
+                let bt = timings.get(&((b/tol) as usize));
+                match bt {
+                    Some(_) => {}
+                    None => {
+                        filsettings.set_value(index, b);
+                        enc_filsettings = serde_json::to_string(&filsettings)?;
+                        info!("parameter  = {}", b); 
+                        fs::write("./fil-zk.config.toml", &enc_filsettings);
+                        if filsettings.size != 1 {
+                            filsettings.size -= 1;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function);
+                            filsettings.size += 1;
+                        } 
+                        let now = Instant::now();
+                        function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
+                        t = now.elapsed();
+                        timings.insert((b/ tol) as usize, t);
+                    }
+                }
+                if timings.get(&((b/tol) as usize)) > timings.get(&((c/tol) as usize)) {
                     filsettings.set_value(index, c);
                     info!("parameter  = {}", c);
                     enc_filsettings = serde_json::to_string(&filsettings)?;  
@@ -186,15 +258,10 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 }
             }
             a = c;
-            ya = yc;
             c = d;
-            yc = yd;
-            h = phi * h;
+            h = b - a;
             d = ((a + phi * h)/tol).round()*tol;
-            if d == c{
-                yd = yc;
-            }
-            else {
+            if d != c{
                 filsettings.cpu_utilization = d;
                 info!("parameter  = {}", d);
                 enc_filsettings = serde_json::to_string(&filsettings)?;  
@@ -206,7 +273,8 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 } 
                 let now = Instant::now();
                 function(pub_in, vanilla_proofs.clone(), pub_params, groth_params);
-                yd = now.elapsed();
+                t = now.elapsed();
+                timings.insert((d/tol) as usize, t);
             }
         }
     }
