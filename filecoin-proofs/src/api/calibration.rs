@@ -18,16 +18,17 @@ pub fn calibrate_filsettings<'a, S: ProofScheme<'a>>(pub_in: &S::PublicInputs, v
         let f = vec![0_f64, 8_f64, 1_f64, 1_f64];
         let g = vec![1_f64, 14_f64, 3_f64, 4_f64];
         let tol = vec![0.1_f64, 1_f64, 1_f64, 1_f64];
-        let mut filsettings = settings::Settings::new().unwrap();
-        filsettings.size = 3;
-        filsettings.cpu_utilization = 0_f64;
-        golden_section_search::<'_, S>(&f, &g, &tol, 1, &mut filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
-        filsettings.size = 1;
-        golden_section_search::<'_, S>(&f, &g, &tol, 0, &mut filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+        //let mut filsettings = settings::Settings::new().unwrap();
+        //filsettings.size = 3;
+        //filsettings.cpu_utilization = 0_f64;
+        //golden_section_search::<'_, S>(&f, &g, &tol, 1, &mut filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+        //filsettings.size = 1;
+        //golden_section_search::<'_, S>(&f, &g, &tol, 0, &mut filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+        golden_section_search::<'_, S>(&f, &g, &tol, 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
         Ok(())
     }
 
-fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, tol_vec: &Vec<f64>, index: usize, filsettings: &mut settings::Settings, pub_in: &S::PublicInputs, vanilla_proofs: Vec<S::Proof>, pub_params: &S::PublicParams,
+fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, tol_vec: &Vec<f64>, index: usize, pub_in: &S::PublicInputs, vanilla_proofs: Vec<S::Proof>, pub_params: &S::PublicParams,
     groth_params: &groth16::MappedParameters<Bls12>, function: &dyn Fn(&S::PublicInputs, Vec<S::Proof>,
         &S::PublicParams, &groth16::MappedParameters<Bls12>) -> Result<Vec<groth16::Proof<Bls12>>>)-> Result<()>
     where
@@ -45,14 +46,13 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
     let mut c = (((a + phi2 * h) / tol).round())*tol;
     let mut d = (((a + phi * h) / tol).round())*tol;
     let mut timings= HashMap::new();
+    let mut filsettings = settings::FILSETTINGS.lock().unwrap();
 
     filsettings.set_value(index, c); 
-    let mut enc_filsettings = serde_json::to_string(&filsettings)?;
     info!("parameter  = {}", c);
-    fs::write("./fil-zk.config.toml", &enc_filsettings)?;
     if filsettings.size != 1 {
         filsettings.size -= 1;
-        golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+        golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
         filsettings.size += 1;
     } 
     let now = Instant::now();
@@ -62,12 +62,10 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
    
     if d!=c {
         filsettings.set_value(index, d);
-        enc_filsettings = serde_json::to_string(&filsettings)?;
         info!("parameter  = {}", d); 
-        fs::write("./fil-zk.config.toml", &enc_filsettings)?;
         if filsettings.size != 1 {
             filsettings.size -= 1;
-            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
             filsettings.size += 1;
         } 
         let now = Instant::now();
@@ -86,12 +84,10 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                     Some(_) => {}
                     None => {
                         filsettings.set_value(index, a);
-                        enc_filsettings = serde_json::to_string(&filsettings)?;
-                        info!("parameter  = {}", a); 
-                        fs::write("./fil-zk.config.toml", &enc_filsettings)?;
+                        info!("parameter  = {}", a);
                         if filsettings.size != 1 {
                             filsettings.size -= 1;
-                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                             filsettings.size += 1;
                         } 
                         let now = Instant::now();
@@ -103,14 +99,14 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 if timings.get(&((a/tol) as usize)) > timings.get(&((d/tol) as usize)) {
                     filsettings.set_value(index, d);
                     info!("parameter  = {}", d);
-                    enc_filsettings = serde_json::to_string(&filsettings)?;  
+                    let enc_filsettings = serde_json::to_string(&*filsettings)?;  
                     fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                     break;
                 }
                 else {
                     filsettings.set_value(index, a);
                     info!("parameter  = {}", a);
-                    enc_filsettings = serde_json::to_string(&filsettings)?;  
+                    let enc_filsettings = serde_json::to_string(&*filsettings)?;  
                     fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                     break;
                 }
@@ -122,11 +118,9 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
             if c != d {
                 filsettings.set_value(index, c);
                 info!("parameter  = {}", c);
-                enc_filsettings = serde_json::to_string(&filsettings)?;  
-                fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                 if filsettings.size != 1 {
                     filsettings.size -= 1;
-                    golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                    golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                     filsettings.size += 1;
                 } 
                 let now = Instant::now();
@@ -141,12 +135,10 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 Some(_) => {}
                 None => {
                     filsettings.set_value(index, a);
-                    enc_filsettings = serde_json::to_string(&filsettings)?;
                     info!("parameter  = {}", a); 
-                    fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                     if filsettings.size != 1 {
                         filsettings.size -= 1;
-                        golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                        golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                         filsettings.size += 1;
                     } 
                     let now = Instant::now();
@@ -160,12 +152,10 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                     Some(_) => {}
                     None => {
                         filsettings.set_value(index, b);
-                        enc_filsettings = serde_json::to_string(&filsettings)?;
                         info!("parameter  = {}", b); 
-                        fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                         if filsettings.size != 1 {
                             filsettings.size -= 1;
-                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                             filsettings.size += 1;
                         } 
                         let now = Instant::now();
@@ -178,14 +168,14 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                     if timings.get(&((c/tol) as usize)) < timings.get(&((a/tol) as usize)) {
                         filsettings.set_value(index, c);
                         info!("parameter  = {}", c);
-                        enc_filsettings = serde_json::to_string(&filsettings)?;  
+                        let enc_filsettings = serde_json::to_string(&*filsettings)?;  
                         fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                         break;
                     }
                     else {
                         filsettings.set_value(index, a);
                         info!("parameter  = {}", a);
-                        enc_filsettings = serde_json::to_string(&filsettings)?;  
+                        let enc_filsettings = serde_json::to_string(&*filsettings)?;  
                         fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                         break;
                     }
@@ -193,14 +183,14 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 else if timings.get(&((b/tol) as usize)) < timings.get(&((a/tol) as usize)) {
                     filsettings.set_value(index, b);
                     info!("parameter  = {}", b);
-                    enc_filsettings = serde_json::to_string(&filsettings)?;  
+                    let enc_filsettings = serde_json::to_string(&*filsettings)?;  
                     fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                     break;
                 }
                 else {
                     filsettings.set_value(index, a);
                     info!("parameter  = {}", a);
-                    enc_filsettings = serde_json::to_string(&filsettings)?;  
+                    let enc_filsettings = serde_json::to_string(&*filsettings)?;  
                     fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                     break;
                 }
@@ -212,12 +202,10 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                     Some(_) => {}
                     None => {
                         filsettings.set_value(index, b);
-                        enc_filsettings = serde_json::to_string(&filsettings)?;
                         info!("parameter  = {}", b); 
-                        fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                         if filsettings.size != 1 {
                             filsettings.size -= 1;
-                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                             filsettings.size += 1;
                         } 
                         let now = Instant::now();
@@ -229,14 +217,14 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 if timings.get(&((b/tol) as usize)) > timings.get(&((c/tol) as usize)) {
                     filsettings.set_value(index, c);
                     info!("parameter  = {}", c);
-                    enc_filsettings = serde_json::to_string(&filsettings)?;  
+                    let enc_filsettings = serde_json::to_string(&*filsettings)?;  
                     fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                     break;
                 }
                 else {
                     filsettings.set_value(index, b);
                     info!("parameter  = {}", b);
-                    enc_filsettings = serde_json::to_string(&filsettings)?;  
+                    let enc_filsettings = serde_json::to_string(&*filsettings)?;  
                     fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                     break;
                 }
@@ -248,11 +236,9 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
             if d != c{
                 filsettings.cpu_utilization = d;
                 info!("parameter  = {}", d);
-                enc_filsettings = serde_json::to_string(&filsettings)?;  
-                fs::write("./fil-zk.config.toml", &enc_filsettings)?;
                 if filsettings.size != 1 {
                     filsettings.size -= 1;
-                    golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                    golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                     filsettings.size += 1;
                 } 
                 let now = Instant::now();
