@@ -1,9 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{PathBuf};
-use std::sync::{mpsc, Arc, RwLock};
-use std::thread;
-use std::time::Duration;
+use std::sync::{mpsc};
 
 use anyhow::Context;
 use bellperson::bls::Fr;
@@ -32,7 +30,7 @@ use super::super::{
 
 use neptune::batch_hasher::BatcherType;
 use neptune::tree_builder::{TreeBuilder, TreeBuilderTrait};
-use fr32::fr_into_bytes;
+use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
 
@@ -149,10 +147,18 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         let labels_start = i * nodes_count + node_index;
                         let labels_end = labels_start + chunked_nodes_count;
 
-                        let encoded_data = last_layer_labels
-                            .read_range(labels_start..labels_end)
-                            .expect("failed to read layer range")
+                        let mut layer_bytes = vec![0u8; (end - start) * std::mem::size_of::<Fr>()];
+                        
+                        last_layer_labels
+                            .read_range_into(labels_start, labels_end, &mut layer_bytes)
+                            .expect("failed to read layer bytes");
+
+                        let encoded_data = layer_bytes
                             .into_par_iter()
+                            .chunks(std::mem::size_of::<Fr>())
+                            .map(|chunk| {
+                                bytes_into_fr(&chunk).expect("Could not create Fr from bytes.")
+                            })
                             .zip(
                                 data[(start * NODE_SIZE)..(end * NODE_SIZE)]
                                     .par_chunks_mut(NODE_SIZE),
@@ -163,8 +169,10 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         data_node_bytes,
                                     )
                                     .expect("try_from_bytes failed");
-                                let encoded_node =
-                                    encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
+                                let encoded_node = encode::<<Tree::Hasher as Hasher>::Domain>(
+                                        key.into(),
+                                        data_node,
+                                    );
                                 data_node_bytes
                                     .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
 
