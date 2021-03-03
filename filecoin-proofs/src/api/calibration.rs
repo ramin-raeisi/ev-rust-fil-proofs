@@ -18,17 +18,19 @@ pub fn calibrate_filsettings<'a, S: ProofScheme<'a>>(pub_in: &S::PublicInputs, v
         let f = vec![0_f64, 8_f64, 1_f64, 1_f64];
         let g = vec![1_f64, 14_f64, 3_f64, 4_f64];
         let tol = vec![0.1_f64, 1_f64, 1_f64, 1_f64];
+        let indices = vec![0];
         //let mut filsettings = settings::Settings::new().unwrap();
         //filsettings.size = 3;
         //filsettings.cpu_utilization = 0_f64;
         //golden_section_search::<'_, S>(&f, &g, &tol, 1, &mut filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
         //filsettings.size = 1;
         //golden_section_search::<'_, S>(&f, &g, &tol, 0, &mut filsettings, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
-        golden_section_search::<'_, S>(&f, &g, &tol, 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+        settings::FILSETTINGS.lock().unwrap().size = 1;
+        golden_section_search::<'_, S>(&f, &g, &tol, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
         Ok(())
     }
 
-fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, tol_vec: &Vec<f64>, index: usize, pub_in: &S::PublicInputs, vanilla_proofs: Vec<S::Proof>, pub_params: &S::PublicParams,
+fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, tol_vec: &Vec<f64>, indices: &Vec<usize>, pub_in: &S::PublicInputs, vanilla_proofs: Vec<S::Proof>, pub_params: &S::PublicParams,
     groth_params: &groth16::MappedParameters<Bls12>, function: &dyn Fn(&S::PublicInputs, Vec<S::Proof>,
         &S::PublicParams, &groth16::MappedParameters<Bls12>) -> Result<Vec<groth16::Proof<Bls12>>>)-> Result<()>
     where
@@ -38,6 +40,9 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
     {
     let phi = ((5_f64).sqrt() - 1_f64) / 2_f64;
     let phi2 = (3_f64 - (5_f64).sqrt()) / 2_f64;
+    let mut filsettings = settings::FILSETTINGS.lock().unwrap();
+    let len = indices.len();
+    let index = indices[len - filsettings.size];
     let mut a = f[index];
     let mut b = g[index];
     let tol = tol_vec[index];
@@ -46,13 +51,12 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
     let mut c = (((a + phi2 * h) / tol).round())*tol;
     let mut d = (((a + phi * h) / tol).round())*tol;
     let mut timings= HashMap::new();
-    let mut filsettings = settings::FILSETTINGS.lock().unwrap();
 
     filsettings.set_value(index, c); 
     info!("parameter  = {}", c);
     if filsettings.size != 1 {
         filsettings.size -= 1;
-        golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+        golden_section_search::<'_, S>(&f, &g, &tol_vec, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
         filsettings.size += 1;
     } 
     let now = Instant::now();
@@ -65,7 +69,7 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
         info!("parameter  = {}", d); 
         if filsettings.size != 1 {
             filsettings.size -= 1;
-            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+            golden_section_search::<'_, S>(&f, &g, &tol_vec, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
             filsettings.size += 1;
         } 
         let now = Instant::now();
@@ -87,7 +91,7 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                         info!("parameter  = {}", a);
                         if filsettings.size != 1 {
                             filsettings.size -= 1;
-                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                             filsettings.size += 1;
                         } 
                         let now = Instant::now();
@@ -120,7 +124,7 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 info!("parameter  = {}", c);
                 if filsettings.size != 1 {
                     filsettings.size -= 1;
-                    golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                    golden_section_search::<'_, S>(&f, &g, &tol_vec, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                     filsettings.size += 1;
                 } 
                 let now = Instant::now();
@@ -138,7 +142,7 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                     info!("parameter  = {}", a); 
                     if filsettings.size != 1 {
                         filsettings.size -= 1;
-                        golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                        golden_section_search::<'_, S>(&f, &g, &tol_vec, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                         filsettings.size += 1;
                     } 
                     let now = Instant::now();
@@ -155,7 +159,7 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                         info!("parameter  = {}", b); 
                         if filsettings.size != 1 {
                             filsettings.size -= 1;
-                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                             filsettings.size += 1;
                         } 
                         let now = Instant::now();
@@ -205,7 +209,7 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                         info!("parameter  = {}", b); 
                         if filsettings.size != 1 {
                             filsettings.size -= 1;
-                            golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                            golden_section_search::<'_, S>(&f, &g, &tol_vec, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                             filsettings.size += 1;
                         } 
                         let now = Instant::now();
@@ -238,7 +242,7 @@ fn golden_section_search<'a, S: ProofScheme<'a>>(f : &Vec<f64>, g: &Vec<f64>, to
                 info!("parameter  = {}", d);
                 if filsettings.size != 1 {
                     filsettings.size -= 1;
-                    golden_section_search::<'_, S>(&f, &g, &tol_vec, index + 1, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
+                    golden_section_search::<'_, S>(&f, &g, &tol_vec, &indices, pub_in, vanilla_proofs.clone(), pub_params, groth_params, function)?;
                     filsettings.size += 1;
                 } 
                 let now = Instant::now();
