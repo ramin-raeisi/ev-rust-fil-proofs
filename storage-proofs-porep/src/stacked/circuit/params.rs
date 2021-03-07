@@ -143,7 +143,8 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
 
         for ((i, parent), cs) in drg_parents_proofs.into_iter().enumerate()
             .zip(drg_cs.iter_mut()) {
-            let comm_c_local = AllocatedNum::alloc(cs.namespace(|| format!("comm_c_{}_num", i)), 
+
+            let comm_c_copy = AllocatedNum::alloc(cs.namespace(|| format!("comm_c_{}_num", i)), 
                 || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
 
             let (parent_col, inclusion_path) =
@@ -156,10 +157,10 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             enforce_inclusion(
                 cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
                 inclusion_path,
-                comm_c,
+                &comm_c_copy,
                 &val,
             )?;
-            cs.deallocate(comm_c_local.get_variable()).unwrap();
+            cs.deallocate(comm_c_copy.get_variable()).unwrap();
             drg_parents.push(parent_col);
         }
 
@@ -170,7 +171,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             for j in 1..=col.len() {
                 let row = col.get_value(j);
                 let mut v = row.get_variable();
-                cs.align_variable(&mut v);
+                cs.align_variable(&mut v, 1);
             }
             cs.aggregate(vec![other_cs]);
         }
