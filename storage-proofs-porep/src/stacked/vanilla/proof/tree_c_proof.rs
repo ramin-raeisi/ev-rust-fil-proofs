@@ -1,6 +1,4 @@
 use std::sync::{mpsc, Arc, RwLock};
-use std::thread;
-use std::time::Duration;
 
 use bellperson::bls::Fr;
 use filecoin_hashers::{Hasher, PoseidonArity};
@@ -27,11 +25,10 @@ use super::super::{
     proof::StackedDrg,
 };
 
-use ff::Field;
-use generic_array::{sequence::GenericSequence, GenericArray};
+use generic_array::{GenericArray};
 use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
-use fr32::fr_into_bytes;
+use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
 
@@ -138,33 +135,41 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 tree_count,
                                 chunked_nodes_count,
                             );
-                            let mut columns: Vec<GenericArray<Fr, ColumnArity>> = vec![
-                                GenericArray::<Fr, ColumnArity>::generate(|_i: usize| Fr::zero());
-                                chunked_nodes_count
-                            ];
 
                             // Allocate layer data array and insert a placeholder for each layer.
-                            let mut layer_data: Vec<Vec<Fr>> =
-                                vec![Vec::with_capacity(chunked_nodes_count); layers];
+                            let mut layer_data: Vec<Vec<u8>> =
+                                vec![
+                                    vec![0u8; chunked_nodes_count * std::mem::size_of::<Fr>()];
+                                    layers
+                                ];
 
-                            for (layer_index, layer_elements) in
+                            for (layer_index, mut layer_bytes) in
                                 layer_data.iter_mut().enumerate()
                             {
                                 let store = labels.labels_for_layer(layer_index + 1);
                                 let start = (i * nodes_count) + node_index;
                                 let end = start + chunked_nodes_count;
-                                let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
-                                    .read_range(std::ops::Range { start, end })
+                                store
+                                    .read_range_into(start, end, &mut layer_bytes)
                                     .expect("failed to read store range");
-                                layer_elements.extend(elements.into_iter().map(Into::into));
                             }
 
                             // Copy out all layer data arranged into columns.
-                            for layer_index in 0..layers {
-                                for index in 0..chunked_nodes_count {
-                                    columns[index][layer_index] = layer_data[layer_index][index];
-                                }
-                            }
+                            let columns: Vec<GenericArray<Fr, ColumnArity>> =
+                                (0..chunked_nodes_count)
+                                    .into_par_iter()
+                                    .map(|index| {
+                                        (0..layers)
+                                            .map(|layer_index| {
+                                                bytes_into_fr(
+                                                &layer_data[layer_index][std::mem::size_of::<Fr>()
+                                                    * index
+                                                    ..std::mem::size_of::<Fr>() * (index + 1)],
+                                            ).expect("Could not create Fr from bytes.")
+                                            })
+                                            .collect::<GenericArray<Fr, ColumnArity>>()
+                                    })
+                                    .collect();
 
                             drop(layer_data);
 
