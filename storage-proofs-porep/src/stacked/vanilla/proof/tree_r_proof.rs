@@ -182,7 +182,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         let encoded: Vec<_> =
                             encoded_data.into_par_iter().map(|x| x.into()).collect();
 
-                        info!("send columns for tree_r_last {} and node_index = {}/{}", i + 1, node_index, nodes_count);
                         let is_final = node_index == nodes_count;
                         builder_tx
                             .send((encoded, is_final))
@@ -301,8 +300,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         .recv()
                         .expect("failed to receive tree_data for tree_r_last");
 
-                    info!("tree data for tree_r_last {} has been recieved", i + 1);
-
                     let tree_data_len = tree_data.len();
                     let cache_size = get_merkle_tree_cache_size(
                         get_merkle_tree_leafs(
@@ -336,8 +333,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         .expect("failed to open file for tree_r_last");
                     f.write_all(&flat_tree_data)
                         .expect("failed to wrote tree_r_last data");
-
-                    info!("done writing tree_r_last {}", i + 1);
                 });
             }); //spawn
         });

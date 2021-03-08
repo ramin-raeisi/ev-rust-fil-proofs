@@ -147,25 +147,17 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             let mut layer_data: Vec<Vec<Fr>> =
                                 vec![Vec::with_capacity(chunked_nodes_count); layers];
 
-                            rayon::scope(|s| {
-                                // capture a shadowed version of layer_data.
-                                let layer_data: &mut Vec<_> = &mut layer_data;
-
-                                // gather all layer data in parallel.
-                                s.spawn(move |_| {
-                                    for (layer_index, layer_elements) in
-                                        layer_data.iter_mut().enumerate()
-                                    {
-                                        let store = labels.labels_for_layer(layer_index + 1);
-                                        let start = (i * nodes_count) + node_index;
-                                        let end = start + chunked_nodes_count;
-                                        let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
-                                            .read_range(std::ops::Range { start, end })
-                                            .expect("failed to read store range");
-                                        layer_elements.extend(elements.into_iter().map(Into::into));
-                                    }
-                                });
-                            });
+                            for (layer_index, layer_elements) in
+                                layer_data.iter_mut().enumerate()
+                            {
+                                let store = labels.labels_for_layer(layer_index + 1);
+                                let start = (i * nodes_count) + node_index;
+                                let end = start + chunked_nodes_count;
+                                let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
+                                    .read_range(std::ops::Range { start, end })
+                                    .expect("failed to read store range");
+                                layer_elements.extend(elements.into_iter().map(Into::into));
+                            }
 
                             // Copy out all layer data arranged into columns.
                             for layer_index in 0..layers {
@@ -184,7 +176,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 nodes_count,
                             );
 
-                            info!("send columns for tree_c {} and node_index = {}/{}", i + 1, node_index, nodes_count);
                             let is_final = node_index == nodes_count;
                             builder_tx
                                 .send((columns, is_final))
@@ -259,8 +250,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
                                     builder_rx.recv().expect("failed to recv columns");
 
-                                info!("tree_c builder {} got new columns (is_final = {})", i + 1, is_final);
-
                                 // Just add non-final column batches.
                                 if !is_final {
                                     column_tree_builder
@@ -318,8 +307,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         assert_eq!(base_data.len(), nodes_count);
                         assert_eq!(tree_len, config.size.expect("config size failure"));
 
-                        info!("tree data for tree_c {} has been recieved", i + 1);
-
                         // Persist the base and tree data to disk based using the current store config.
                         let tree_c_store =
                             DiskStore::<<Tree::Hasher as Hasher>::Domain>::new_with_config(
@@ -355,7 +342,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         );
                         flatten_and_write_store(&base_data, 0)
                             .expect("failed to flatten and write store");
-                        trace!("done flattening tree_c base data");
 
                         let base_offset = base_data.len();
                         trace!("flattening tree_c tree data of {} nodes using batch size {} and base offset {}", tree_data.len(), batch_size, base_offset);
@@ -363,15 +349,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             .expect("failed to flatten and write store");
                         trace!("done flattening tree_c tree data");
 
-                        trace!("writing tree_c store data");
                         store
                             .write()
                             .expect("failed to access store for sync")
                             .sync()
                             .expect("store sync failure");
                         trace!("done writing tree_c store data");
-
-                        info!("done writing tree_c {}", i + 1);
                     });
                 }); // spawn
             }); // rayon::scope
