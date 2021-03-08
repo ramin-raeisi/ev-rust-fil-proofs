@@ -1,6 +1,4 @@
 use std::sync::{mpsc, Arc, RwLock};
-use std::thread;
-use std::time::Duration;
 
 use bellperson::bls::Fr;
 use filecoin_hashers::{Hasher, PoseidonArity};
@@ -27,11 +25,10 @@ use super::super::{
     proof::StackedDrg,
 };
 
-use ff::Field;
-use generic_array::{sequence::GenericSequence, GenericArray};
+use generic_array::{GenericArray};
 use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
-use fr32::fr_into_bytes;
+use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
 
@@ -100,10 +97,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 builders_rx_by_gpu.push(Vec::new());
             }
 
+            let queue_size = nodes_count / max_gpu_column_batch_size;
             for config_idx in 0..configs.len() {
                 // This channel will receive batches of columns and add them to the ColumnTreeBuilder.
                 // Each config has own channel
-                let (builder_tx, builder_rx) = mpsc::sync_channel(0);
+                let (builder_tx, builder_rx) = mpsc::sync_channel(queue_size);
                 builders_tx.push(builder_tx);
                 builders_rx_by_gpu[config_idx % bus_num].push(builder_rx);
             }
@@ -117,7 +115,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 let mut writers_tx = Vec::new();
                 let mut writers_rx = Vec::new();
                 for _i in 0..config_count {
-                    let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(config_count);
+                    let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(0);
                     writers_tx.push(writer_tx);
                     writers_rx.push(writer_rx);
                 }
@@ -138,41 +136,41 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 tree_count,
                                 chunked_nodes_count,
                             );
-                            let mut columns: Vec<GenericArray<Fr, ColumnArity>> = vec![
-                                GenericArray::<Fr, ColumnArity>::generate(|_i: usize| Fr::zero());
-                                chunked_nodes_count
-                            ];
 
                             // Allocate layer data array and insert a placeholder for each layer.
-                            let mut layer_data: Vec<Vec<Fr>> =
-                                vec![Vec::with_capacity(chunked_nodes_count); layers];
+                            let mut layer_data: Vec<Vec<u8>> =
+                                vec![
+                                    vec![0u8; chunked_nodes_count * std::mem::size_of::<Fr>()];
+                                    layers
+                                ];
 
-                            rayon::scope(|s| {
-                                // capture a shadowed version of layer_data.
-                                let layer_data: &mut Vec<_> = &mut layer_data;
-
-                                // gather all layer data in parallel.
-                                s.spawn(move |_| {
-                                    for (layer_index, layer_elements) in
-                                        layer_data.iter_mut().enumerate()
-                                    {
-                                        let store = labels.labels_for_layer(layer_index + 1);
-                                        let start = (i * nodes_count) + node_index;
-                                        let end = start + chunked_nodes_count;
-                                        let elements: Vec<<Tree::Hasher as Hasher>::Domain> = store
-                                            .read_range(std::ops::Range { start, end })
-                                            .expect("failed to read store range");
-                                        layer_elements.extend(elements.into_iter().map(Into::into));
-                                    }
-                                });
-                            });
+                            for (layer_index, mut layer_bytes) in
+                                layer_data.iter_mut().enumerate()
+                            {
+                                let store = labels.labels_for_layer(layer_index + 1);
+                                let start = (i * nodes_count) + node_index;
+                                let end = start + chunked_nodes_count;
+                                store
+                                    .read_range_into(start, end, &mut layer_bytes)
+                                    .expect("failed to read store range");
+                            }
 
                             // Copy out all layer data arranged into columns.
-                            for layer_index in 0..layers {
-                                for index in 0..chunked_nodes_count {
-                                    columns[index][layer_index] = layer_data[layer_index][index];
-                                }
-                            }
+                            let columns: Vec<GenericArray<Fr, ColumnArity>> =
+                                (0..chunked_nodes_count)
+                                    .into_par_iter()
+                                    .map(|index| {
+                                        (0..layers)
+                                            .map(|layer_index| {
+                                                bytes_into_fr(
+                                                &layer_data[layer_index][std::mem::size_of::<Fr>()
+                                                    * index
+                                                    ..std::mem::size_of::<Fr>() * (index + 1)],
+                                            ).expect("Could not create Fr from bytes.")
+                                            })
+                                            .collect::<GenericArray<Fr, ColumnArity>>()
+                                    })
+                                    .collect();
 
                             drop(layer_data);
 
@@ -251,8 +249,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 max_gpu_tree_batch_size,
                             )
                             .expect("failed to create ColumnTreeBuilder");
-
-                            info!("Run builder for tree_c {}/{}", i + 1, tree_count);
                             
                             loop {
                                 let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
@@ -299,75 +295,70 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     }); // gpu loop
                 });
 
-                configs.iter().enumerate()
-                    .zip(writers_rx.iter())
-                    .for_each(|((i, config), writer_rx)| {
+                let configs = &configs;
+                s.spawn(move |_| {
+                    configs.iter().enumerate()
+                        .zip(writers_rx.iter())
+                        .for_each(|((i, config), writer_rx)| {
 
-                    info!("writing tree_c {}", i + 1);
+                        let (base_data, tree_data) = writer_rx
+                            .recv()
+                            .expect("failed to receive base_data, tree_data for tree_c");
+                        let tree_len = base_data.len() + tree_data.len();
 
-                    let (base_data, tree_data) = writer_rx
-                        .recv()
-                        .expect("failed to receive base_data, tree_data for tree_c");
-                    let tree_len = base_data.len() + tree_data.len();
+                        assert_eq!(base_data.len(), nodes_count);
+                        assert_eq!(tree_len, config.size.expect("config size failure"));
 
-                    assert_eq!(base_data.len(), nodes_count);
-                    assert_eq!(tree_len, config.size.expect("config size failure"));
+                        // Persist the base and tree data to disk based using the current store config.
+                        let tree_c_store =
+                            DiskStore::<<Tree::Hasher as Hasher>::Domain>::new_with_config(
+                                tree_len,
+                                Tree::Arity::to_usize(),
+                                config.clone(),
+                            )
+                            .expect("failed to create DiskStore for base tree data");
 
-                    info!("tree data for tree_c {} has been recieved", i + 1);
+                        let store = Arc::new(RwLock::new(tree_c_store));
+                        let batch_size = std::cmp::min(base_data.len(), column_write_batch_size);
+                        let flatten_and_write_store = |data: &Vec<Fr>, offset| {
+                            data.into_par_iter()
+                                .chunks(batch_size)
+                                .enumerate()
+                                .try_for_each(|(index, fr_elements)| {
+                                    let mut buf = Vec::with_capacity(batch_size * NODE_SIZE);
 
-                    // Persist the base and tree data to disk based using the current store config.
-                    let tree_c_store =
-                        DiskStore::<<Tree::Hasher as Hasher>::Domain>::new_with_config(
-                            tree_len,
-                            Tree::Arity::to_usize(),
-                            config.clone(),
-                        )
-                        .expect("failed to create DiskStore for base tree data");
+                                    for fr in fr_elements {
+                                        buf.extend(fr_into_bytes(&fr));
+                                    }
+                                    store
+                                        .write()
+                                        .expect("failed to access store for write")
+                                        .copy_from_slice(&buf[..], offset + (batch_size * index))
+                                })
+                        };
 
-                    let store = Arc::new(RwLock::new(tree_c_store));
-                    let batch_size = std::cmp::min(base_data.len(), column_write_batch_size);
-                    let flatten_and_write_store = |data: &Vec<Fr>, offset| {
-                        data.into_par_iter()
-                            .chunks(batch_size)
-                            .enumerate()
-                            .try_for_each(|(index, fr_elements)| {
-                                let mut buf = Vec::with_capacity(batch_size * NODE_SIZE);
+                        trace!(
+                            "flattening tree_c base data of {} nodes using batch size {}",
+                            base_data.len(),
+                            batch_size
+                        );
+                        flatten_and_write_store(&base_data, 0)
+                            .expect("failed to flatten and write store");
 
-                                for fr in fr_elements {
-                                    buf.extend(fr_into_bytes(&fr));
-                                }
-                                store
-                                    .write()
-                                    .expect("failed to access store for write")
-                                    .copy_from_slice(&buf[..], offset + (batch_size * index))
-                            })
-                    };
+                        let base_offset = base_data.len();
+                        trace!("flattening tree_c tree data of {} nodes using batch size {} and base offset {}", tree_data.len(), batch_size, base_offset);
+                        flatten_and_write_store(&tree_data, base_offset)
+                            .expect("failed to flatten and write store");
+                        trace!("done flattening tree_c tree data");
 
-                    trace!(
-                        "flattening tree_c base data of {} nodes using batch size {}",
-                        base_data.len(),
-                        batch_size
-                    );
-                    flatten_and_write_store(&base_data, 0)
-                        .expect("failed to flatten and write store");
-                    trace!("done flattening tree_c base data");
-
-                    let base_offset = base_data.len();
-                    trace!("flattening tree_c tree data of {} nodes using batch size {} and base offset {}", tree_data.len(), batch_size, base_offset);
-                    flatten_and_write_store(&tree_data, base_offset)
-                        .expect("failed to flatten and write store");
-                    trace!("done flattening tree_c tree data");
-
-                    trace!("writing tree_c store data");
-                    store
-                        .write()
-                        .expect("failed to access store for sync")
-                        .sync()
-                        .expect("store sync failure");
-                    trace!("done writing tree_c store data");
-
-                    info!("done writing tree_c {}", i + 1);
-                });
+                        store
+                            .write()
+                            .expect("failed to access store for sync")
+                            .sync()
+                            .expect("store sync failure");
+                        trace!("done writing tree_c store data");
+                    });
+                }); // spawn
             }); // rayon::scope
             
             create_disk_tree::<
