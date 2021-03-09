@@ -162,10 +162,10 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
 
     info!("verifying pieces");
 
-    /*ensure!(
+    ensure!(
         verify_pieces(&comm_d, piece_infos, porep_config.into())?,
         "pieces and comm_d do not match"
-    );*/
+    );
 
     let replica_id = generate_replica_id::<Tree::Hasher, _>(
         &prover_id,
@@ -544,7 +544,7 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
 pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
     porep_config: PoRepConfig,
     phase1_output: SealCommitPhase1Output<Tree>,
-    prover_id: ProverId,
+    _prover_id: ProverId,
     sector_id: SectorId,
 ) -> Result<SealCommitOutput> {
     info!("seal_commit_phase2:start: {:?}", sector_id);
@@ -553,9 +553,9 @@ pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
         vanilla_proofs,
         comm_d,
         comm_r,
-        replica_id,
+        replica_id, 
         seed,
-        ticket,
+        ..
     } = phase1_output;
 
     ensure!(comm_d != [0; 32], "Invalid all zero commitment (comm_d)");
@@ -599,7 +599,7 @@ pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
 
     info!("snark_proof calibration: start"); 
     calibrate_filsettings::<StackedDrg<'_, Tree, DefaultPieceHasher>>(&public_inputs, vanilla_proofs, &compound_public_params.vanilla_params, &groth_params,
-         &StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs);
+         &StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs)?;
 
     info!("snark_proof calibration: finish"); 
     let mut tmp_vec = Vec::new();
