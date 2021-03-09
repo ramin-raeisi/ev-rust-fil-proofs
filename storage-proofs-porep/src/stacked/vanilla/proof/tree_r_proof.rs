@@ -83,7 +83,24 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             start_idx = bus_num - tree_r_gpu; 
         }
 
-        for gpu_index in start_idx..bus_num {
+        let mut bus_num = bus_num - start_idx;
+
+        let trees_per_gpu: usize = std::env::var("FIL_PROOFS_TREE_PER_GPU")
+                .and_then(|v| match v.parse() {
+                    Ok(val) => Ok(val),
+                    Err(_) => {
+                        error!("Invalid FIL_PROOFS_TREE_PER_GPU! Defaulting to {}", 0);
+                        Ok(0)
+                    }
+                })
+                .unwrap_or(0);
+            
+        if trees_per_gpu != 0 {
+            assert!(trees_per_gpu * bus_num >= configs.len(), "wrong FIL_PROOFS_TREE_PER_GPU value");
+            bus_num = ((configs.len() as f64) / (trees_per_gpu as f64)).ceil() as usize;
+        }
+
+        for gpu_index in start_idx..start_idx + bus_num {
             batchertype_gpus.push(BatcherType::CustomGPU
                 (opencl::GPUSelector::BusId(all_bus_ids[gpu_index])));
         }
