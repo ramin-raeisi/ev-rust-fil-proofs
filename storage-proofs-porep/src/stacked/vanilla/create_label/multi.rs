@@ -200,7 +200,7 @@ fn create_label_runner(
         // Mark our work as done
         cur_producer.fetch_add(count, SeqCst);
     }
-
+    info!("finished label runner");
     Ok(())
 }
 
@@ -242,7 +242,6 @@ fn create_layer_labels(
     info!("prepate block time: {:?}", prepare_time);
 
 
-    let now = Instant::now();
     // Highest node that is ready from the producer
     let cur_producer = AtomicU64::new(0);
     // Next node to be filled
@@ -291,9 +290,6 @@ fn create_layer_labels(
                 )
             }));
         }
-
-        let label_runners_time = now.elapsed();
-        info!("creating label runners time: {:?}", label_runners_time);
 
         let now = Instant::now();
 
