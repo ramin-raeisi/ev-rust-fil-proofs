@@ -1,4 +1,5 @@
-use std::sync::{mpsc, Arc, RwLock, Mutex};
+use std::sync::{mpsc, Arc, RwLock, Mutex,
+    atomic::{AtomicU64, Ordering::SeqCst}};
 use std::thread;
 use std::time::Duration;
 
@@ -34,9 +35,10 @@ use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
 use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
-
 use bellperson::gpu::scheduler;
 
+
+const MEMORY_PADDING: f64 = 0.15;
 
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> {
@@ -132,6 +134,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let labels = Arc::new(Mutex::new(labels));
             //let labels = Arc::new(labels);
+
+            let size_fr = std::mem::size_of::<Fr>() as u64;
+            let size_state: u64 = size_fr * (layers as u64); // state_{width} = ColumnArity = layers
+            let local_work_size: u64 = 256; // shoud be equal with ColumnTreeBuilder
+            let threads_num: u64 = (max_gpu_column_batch_size as u64) / local_work_size + 1;
+            let mut mem_column_add: u64 = 0;
+            mem_column_add = mem_column_add + size_fr * (max_gpu_column_batch_size as u64); // preimages buffer
+            mem_column_add = mem_column_add + size_fr * (max_gpu_column_batch_size as u64); // digests buffer
+            mem_column_add = mem_column_add + size_state * threads_num; // states per thread
 
             rayon::scope(|s| {
                 // This channel will receive the finished tree data to be written to disk.
@@ -267,12 +278,18 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         assert!(locked_gpu >= 0);
                         let locked_gpu: usize = locked_gpu as usize;
 
+                        let mut mem_total: u64 = 0;
+                        let mut mem_used = AtomicU64::new(0);
+
                         match &batchertype_gpus[locked_gpu] {
                             BatcherType::CustomGPU(selector) => {
-                                info!("[tree_c] Run ColumnTreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {})",
+                                mem_total = selector.get_device().unwrap().memory();
+
+                                info!("[tree_c] Run ColumnTreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {}, memory: {})",
                                 gpu_index,
                                 selector.get_device().unwrap().name(),
                                 selector.get_device().unwrap().bus_id().unwrap(),
+                                mem_total,
                                 );
                             }
                             _default => {
@@ -306,9 +323,22 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 //debug!("got columns, tree_c {}, is_final = {}", i + 1, is_final);
                                 // Just add non-final column batches.
                                 if !is_final {
+                                    let mut printed = false;
+                                    let mut mem_used_val = mem_used.load(SeqCst);
+                                    while((mem_used_val + mem_column_add) as f64 >= (1.0 - MEMORY_PADDING) * (mem_total as f64)) {
+                                        if !printed {
+                                            info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
+                                            printed = true;
+                                        }
+                                        thread::sleep(Duration::from_micros(10));
+                                        mem_used_val = mem_used.load(SeqCst);
+                                    }
+                                    mem_used.fetch_add(mem_column_add, SeqCst);
+                                    info!("Use {}/{} GB", mem_used.load(SeqCst), mem_total);
                                     column_tree_builder
                                         .add_columns(&columns)
                                         .expect("failed to add columns");
+                                    mem_used.fetch_sub(mem_column_add, SeqCst);
                                     continue;
                                 };
 
