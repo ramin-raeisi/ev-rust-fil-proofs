@@ -1,7 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{PathBuf};
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::{mpsc, Arc, RwLock, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -125,6 +125,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let bus_num = batchertype_gpus.len();
         assert!(bus_num > 0);
 
+        let last_layer_labels = Arc::new(Mutex::new(last_layer_labels));
+
         let config_count = configs.len(); // Don't move config into closure below.
         let configs = &configs;
         let tree_r_last_config = &tree_r_last_config;
@@ -165,28 +167,31 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                         let labels_start = i * nodes_count + node_index;
                         let labels_end = labels_start + chunked_nodes_count;
+                        let mut encoded_data;
+                        {
+                            let last_layer_labels = last_layer_labels.lock().unwrap();
+                            encoded_data = last_layer_labels
+                                .read_range(labels_start..labels_end)
+                                .expect("failed to read layer range")
+                                .into_par_iter()
+                                .zip(
+                                    data[(start * NODE_SIZE)..(end * NODE_SIZE)]
+                                        .par_chunks_mut(NODE_SIZE),
+                                )
+                                .map(|(key, data_node_bytes)| {
+                                    let data_node =
+                                        <Tree::Hasher as Hasher>::Domain::try_from_bytes(
+                                            data_node_bytes,
+                                        )
+                                        .expect("try_from_bytes failed");
+                                    let encoded_node =
+                                        encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
+                                    data_node_bytes
+                                        .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
 
-                        let encoded_data = last_layer_labels
-                            .read_range(labels_start..labels_end)
-                            .expect("failed to read layer range")
-                            .into_par_iter()
-                            .zip(
-                                data[(start * NODE_SIZE)..(end * NODE_SIZE)]
-                                    .par_chunks_mut(NODE_SIZE),
-                            )
-                            .map(|(key, data_node_bytes)| {
-                                let data_node =
-                                    <Tree::Hasher as Hasher>::Domain::try_from_bytes(
-                                        data_node_bytes,
-                                    )
-                                    .expect("try_from_bytes failed");
-                                let encoded_node =
-                                    encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
-                                data_node_bytes
-                                    .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
-
-                                encoded_node
-                            });
+                                    encoded_node
+                                });
+                        }
 
                         node_index += chunked_nodes_count;
                         trace!(
