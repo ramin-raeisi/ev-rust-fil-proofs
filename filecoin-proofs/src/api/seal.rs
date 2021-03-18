@@ -26,6 +26,9 @@ use storage_proofs_porep::stacked::{
     TemporaryAux, TemporaryAuxCache,
 };
 
+use rayon::prelude::*;
+use std::sync::{mpsc};
+
 use crate::{
     api::{as_safe_commitment, commitment_from_fr, get_base_tree_leafs, get_base_tree_size, calibrate_filsettings},
     caches::{get_stacked_params, get_stacked_verifying_key},
@@ -121,51 +124,18 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
         _,
     >>::setup(&compound_setup_params)?;
 
-    info!("building merkle tree for the original data");
-    let (config, comm_d) = measure_op(Operation::CommD, || -> Result<_> {
-        let base_tree_size = get_base_tree_size::<DefaultBinaryTree>(porep_config.sector_size)?;
-        let base_tree_leafs = get_base_tree_leafs::<DefaultBinaryTree>(base_tree_size)?;
-        ensure!(
-            compound_public_params.vanilla_params.graph.size() == base_tree_leafs,
-            "graph size and leaf size don't match"
-        );
+    let base_tree_size = get_base_tree_size::<DefaultBinaryTree>(porep_config.sector_size)?;
+    let base_tree_leafs = get_base_tree_leafs::<DefaultBinaryTree>(base_tree_size)?;
+    // MT for original data is always named tree-d, and it will be
+    // referenced later in the process as such.
+    let mut config = StoreConfig::new(
+        cache_path.as_ref(),
+        CacheKey::CommDTree.to_string(),
+        default_rows_to_discard(base_tree_leafs, BINARY_ARITY),
+    );
 
-        trace!(
-            "seal phase 1: sector_size {}, base tree size {}, base tree leafs {}",
-            u64::from(porep_config.sector_size),
-            base_tree_size,
-            base_tree_leafs,
-        );
+    let comm_d = compute_comm_d(porep_config.into(), piece_infos)?;
 
-        // MT for original data is always named tree-d, and it will be
-        // referenced later in the process as such.
-        let mut config = StoreConfig::new(
-            cache_path.as_ref(),
-            CacheKey::CommDTree.to_string(),
-            default_rows_to_discard(base_tree_leafs, BINARY_ARITY),
-        );
-        let data_tree = create_base_merkle_tree::<BinaryMerkleTree<DefaultPieceHasher>>(
-            Some(config.clone()),
-            base_tree_leafs,
-            &data,
-        )?;
-        drop(data);
-
-        config.size = Some(data_tree.len());
-        let comm_d_root: Fr = data_tree.root().into();
-        let comm_d = commitment_from_fr(comm_d_root);
-
-        drop(data_tree);
-
-        Ok((config, comm_d))
-    })?;
-
-    info!("verifying pieces");
-
-    /*ensure!(
-        verify_pieces(&comm_d, piece_infos, porep_config.into())?,
-        "pieces and comm_d do not match"
-    );*/
 
     let replica_id = generate_replica_id::<Tree::Hasher, _>(
         &prover_id,
@@ -175,11 +145,59 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
         &porep_config.porep_id,
     );
 
-    let labels = StackedDrg::<Tree, DefaultPieceHasher>::replicate_phase1(
-        &compound_public_params.vanilla_params,
-        &replica_id,
-        config.clone(),
-    )?;
+    let (labels_tx, labels_rx) = mpsc::sync_channel::<storage_proofs_porep::stacked::Labels<Tree>>(1);
+
+    let labels_config = config.clone();
+    rayon::scope(|s| {
+        s.spawn(|_| {
+            let labels = StackedDrg::<Tree, DefaultPieceHasher>::replicate_phase1(
+                &compound_public_params.vanilla_params,
+                &replica_id,
+                labels_config,
+            ).unwrap();
+            labels_tx.send(labels).unwrap();
+        });
+
+        s.spawn(|_| {
+            info!("building merkle tree for the original data");
+            measure_op(Operation::CommD, || -> Result<_> {
+                ensure!(
+                    compound_public_params.vanilla_params.graph.size() == base_tree_leafs,
+                    "graph size and leaf size don't match"
+                );
+
+                trace!(
+                    "seal phase 1: sector_size {}, base tree size {}, base tree leafs {}",
+                    u64::from(porep_config.sector_size),
+                    base_tree_size,
+                    base_tree_leafs,
+                );
+
+                let data_tree = create_base_merkle_tree::<BinaryMerkleTree<DefaultPieceHasher>>(
+                    Some(config.clone()),
+                    base_tree_leafs,
+                    &data,
+                )?;
+                drop(data);
+
+                config.size = Some(data_tree.len());
+                let comm_d_root: Fr = data_tree.root().into();
+                let comm_d = commitment_from_fr(comm_d_root);
+
+                drop(data_tree);
+                Ok(())
+            }).unwrap();
+        });
+    });
+
+    let labels = labels_rx.recv().unwrap();
+
+    info!("verifying pieces");
+
+    /*ensure!(
+        verify_pieces(&comm_d, piece_infos, porep_config.into())?,
+        "pieces and comm_d do not match"
+    );*/
 
     let out = SealPreCommitPhase1Output {
         labels,
@@ -601,7 +619,7 @@ pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
     calibrate_filsettings::<StackedDrg<'_, Tree, DefaultPieceHasher>>(&public_inputs, vanilla_proofs, &compound_public_params.vanilla_params, &groth_params,
          &StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs);
 
-    info!("snark_proof calibration: finish"); 
+    info!("snark_proof calibration: finish");
     let mut tmp_vec = Vec::new();
     tmp_vec.push(0);
     let out = SealCommitOutput { proof: tmp_vec};
