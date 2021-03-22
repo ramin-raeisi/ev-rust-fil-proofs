@@ -150,9 +150,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let mem_column_add = 800000000;
 
             let configs =  Arc::new(configs);
-            rayon::scope(|s| {
-            //crossbeam::scope(|s| {
-                //let mut main_threads = Vec::new();
+            crossbeam::scope(|s| {
+                let mut main_threads = Vec::new();
                 // This channel will receive the finished tree data to be written to disk.
                 let mut writers_tx = Vec::new();
                 let mut writers_rx = Vec::new();
@@ -162,22 +161,18 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     writers_rx.push(writer_rx);
                 }
 
-                //main_threads.push(s.spawn(move |_| {
-                s.spawn(move |_| {
-                    //debug!("start spawn");
-                    //crossbeam::scope(|s2| {
-                        //let mut threads = Vec::new();
-                        //for (&i, builder_tx) in (0..config_count).collect::<Vec<_>>().iter()
-                        (0..config_count).collect::<Vec<_>>().par_iter()
-                        .zip(builders_tx.into_par_iter())
-                        //{
-                        .for_each( |(&i, builder_tx)| {
-                            //let labels = labels.clone();
-                        //debug!("start spawn tree_c {}", i + 1);
-                            //threads.push(s2.spawn(move |_| {
+                main_threads.push(s.spawn(move |_| {
+                    crossbeam::scope(|s2| {
+                        let mut threads = Vec::new();
+                        for (&i, builder_tx) in (0..config_count).collect::<Vec<_>>().iter()
+                        .zip(builders_tx.into_iter())
+                        {
+                            let labels = labels.clone();
+                            debug!("start spawn tree_c {}", i + 1);
+                            threads.push(s2.spawn(move |_| {
                                 let mut node_index = 0;
                                 while node_index != nodes_count {
-                                    //debug!("while tree_c {}, node_index = {}", i + 1, node_index);
+                                    debug!("while tree_c {}, node_index = {}", i + 1, node_index);
                                     let chunked_nodes_count =
                                         std::cmp::min(nodes_count - node_index, max_gpu_column_batch_size);
                                     trace!(
@@ -219,7 +214,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                         debug!("loop 2, tree_c {}, node_index = {}", i + 1, node_index);
                                         let res = (0..chunked_nodes_count)
-                                            .into_par_iter()
+                                            .into_par_iter() // TODO: CROSSBEAM
                                             .map(|index| {
                                                 (0..layers)
                                                     .map(|layer_index| {
@@ -236,11 +231,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             .collect();
                                         debug!("loop 2 end, tree_c {}, node_index = {}", i + 1, node_index);
                                         res
-                                    }
-
-                                    //debug!("drop layer_data, tree_c {}, node_index = {}", i + 1, node_index);
-                                    drop(layer_data);
-                                    //debug!("layer_data is dropped, tree_c {}, node_index = {}", i + 1, node_index);*/
+                                    }; // columns
 
                                     node_index += chunked_nodes_count;
                                     trace!(
@@ -255,157 +246,180 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     builder_tx
                                         .send((columns, is_final))
                                         .expect("failed to send columns");
-                                    //debug!("tree_c {}, new node_index = {}, data was sent", i + 1, node_index);
-                                }
-                            });
-                    //});
-                        //}
+                                    debug!("tree_c {}, new node_index = {}, data was sent", i + 1, node_index);
+                                } // while loop
+                            }));
+                        } // threads loop
 
-                        /*for t in threads {
+                        for t in threads {
                             t.join().unwrap();
                         }
-                    }).unwrap();*/
+                    }).unwrap(); // scope s2
 
-                    //debug!("end spawn");
-                }); // spawn
+                    debug!("end spawn");
+                })); // spawn
                 
                 let batchertype_gpus = &batchertype_gpus;
                 let gpu_indexes: Vec<usize> = (0.. bus_num).collect();
 
                 //Parallel tuning GPU computing
-                //main_threads.push(s.spawn(move |_| {
-                    s.spawn(move |_| {
-                    //debug!("start spawn2");
-                    gpu_indexes.par_iter()
-                        .zip(builders_rx_by_gpu.into_par_iter())
-                        .for_each( |(&gpu_index, builders_rx)| {
+                main_threads.push(s.spawn(move |_| {
 
+                    crossbeam::scope(|s2| {
+                        let mut gpu_threads = Vec::new();
 
-                        let lock = scheduler::get_next_device().lock().unwrap();
-                        let target_bus_id = lock.device().bus_id().unwrap();
-                        
-                        let mut locked_gpu: i32 = -1;
-                        for idx in 0..batchertype_gpus.len() {
-                            match &batchertype_gpus[idx][0] {
-                                BatcherType::CustomGPU(selector) => {
-                                    let bus_id = selector.get_device().unwrap().bus_id().unwrap();
-                                    if bus_id == target_bus_id {
-                                        locked_gpu = idx as i32;
+                        let writers_tx = Arc::new(writers_tx);
+
+                        //debug!("start spawn2");
+                        for (&gpu_index, builders_rx) in gpu_indexes.iter()
+                            .zip(builders_rx_by_gpu.into_iter())
+                            {
+                                let writers_tx = writers_tx.clone();
+
+                                gpu_threads.push(s2.spawn(move |_| {
+                                    let lock = scheduler::get_next_device().lock().unwrap();
+                                    let target_bus_id = lock.device().bus_id().unwrap();
+                                    
+                                    let mut locked_gpu: i32 = -1;
+                                    for idx in 0..batchertype_gpus.len() {
+                                        match &batchertype_gpus[idx][0] {
+                                            BatcherType::CustomGPU(selector) => {
+                                                let bus_id = selector.get_device().unwrap().bus_id().unwrap();
+                                                if bus_id == target_bus_id {
+                                                    locked_gpu = idx as i32;
+                                                }
+
+                                            }
+                                            _default => {
+                                                info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                                            }
+                                        }
                                     }
 
-                                }
-                                _default => {
-                                    info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
-                                }
-                            }
-                        }
+                                    assert!(locked_gpu >= 0);
+                                    let locked_gpu: usize = locked_gpu as usize;
 
-                        assert!(locked_gpu >= 0);
-                        let locked_gpu: usize = locked_gpu as usize;
+                                    let mut mem_total: u64 = 0;
+                                    let mut mem_used = AtomicU64::new(0);
 
-                        let mut mem_total: u64 = 0;
-                        let mut mem_used = AtomicU64::new(0);
+                                    match &batchertype_gpus[locked_gpu][0] {
+                                        BatcherType::CustomGPU(selector) => {
+                                            mem_total = selector.get_device().unwrap().memory();
 
-                        match &batchertype_gpus[locked_gpu][0] {
-                            BatcherType::CustomGPU(selector) => {
-                                mem_total = selector.get_device().unwrap().memory();
+                                            info!("[tree_c] Run ColumnTreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {}, memory: {})",
+                                            gpu_index,
+                                            selector.get_device().unwrap().name(),
+                                            selector.get_device().unwrap().bus_id().unwrap(),
+                                            mem_total,
+                                            );
+                                        }
+                                        _default => {
+                                            info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                                        }
+                                    }
 
-                                info!("[tree_c] Run ColumnTreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {}, memory: {})",
-                                gpu_index,
-                                selector.get_device().unwrap().name(),
-                                selector.get_device().unwrap().bus_id().unwrap(),
-                                mem_total,
-                                );
-                            }
-                            _default => {
-                                info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
-                            }
-                        }
+                                    // Loop until all trees for all configs have been built.
+                                    let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
 
-                        // Loop until all trees for all configs have been built.
-                        let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
-
-                        
-                        //debug!("run spawn2 inner loop");
-                        config_ids.par_iter()
-                            .zip(builders_rx.into_par_iter())
-                            .for_each( |(&i, builder_rx)| {
-
-                            let mut printed = false;
-                            let mut mem_used_val = mem_used.load(SeqCst);
-                            while((mem_used_val + mem_column_add) as f64 >= (1.0 - MEMORY_PADDING) * (mem_total as f64)) {
-                                if !printed {
-                                    info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
-                                    printed = true;
-                                }
-                                thread::sleep(Duration::from_micros(10));
-                                mem_used_val = mem_used.load(SeqCst);
-                            }
-                            mem_used.fetch_add(mem_column_add, SeqCst);
-
-                            //debug!("create column_tree_builder, tree_c {}", i + 1);
-                            let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
-                                Some(batchertype_gpus[locked_gpu][i].clone()),
-                                nodes_count,
-                                max_gpu_column_batch_size,
-                                max_gpu_tree_batch_size,
-                            )
-                            .expect("failed to create ColumnTreeBuilder");
-                            
-                            //debug!("loop, tree_c {}", i + 1);
-                            loop {
-                                //debug!("get columns, tree_c {}", i + 1);
-                                let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
-                                    builder_rx.recv().expect("failed to recv columns");
-                                //debug!("got columns, tree_c {}, is_final = {}", i + 1, is_final);
-                                // Just add non-final column batches.
-                                if !is_final {
                                     
-                                    debug!("Use {}/{} GB", (mem_used.load(SeqCst) as f64 / (1024 * 1024 * 1024) as f64), (mem_total as f64 / (1024 * 1024 * 1024) as f64));
-                                    column_tree_builder
-                                        .add_columns(&columns)
-                                        .expect("failed to add columns");
-                                    continue;
-                                };
+                                    crossbeam::scope(|s3| {
+                                        let mut config_threads = Vec::new();
 
-                                // If we get here, this is a final column: build a sub-tree.
-                                let (base_data, tree_data) = column_tree_builder
-                                    .add_final_columns(&columns)
-                                    .expect("failed to add final columns");
-                                trace!(
-                                    "base data len {}, tree data len {}",
-                                    base_data.len(),
-                                    tree_data.len()
-                                );
+                                        let writers_tx = Arc::new(writers_tx);
+                                        let mem_used = Arc::new(mem_used);
+                                        debug!("run spawn2 inner loop");
+                                        for (&i, builder_rx) in config_ids.iter()
+                                            .zip(builders_rx.into_iter())
+                                            {
+                                            let writers_tx  = writers_tx.clone();
+                                            let mem_used = mem_used.clone();
+                                            config_threads.push(s3.spawn(move |_| {
+                                                let mut printed = false;
+                                                let mut mem_used_val = mem_used.load(SeqCst);
+                                                while((mem_used_val + mem_column_add) as f64 >= (1.0 - MEMORY_PADDING) * (mem_total as f64)) {
+                                                    if !printed {
+                                                        info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
+                                                        printed = true;
+                                                    }
+                                                    thread::sleep(Duration::from_micros(10));
+                                                    mem_used_val = mem_used.load(SeqCst);
+                                                }
+                                                mem_used.fetch_add(mem_column_add, SeqCst);
 
-                                let tree_len = base_data.len() + tree_data.len();
+                                                //debug!("create column_tree_builder, tree_c {}", i + 1);
+                                                let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
+                                                    Some(batchertype_gpus[locked_gpu][i].clone()),
+                                                    nodes_count,
+                                                    max_gpu_column_batch_size,
+                                                    max_gpu_tree_batch_size,
+                                                )
+                                                .expect("failed to create ColumnTreeBuilder");
+                                                
+                                                //debug!("loop, tree_c {}", i + 1);
+                                                loop {
+                                                    //debug!("get columns, tree_c {}", i + 1);
+                                                    let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
+                                                        builder_rx.recv().expect("failed to recv columns");
+                                                    //debug!("got columns, tree_c {}, is_final = {}", i + 1, is_final);
+                                                    // Just add non-final column batches.
+                                                    if !is_final {
+                                                        
+                                                        debug!("Use {}/{} GB", (mem_used.load(SeqCst) as f64 / (1024 * 1024 * 1024) as f64), (mem_total as f64 / (1024 * 1024 * 1024) as f64));
+                                                        column_tree_builder
+                                                            .add_columns(&columns)
+                                                            .expect("failed to add columns");
+                                                        continue;
+                                                    };
 
-                                info!(
-                                    "persisting base tree_c {}/{} of length {}",
-                                    i + 1,
-                                    tree_count,
-                                    tree_len,
-                                );
+                                                    // If we get here, this is a final column: build a sub-tree.
+                                                    let (base_data, tree_data) = column_tree_builder
+                                                        .add_final_columns(&columns)
+                                                        .expect("failed to add final columns");
+                                                    trace!(
+                                                        "base data len {}, tree data len {}",
+                                                        base_data.len(),
+                                                        tree_data.len()
+                                                    );
 
-                                let writer_tx = writers_tx[i].clone();
+                                                    let tree_len = base_data.len() + tree_data.len();
 
-                                mem_used.fetch_sub(mem_column_add, SeqCst);
-                                writer_tx
-                                    .send((base_data, tree_data))
-                                    .expect("failed to send base_data, tree_data");
-                                break;
-                            }
-                        }); // configs loop
+                                                    info!(
+                                                        "persisting base tree_c {}/{} of length {}",
+                                                        i + 1,
+                                                        tree_count,
+                                                        tree_len,
+                                                    );
 
-                        drop(lock);
-                        trace!("[tree_c] set gpu idle={}", locked_gpu);
-                    }); // gpu loop
-                //debug!("end spawn2");
-                });
+                                                    let writer_tx = writers_tx[i].clone();
+
+                                                    mem_used.fetch_sub(mem_column_add, SeqCst);
+                                                    writer_tx
+                                                        .send((base_data, tree_data))
+                                                        .expect("failed to send base_data, tree_data");
+                                                    break;
+                                                }
+                                            }));
+                                        } // configs loop
+
+                                        for t in config_threads {
+                                            t.join().unwrap();
+                                        }
+                                    }).unwrap(); // scope s3
+
+                                    drop(lock);
+                                    trace!("[tree_c] set gpu idle={}", locked_gpu);
+                                })); // spawn
+                        } // gpu loop
+
+                        for t in gpu_threads {
+                            t.join().unwrap();
+                        }
+                    }).unwrap(); //scope s2
+                    debug!("end spawn2");
+                }));
 
                 let configs = configs.clone();
-                //main_threads.push(s.spawn(move |_| {
-                    s.spawn(move |_| {
+                main_threads.push(s.spawn(move |_| {
                     configs.iter().enumerate()
                         .zip(writers_rx.iter())
                         .for_each(|((i, config), writer_rx)| {
@@ -467,13 +481,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             .expect("store sync failure");
                         trace!("done writing tree_c store data");
                     });
-                });
+                }));
 
-                /*for t in main_threads {
+                for t in main_threads {
                     t.join().unwrap();
-                }*/
-            });
-                //.unwrap(); // scope
+                }
+            }).unwrap(); // scope
             
             create_disk_tree::<
                 DiskTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,

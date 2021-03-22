@@ -15,6 +15,7 @@ use merkletree::merkle::{
 };
 use merkletree::store::{StoreConfig};
 use rayon::prelude::*;
+use crossbeam;
 use storage_proofs_core::{
     data::Data,
     error::Result,
@@ -65,7 +66,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         info!("[tree_r_last] generating tree r last using the GPU");
         let max_gpu_tree_batch_size = settings::SETTINGS.max_gpu_tree_batch_size as usize;
 
-        // Ryan 
         let mut batchertype_gpus = Vec::new();
         let all_bus_ids = opencl::Device::all()
             .iter()
@@ -133,7 +133,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let config_count = configs.len(); // Don't move config into closure below.
         let configs = &configs;
         let tree_r_last_config = &tree_r_last_config;
-        rayon::scope(|s| {
+        crossbeam::scope(|s| {
+            let mut main_threads = Vec::new();
+
             // This channel will receive the finished tree data to be written to disk.
             let mut writers_tx = Vec::new();
             let mut writers_rx = Vec::new();
@@ -145,194 +147,227 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let data_raw = data.as_mut();
             
-            s.spawn(move |_| {
-                for ((&i, builder_tx), data) in (0..config_count).collect::<Vec<_>>().iter()
-                //(0..config_count).collect::<Vec<_>>().par_iter()
-                    .zip(builders_tx.into_iter())
-                    .zip(data_raw.chunks_mut(nodes_count * NODE_SIZE))
-                    {
-                    //.for_each( |((&i, builder_tx), data)| {
+            main_threads.push(s.spawn(move |_| {
+                crossbeam::scope(|s2| {
+                    let mut threads = Vec::new();
 
-                    let mut node_index = 0;
-                    debug!("run while loop for {}", i + 1);
-                    while node_index != nodes_count {
-                        let chunked_nodes_count =
-                            std::cmp::min(nodes_count - node_index, max_gpu_tree_batch_size);
-                        let start = node_index;
-                        let end = start + chunked_nodes_count;
-                        trace!(
-                            "processing config {}/{} with leaf nodes {} [{}, {}, {}-{}]",
-                            i + 1,
-                            tree_count,
-                            chunked_nodes_count,
-                            node_index,
-                            nodes_count,
-                            start,
-                            end,
-                        );
-                        
-                        debug!("encoded_data, tree_c {}, node_index = {}", i + 1, node_index);
-                        let encoded_data = {
-                            use fr32::bytes_into_fr;
+                    for ((&i, builder_tx), data) in (0..config_count).collect::<Vec<_>>().iter()
+                        .zip(builders_tx.into_iter())
+                        .zip(data_raw.chunks_mut(nodes_count * NODE_SIZE))
+                        {
+                            
+                        let last_layer_labels = last_layer_labels.clone();
+                        threads.push(s2.spawn(move |_| {
+                            let mut node_index = 0;
+                            debug!("run while loop for {}", i + 1);
+                            while node_index != nodes_count {
+                                let chunked_nodes_count =
+                                    std::cmp::min(nodes_count - node_index, max_gpu_tree_batch_size);
+                                let start = node_index;
+                                let end = start + chunked_nodes_count;
+                                trace!(
+                                    "processing config {}/{} with leaf nodes {} [{}, {}, {}-{}]",
+                                    i + 1,
+                                    tree_count,
+                                    chunked_nodes_count,
+                                    node_index,
+                                    nodes_count,
+                                    start,
+                                    end,
+                                );
+                                
+                                debug!("encoded_data, tree_c {}, node_index = {}", i + 1, node_index);
+                                let encoded_data = {
+                                    use fr32::bytes_into_fr;
 
-                            let mut layer_bytes =
-                                vec![0u8; (end - start) * std::mem::size_of::<Fr>()];
+                                    let mut layer_bytes =
+                                        vec![0u8; (end - start) * std::mem::size_of::<Fr>()];
 
-                            {
-                                let last_layer_labels = last_layer_labels.lock().unwrap();
-                                debug!("read labels, tree_c {}, node_index = {}", i + 1, node_index);
-                                let labels_start = i * nodes_count + node_index;
-                                let labels_end = labels_start + chunked_nodes_count;
-                                last_layer_labels
-                                    .read_range_into(labels_start, labels_end, &mut layer_bytes)
-                                    .expect("failed to read layer bytes");
-                                debug!("read labels end, tree_c {}, node_index = {}", i + 1, node_index);
-                            }
+                                    {
+                                        let last_layer_labels = last_layer_labels.lock().unwrap();
+                                        debug!("read labels, tree_c {}, node_index = {}", i + 1, node_index);
+                                        let labels_start = i * nodes_count + node_index;
+                                        let labels_end = labels_start + chunked_nodes_count;
+                                        last_layer_labels
+                                            .read_range_into(labels_start, labels_end, &mut layer_bytes)
+                                            .expect("failed to read layer bytes");
+                                        debug!("read labels end, tree_c {}, node_index = {}", i + 1, node_index);
+                                    }
 
-                            debug!("layer_bytes, tree_c {}, node_index = {}", i + 1, node_index);
-                            let res = layer_bytes
-                                .into_par_iter()
-                                .chunks(std::mem::size_of::<Fr>())
-                                .map(|chunk| {
-                                    bytes_into_fr(&chunk).expect("Could not create Fr from bytes.")
-                                })
-                                .zip(
-                                    data.as_mut()[(start * NODE_SIZE)..(end * NODE_SIZE)]
-                                        .par_chunks_mut(NODE_SIZE),
-                                )
-                                .map(|(key, data_node_bytes)| {
-                                    let data_node =
-                                        <Tree::Hasher as Hasher>::Domain::try_from_bytes(
-                                            data_node_bytes,
+                                    debug!("layer_bytes, tree_c {}, node_index = {}", i + 1, node_index);
+                                    let res = layer_bytes
+                                        .into_par_iter() // TODO CROSSBEAM
+                                        .chunks(std::mem::size_of::<Fr>())
+                                        .map(|chunk| {
+                                            bytes_into_fr(&chunk).expect("Could not create Fr from bytes.")
+                                        })
+                                        .zip(
+                                            data.as_mut()[(start * NODE_SIZE)..(end * NODE_SIZE)]
+                                                .par_chunks_mut(NODE_SIZE),
                                         )
-                                        .expect("try_from_bytes failed");
+                                        .map(|(key, data_node_bytes)| {
+                                            let data_node =
+                                                <Tree::Hasher as Hasher>::Domain::try_from_bytes(
+                                                    data_node_bytes,
+                                                )
+                                                .expect("try_from_bytes failed");
 
-                                    let encoded_node = encode::<<Tree::Hasher as Hasher>::Domain>(
-                                        key.into(),
-                                        data_node,
-                                    );
-                                    data_node_bytes
-                                        .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
+                                            let encoded_node = encode::<<Tree::Hasher as Hasher>::Domain>(
+                                                key.into(),
+                                                data_node,
+                                            );
+                                            data_node_bytes
+                                                .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
 
-                                    encoded_node
-                                });
-                            debug!("layer_bytes end, tree_c {}, node_index = {}", i + 1, node_index);
-                            res
-                        };
-                        debug!("encoded_data end, tree_c {}, node_index = {}", i + 1, node_index);
+                                            encoded_node
+                                        });
+                                    debug!("layer_bytes end, tree_c {}, node_index = {}", i + 1, node_index);
+                                    res
+                                };
+                                debug!("encoded_data end, tree_c {}, node_index = {}", i + 1, node_index);
 
-                        node_index += chunked_nodes_count;
-                        trace!(
-                            "node index {}/{}/{}",
-                            node_index,
-                            chunked_nodes_count,
-                            nodes_count,
-                        );
+                                node_index += chunked_nodes_count;
+                                trace!(
+                                    "node index {}/{}/{}",
+                                    node_index,
+                                    chunked_nodes_count,
+                                    nodes_count,
+                                );
 
-                        let encoded: Vec<_> =
-                            encoded_data.into_par_iter().map(|x| x.into()).collect();
+                                let encoded: Vec<_> =
+                                    encoded_data.into_par_iter().map(|x| x.into()).collect();
 
-                        let is_final = node_index == nodes_count;
-                        builder_tx
-                            .send((encoded, is_final))
-                            .expect("failed to send encoded");
+                                let is_final = node_index == nodes_count;
+                                builder_tx
+                                    .send((encoded, is_final))
+                                    .expect("failed to send encoded");
+                            }
+                        }));
+                    } // threads loop
+
+                    for t in threads {
+                        t.join().unwrap();
                     }
-                //}); // loop
-                }
-            }); // spawn
+                }).unwrap(); // scope s2
+            })); // spawn
             let batchertype_gpus = &batchertype_gpus;
             let gpu_indexes: Vec<usize> = (0.. bus_num).collect();
 
             //Parallel tuning GPU computing
-            s.spawn(move |_| {
-                gpu_indexes.par_iter()
-                    .zip(builders_rx_by_gpu.into_par_iter())
-                    .for_each( |(&gpu_index, builders_rx)| {
-                    
-                    let lock = scheduler::get_next_device().lock().unwrap();
-                    let target_bus_id = lock.device().bus_id().unwrap();
+            main_threads.push(s.spawn(move |_| {
+                crossbeam::scope(|s2| {
+                    let mut gpu_threads = Vec::new();
 
-                    let mut locked_gpu: i32 = -1;
-                    for idx in 0..batchertype_gpus.len() {
-                        match &batchertype_gpus[idx][0] {
-                            BatcherType::CustomGPU(selector) => {
-                                let bus_id = selector.get_device().unwrap().bus_id().unwrap();
-                                if bus_id == target_bus_id {
-                                    locked_gpu = idx as i32;
+                    let writers_tx = Arc::new(writers_tx);
+
+                    for (&gpu_index, builders_rx) in gpu_indexes.iter()
+                        .zip(builders_rx_by_gpu.into_iter())
+                        {
+
+                        let writers_tx = writers_tx.clone();
+
+                        gpu_threads.push(s2.spawn(move |_| {
+                            let lock = scheduler::get_next_device().lock().unwrap();
+                            let target_bus_id = lock.device().bus_id().unwrap();
+
+                            let mut locked_gpu: i32 = -1;
+                            for idx in 0..batchertype_gpus.len() {
+                                match &batchertype_gpus[idx][0] {
+                                    BatcherType::CustomGPU(selector) => {
+                                        let bus_id = selector.get_device().unwrap().bus_id().unwrap();
+                                        if bus_id == target_bus_id {
+                                            locked_gpu = idx as i32;
+                                        }
+
+                                    }
+                                    _default => {
+                                        info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                                    }
+                                }
+                            }
+
+                            assert!(locked_gpu >= 0);
+                            let locked_gpu: usize = locked_gpu as usize;
+                            
+                            let tree_r_last_config = &tree_r_last_config;
+                            let batchertype_gpus = &batchertype_gpus;
+
+                            match &batchertype_gpus[locked_gpu][0] {
+                                BatcherType::CustomGPU(selector) => {
+                                    info!("[tree_r_last] Run TreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {})",
+                                    gpu_index,
+                                    selector.get_device().unwrap().name(),
+                                    selector.get_device().unwrap().bus_id().unwrap(),
+                                    );
+                                }
+                                _default => {
+                                    info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                                }
+                            }
+
+                            // Loop until all trees for all configs have been built.
+                            let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
+
+                            crossbeam::scope(|s3| {
+                                let mut config_threads = Vec::new();
+                                let writers_tx = Arc::new(writers_tx);
+
+                                // Loop until all trees for all configs have been built.
+                                for (&i, builder_rx) in config_ids.iter()
+                                    .zip(builders_rx.into_iter())
+                                    {
+                                    let writers_tx  = writers_tx.clone();
+                                    
+                                    config_threads.push(s3.spawn(move |_| {
+                                        let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
+                                            Some(batchertype_gpus[locked_gpu][i].clone()),
+                                            nodes_count,
+                                            max_gpu_tree_batch_size,
+                                            tree_r_last_config.rows_to_discard,
+                                        )
+                                        .expect("failed to create TreeBuilder");
+                                        
+                                        loop {
+                                            let (encoded, is_final) =
+                                                builder_rx.recv().expect("failed to recv encoded data");
+    
+                                            // Just add non-final leaf batches.
+                                            if !is_final {
+                                                tree_builder
+                                                    .add_leaves(&encoded)
+                                                    .expect("failed to add leaves");
+                                                continue;
+                                            };
+    
+                                            // If we get here, this is a final leaf batch: build a sub-tree.
+                                            let (_, tree_data) = tree_builder
+                                                .add_final_leaves(&encoded)
+                                                .expect("failed to add final leaves");
+                    
+    
+                                            let writer_tx = writers_tx[i].clone();
+                                            writer_tx.send(tree_data).expect("failed to send tree_data");
+                                            break;
+                                        }
+                                    })); // spawn
                                 }
 
-                            }
-                            _default => {
-                                info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
-                            }
-                        }
+                                for t in config_threads {
+                                    t.join().unwrap();
+                                }
+                            }).unwrap(); // scope s3
+
+                            drop(lock);
+                            trace!("[tree_c] set gpu idle={}", locked_gpu);
+                        })); // spawn
+                    } // gpu loop
+                    for t in gpu_threads {
+                        t.join().unwrap();
                     }
+                }).unwrap(); // scope s2
+            }));
 
-                    assert!(locked_gpu >= 0);
-                    let locked_gpu: usize = locked_gpu as usize;
-                    
-                    let tree_r_last_config = &tree_r_last_config;
-                    let batchertype_gpus = &batchertype_gpus;
-
-                    match &batchertype_gpus[locked_gpu][0] {
-                        BatcherType::CustomGPU(selector) => {
-                            info!("[tree_r_last] Run TreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {})",
-                            gpu_index,
-                            selector.get_device().unwrap().name(),
-                            selector.get_device().unwrap().bus_id().unwrap(),
-                            );
-                        }
-                        _default => {
-                            info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
-                        }
-                    }
-
-                    // Loop until all trees for all configs have been built.
-                    let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
-
-                    // Loop until all trees for all configs have been built.
-                    config_ids.par_iter()
-                        .zip(builders_rx.into_par_iter())
-                        .for_each( |(&i, builder_rx)| {
-
-                        let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
-                            Some(batchertype_gpus[locked_gpu][i].clone()),
-                            nodes_count,
-                            max_gpu_tree_batch_size,
-                            tree_r_last_config.rows_to_discard,
-                        )
-                        .expect("failed to create TreeBuilder");
-                        
-                        loop {
-                            let (encoded, is_final) =
-                                builder_rx.recv().expect("failed to recv encoded data");
-
-                            // Just add non-final leaf batches.
-                            if !is_final {
-                                tree_builder
-                                    .add_leaves(&encoded)
-                                    .expect("failed to add leaves");
-                                continue;
-                            };
-
-                            // If we get here, this is a final leaf batch: build a sub-tree.
-                            let (_, tree_data) = tree_builder
-                                .add_final_leaves(&encoded)
-                                .expect("failed to add final leaves");
-    
-
-                            let writer_tx = writers_tx[i].clone();
-                            writer_tx.send(tree_data).expect("failed to send tree_data");
-                            break;
-                        }
-                    });
-
-                    drop(lock);
-                    trace!("[tree_c] set gpu idle={}", locked_gpu);
-                }); // gpu loop
-            });
-
-            s.spawn(move |_| {
+            main_threads.push(s.spawn(move |_| {
                 configs.iter().enumerate()
                     .zip(writers_rx.iter())
                     .for_each(|((i, config), writer_rx)| {
@@ -375,8 +410,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     f.write_all(&flat_tree_data)
                         .expect("failed to wrote tree_r_last data");
                 });
-            }); //spawn
-        });
+            })); //spawn
+
+            for t in main_threads {
+                t.join().unwrap();
+            }
+        }).unwrap(); // scope
 
         create_lc_tree::<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>(
             tree_r_last_config.size.expect("config size failure"),
