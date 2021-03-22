@@ -146,12 +146,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let data_raw = data.as_mut();
             
             s.spawn(move |_| {
-                (0..config_count).collect::<Vec<_>>().par_iter()
-                    .zip(builders_tx.into_par_iter())
-                    .zip(data_raw.par_chunks_mut(nodes_count * NODE_SIZE))
-                    .for_each( |((&i, builder_tx), data)| {
+                for ((&i, builder_tx), data) in (0..config_count).collect::<Vec<_>>().iter()
+                //(0..config_count).collect::<Vec<_>>().par_iter()
+                    .zip(builders_tx.into_iter())
+                    .zip(data_raw.chunks_mut(nodes_count * NODE_SIZE))
+                    {
+                    //.for_each( |((&i, builder_tx), data)| {
 
                     let mut node_index = 0;
+                    debug!("run while loop for {}", i + 1);
                     while node_index != nodes_count {
                         let chunked_nodes_count =
                             std::cmp::min(nodes_count - node_index, max_gpu_tree_batch_size);
@@ -167,11 +170,62 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             start,
                             end,
                         );
+                        
+                        debug!("encoded_data, tree_c {}, node_index = {}", i + 1, node_index);
+                        let encoded_data = {
+                            use fr32::bytes_into_fr;
 
-                        let labels_start = i * nodes_count + node_index;
+                            let mut layer_bytes =
+                                vec![0u8; (end - start) * std::mem::size_of::<Fr>()];
+
+                            {
+                                let last_layer_labels = last_layer_labels.lock().unwrap();
+                                debug!("read labels, tree_c {}, node_index = {}", i + 1, node_index);
+                                let labels_start = i * nodes_count + node_index;
+                                let labels_end = labels_start + chunked_nodes_count;
+                                last_layer_labels
+                                    .read_range_into(labels_start, labels_end, &mut layer_bytes)
+                                    .expect("failed to read layer bytes");
+                                debug!("read labels end, tree_c {}, node_index = {}", i + 1, node_index);
+                            }
+
+                            debug!("layer_bytes, tree_c {}, node_index = {}", i + 1, node_index);
+                            let res = layer_bytes
+                                .into_par_iter()
+                                .chunks(std::mem::size_of::<Fr>())
+                                .map(|chunk| {
+                                    bytes_into_fr(&chunk).expect("Could not create Fr from bytes.")
+                                })
+                                .zip(
+                                    data.as_mut()[(start * NODE_SIZE)..(end * NODE_SIZE)]
+                                        .par_chunks_mut(NODE_SIZE),
+                                )
+                                .map(|(key, data_node_bytes)| {
+                                    let data_node =
+                                        <Tree::Hasher as Hasher>::Domain::try_from_bytes(
+                                            data_node_bytes,
+                                        )
+                                        .expect("try_from_bytes failed");
+
+                                    let encoded_node = encode::<<Tree::Hasher as Hasher>::Domain>(
+                                        key.into(),
+                                        data_node,
+                                    );
+                                    data_node_bytes
+                                        .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
+
+                                    encoded_node
+                                });
+                            debug!("layer_bytes end, tree_c {}, node_index = {}", i + 1, node_index);
+                            res
+                        };
+                        debug!("encoded_data end, tree_c {}, node_index = {}", i + 1, node_index);
+
+                        /*let labels_start = i * nodes_count + node_index;
                         let labels_end = labels_start + chunked_nodes_count;
                         let mut encoded_data;
                         {
+                            debug!("labels loop {}", i + 1);
                             let last_layer_labels = last_layer_labels.lock().unwrap();
                             encoded_data = last_layer_labels
                                 .read_range(labels_start..labels_end)
@@ -194,7 +248,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                     encoded_node
                                 });
-                        }
+                                debug!("labels loop end {}", i + 1);
+                        }*/
 
                         node_index += chunked_nodes_count;
                         trace!(
@@ -212,7 +267,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             .send((encoded, is_final))
                             .expect("failed to send encoded");
                     }
-                }); // loop
+                //}); // loop
+                }
             }); // spawn
             let batchertype_gpus = &batchertype_gpus;
             let gpu_indexes: Vec<usize> = (0.. bus_num).collect();
