@@ -37,8 +37,6 @@ use crate::stacked::vanilla::{
     utils::{memset, prepare_block, BitMask, RingBuf, UnsafeSlice},
 };
 
-use std::time::Instant;
-
 const MIN_BASE_PARENT_NODE: u64 = 2000;
 
 const NODE_WORDS: usize = NODE_SIZE / size_of::<u32>();
@@ -233,14 +231,10 @@ fn create_layer_labels(
     let mut ring_buf = RingBuf::new(BYTES_PER_NODE, lookahead);
     let mut base_parent_missing = vec![BitMask::default(); lookahead];
 
-    let now = Instant::now();
     // Fill in the fixed portion of all buffers
     for buf in ring_buf.iter_slot_mut() {
         prepare_block(replica_id, cur_layer, buf);
     }
-    let prepare_time = now.elapsed();
-    info!("prepate block time: {:?}", prepare_time);
-
 
     // Highest node that is ready from the producer
     let cur_producer = AtomicU64::new(0);
@@ -315,7 +309,6 @@ fn create_layer_labels(
         info!("finish: calculate node 0");
         // Calculate nodes 1 to n
 
-        let all_nodes_now = Instant::now();
         // Skip first node.
         parents_cache.store_consumer(1);
         let mut i = 1;
@@ -323,7 +316,6 @@ fn create_layer_labels(
         let mut tmp_f = false;
         info!("start: calculate nodes 2..n ");
         while i < num_nodes {
-            let per_node_now = Instant::now();
             // Ensure next buffer is ready
             let mut printed = false;
             let mut producer_val = cur_producer.load(SeqCst);
@@ -432,8 +424,6 @@ fn create_layer_labels(
                 }
                 i += 1;
                 cur_slot = (cur_slot + 1) % lookahead;
-                let per_node_time = per_node_now.elapsed();
-                info!("per node time: {:?}", per_node_time);
             }
             if !tmp_p {
                 info!("finish: process nodes");
@@ -442,15 +432,9 @@ fn create_layer_labels(
         }
         info!("finish: calculate nodes 2..n ");
 
-        let all_nodes_time = all_nodes_now.elapsed();
-        info!("all nodes ({}) time: {:?}", num_nodes, all_nodes_time);
-
-        let now = Instant::now();
         for runner in runners {
             runner.join().unwrap().unwrap();
         }
-        let runners_time = now.elapsed();
-        info!("runners join time: {:?}", runners_time);
     })
         .unwrap();
 
@@ -495,7 +479,6 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     for (layer, layer_state) in (1..=layers).zip(layer_states.iter()) {
         info!("Layer {}", layer);
-        let now = Instant::now();
 
         if layer_state.generated {
             info!("skipping layer {}, already generated", layer);
@@ -543,9 +526,6 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
                 layer, layer_config.id
             );
         }
-
-        let layer_time = now.elapsed();
-        info!("layer {} time: {:?}", layer, layer_time);
     }
 
     Ok((
