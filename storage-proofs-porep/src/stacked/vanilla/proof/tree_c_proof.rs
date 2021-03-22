@@ -236,55 +236,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             .collect();
                                         debug!("loop 2 end, tree_c {}, node_index = {}", i + 1, node_index);
                                         res
-                                    };
-                                    /*let mut columns: Vec<GenericArray<Fr, ColumnArity>> = vec![
-                                        GenericArray::<Fr, ColumnArity>::generate(|_i: usize| Fr::zero());
-                                        chunked_nodes_count
-                                    ];
-
-                                    // Allocate layer data array and insert a placeholder for each layer.
-                                    let mut layer_data: Vec<Vec<u8>> =
-                                        vec![
-                                            vec![0u8; chunked_nodes_count * std::mem::size_of::<Fr>()];
-                                            layers
-                                        ];
-
-                                    //debug!("run for loop (allocate), tree_c {}, node_index = {}", i + 1, node_index);
-
-                                    for (layer_index, mut layer_bytes) in
-                                        layer_data.iter_mut().enumerate()
-                                    {
-                                        //debug!("tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
-                                        let labels = labels.lock().unwrap();
-                                        let store = labels.labels_for_layer(layer_index + 1);
-                                        let start = (i * nodes_count) + node_index;
-                                        let end = start + chunked_nodes_count;
-                                        //debug!("read from store, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
-                                        store
-                                            .read_range_into(start, end, &mut layer_bytes)
-                                            .expect("failed to read store range");
-                                        //debug!("store read end, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
                                     }
-                                    //debug!("run for loop (copy), tree_c {}" i + 1, node_index);
-                                    debug!("test: {}", i + 1);
-
-                                    // Copy out all layer data arranged into columns.
-                                    let columns: Vec<GenericArray<Fr, ColumnArity>> =
-                                        (0..chunked_nodes_count)
-                                            .into_par_iter()
-                                            .map(|index| {
-                                                (0..layers)
-                                                    .map(|layer_index| {
-                                                        bytes_into_fr(
-                                                        &layer_data[layer_index][std::mem::size_of::<Fr>()
-                                                            * index
-                                                            ..std::mem::size_of::<Fr>() * (index + 1)],
-                                                    ).expect("Could not create Fr from bytes.")
-                                                    })
-                                                    .collect::<GenericArray<Fr, ColumnArity>>()
-                                            })
-                                            .collect();
-                                    
 
                                     //debug!("drop layer_data, tree_c {}, node_index = {}", i + 1, node_index);
                                     drop(layer_data);
