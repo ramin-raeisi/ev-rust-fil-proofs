@@ -1,7 +1,8 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{PathBuf};
-use std::sync::{mpsc, Arc, RwLock, Mutex};
+use std::sync::{mpsc, Arc, Mutex,
+    atomic::{AtomicU64, Ordering::SeqCst}};
 use std::thread;
 use std::time::Duration;
 
@@ -39,7 +40,7 @@ use rust_gpu_tools::opencl;
 
 use crate::encode::{encode};
 
-use bellperson::gpu::scheduler;
+use bellperson::gpu::{scheduler, get_memory_padding};
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     pub fn generate_tree_r_last_gpu<TreeArity>(
@@ -128,6 +129,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let bus_num = batchertype_gpus.len();
         assert!(bus_num > 0);
 
+        let mem_one_thread = 1;
+        let gpu_memory_padding = get_memory_padding();
+
         let last_layer_labels = Arc::new(Mutex::new(last_layer_labels));
 
         let config_count = configs.len(); // Don't move config into closure below.
@@ -195,6 +199,39 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     }
 
                                     debug!("layer_bytes, tree_c {}, node_index = {}", i + 1, node_index);
+                                    /*let mut res = vec![
+                                        <Tree::Hasher as Hasher>::Domain::try_from_bytes("".as_bytes()).unwrap();
+                                        chunked_nodes_count
+                                    ];
+                                    crossbeam::scope(|s3| {
+                                        for ((chunk, data_node_bytes), res_data) in layer_bytes //.into_iter()
+                                            .chunks(std::mem::size_of::<Fr>())
+                                            /*.map(|chunk| {
+                                                bytes_into_fr(&chunk).expect("Could not create Fr from bytes.")
+                                            })*/
+                                            .zip(data.as_mut()[(start * NODE_SIZE)..(end * NODE_SIZE)]
+                                                .chunks_mut(NODE_SIZE),)
+                                            .zip(res.iter_mut())
+                                            {
+                                                s3.spawn(move |_| {
+                                                    let key = bytes_into_fr(&chunk).expect("Could not create Fr from bytes.");
+                                                    let data_node =
+                                                        <Tree::Hasher as Hasher>::Domain::try_from_bytes(
+                                                            data_node_bytes,
+                                                        )
+                                                        .expect("try_from_bytes failed");
+
+                                                    let encoded_node = encode::<<Tree::Hasher as Hasher>::Domain>(
+                                                        key.into(),
+                                                        data_node,
+                                                    );
+                                                    data_node_bytes
+                                                        .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
+
+                                                    *res_data = encoded_node;
+                                                });
+                                            }
+                                    }).unwrap();*/
                                     let res = layer_bytes
                                         .into_par_iter() // TODO CROSSBEAM
                                         .chunks(std::mem::size_of::<Fr>())
@@ -288,12 +325,17 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                             assert!(locked_gpu >= 0);
                             let locked_gpu: usize = locked_gpu as usize;
+
+                            let mut mem_total: u64 = 0;
+                            let mem_used = AtomicU64::new(0);
                             
                             let tree_r_last_config = &tree_r_last_config;
                             let batchertype_gpus = &batchertype_gpus;
 
                             match &batchertype_gpus[locked_gpu][0] {
                                 BatcherType::CustomGPU(selector) => {
+                                    mem_total = selector.get_device().unwrap().memory();
+
                                     info!("[tree_r_last] Run TreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {})",
                                     gpu_index,
                                     selector.get_device().unwrap().name(),
@@ -311,14 +353,29 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             crossbeam::scope(|s3| {
                                 let mut config_threads = Vec::new();
                                 let writers_tx = Arc::new(writers_tx);
+                                let mem_used = Arc::new(mem_used);
 
                                 // Loop until all trees for all configs have been built.
                                 for (&i, builder_rx) in config_ids.iter()
                                     .zip(builders_rx.into_iter())
                                     {
                                     let writers_tx  = writers_tx.clone();
+                                    let mem_used = mem_used.clone();
                                     
                                     config_threads.push(s3.spawn(move |_| {
+
+                                        let mut printed = false;
+                                        let mut mem_used_val = mem_used.load(SeqCst);
+                                        while (mem_used_val + mem_one_thread) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
+                                            if !printed {
+                                                info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
+                                                printed = true;
+                                            }
+                                            thread::sleep(Duration::from_micros(10));
+                                            mem_used_val = mem_used.load(SeqCst);
+                                        }
+                                        mem_used.fetch_add(mem_one_thread, SeqCst);
+
                                         let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
                                             Some(batchertype_gpus[locked_gpu][i].clone()),
                                             nodes_count,
@@ -345,6 +402,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                 .expect("failed to add final leaves");
                     
     
+                                            mem_used.fetch_sub(mem_one_thread, SeqCst);
                                             let writer_tx = writers_tx[i].clone();
                                             writer_tx.send(tree_data).expect("failed to send tree_data");
                                             break;

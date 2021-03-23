@@ -30,16 +30,13 @@ use super::super::{
 };
 
 use ff::Field;
-use generic_array::{sequence::GenericSequence, GenericArray};
+use generic_array::{GenericArray, sequence::GenericSequence};
 use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
 use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
-use bellperson::gpu::scheduler;
-
-
-const MEMORY_PADDING: f64 = 0.15;
+use bellperson::gpu::{scheduler, get_memory_padding};
 
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> {
@@ -148,6 +145,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             mem_column_add = mem_column_add + size_state * threads_num; // states per thread*/
             //let mem_column_add = 858993459;
             let mem_column_add = 800000000;
+            let gpu_memory_padding = get_memory_padding();
 
             let configs =  Arc::new(configs);
             crossbeam::scope(|s| {
@@ -186,7 +184,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         GenericArray<Fr, ColumnArity>,
                                     > = {
                                         debug!("columns, tree_c {}, node_index = {}", i + 1, node_index);
-                                        use fr32::bytes_into_fr;
 
                                         // Allocate layer data array and insert a placeholder for each layer.
                                         let mut layer_data: Vec<Vec<u8>> =
@@ -213,6 +210,31 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         debug!("loop 1 end, tree_c {}, node_index = {}", i + 1, node_index);
 
                                         debug!("loop 2, tree_c {}, node_index = {}", i + 1, node_index);
+                                        /*let mut res: Vec<GenericArray<Fr, ColumnArity>> = vec![
+                                            GenericArray::<Fr, ColumnArity>::generate(|_i: usize| {
+                                                Fr::zero()
+                                            });
+                                            chunked_nodes_count
+                                        ];
+                                        crossbeam::scope(|s3| {
+                                            let layer_data = Arc::new(layer_data);
+                                            for (index, res_array) in  (0..chunked_nodes_count).into_iter()
+                                                .zip(res.iter_mut())
+                                                {
+                                                    let layer_data = layer_data.clone();
+                                                    s3.spawn(move |_| {
+                                                        for layer_index in 0..layers {
+                                                            trace!("loop 2 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
+                                                            res_array[layer_index] = bytes_into_fr(
+                                                                &layer_data[layer_index][std::mem::size_of::<Fr>()
+                                                                    * index
+                                                                    ..std::mem::size_of::<Fr>() * (index + 1)],
+                                                                )
+                                                                .expect("Could not create Fr from bytes.")
+                                                        }
+                                                    });
+                                                }
+                                        }).unwrap();*/
                                         let res = (0..chunked_nodes_count)
                                             .into_par_iter() // TODO: CROSSBEAM
                                             .map(|index| {
@@ -300,7 +322,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     let locked_gpu: usize = locked_gpu as usize;
 
                                     let mut mem_total: u64 = 0;
-                                    let mut mem_used = AtomicU64::new(0);
+                                    let mem_used = AtomicU64::new(0);
 
                                     match &batchertype_gpus[locked_gpu][0] {
                                         BatcherType::CustomGPU(selector) => {
@@ -336,7 +358,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             config_threads.push(s3.spawn(move |_| {
                                                 let mut printed = false;
                                                 let mut mem_used_val = mem_used.load(SeqCst);
-                                                while((mem_used_val + mem_column_add) as f64 >= (1.0 - MEMORY_PADDING) * (mem_total as f64)) {
+                                                while (mem_used_val + mem_column_add) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                                     if !printed {
                                                         info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
                                                         printed = true;
