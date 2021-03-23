@@ -25,7 +25,7 @@ serde = { version = "1.0", features = ["rc", "derive"] }
 serde_json = "1.0"
 ff = { version = "0.2.3", package = "fff" }
 blake2b_simd = "0.5"
-bellperson = { git = "ssh://git@github.com/nilfoundation/fil-zk.git", branch = "master", default-features = false }
+bellperson = { git = "ssh://git@github.com/nilfoundation/fil-zk.git", branch = "develop", default-features = false }
 log = "0.4.7"
 fil_logger = "0.1"
 env_proxy = "0.4"

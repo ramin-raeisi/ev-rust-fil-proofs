@@ -22,13 +22,13 @@ rayon-futures = "0.1.1"
 serde = { version = "1.0", features = ["derive"] }
 blake2b_simd = "0.5"
 blake2s_simd = "0.5"
-bellperson = { git = "ssh://git@github.com/nilfoundation/fil-zk.git", branch = "master", default-features = false }
+bellperson = { git = "ssh://git@github.com/nilfoundation/fil-zk.git", branch = "develop", default-features = false }
 ff = { version = "0.2.3", package = "fff" }
 log = "0.4.7"
 hex = "0.4.0"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune.git", branch = "master", default-features = false, features = ["opencl"] }
+neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune", branch = "develop", default-features = false, features = ["opencl"] }
 num_cpus = "1.10.1"
 fr32 = { path = "../fr32", default-features = false }
 
