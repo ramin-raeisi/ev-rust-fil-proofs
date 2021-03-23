@@ -109,10 +109,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             //let batchers_per_gpu = configs.len() / bus_num + 1;
             for gpu_idx in 0..bus_num {
-                batchertype_gpus.push(Vec::with_capacity(configs.len()));
-                for i in 0..configs.len() {
-                    batchertype_gpus[gpu_idx].push(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_idx])));
-                }
+                batchertype_gpus.push(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_idx])));
             }
 
             let mut builders_rx_by_gpu = Vec::new();
@@ -304,7 +301,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     
                                     let mut locked_gpu: i32 = -1;
                                     for idx in 0..batchertype_gpus.len() {
-                                        match &batchertype_gpus[idx][0] {
+                                        match &batchertype_gpus[idx] {
                                             BatcherType::CustomGPU(selector) => {
                                                 let bus_id = selector.get_device().unwrap().bus_id().unwrap();
                                                 if bus_id == target_bus_id {
@@ -324,7 +321,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     let mut mem_total: u64 = 0;
                                     let mem_used = AtomicU64::new(0);
 
-                                    match &batchertype_gpus[locked_gpu][0] {
+                                    match &batchertype_gpus[locked_gpu] {
                                         BatcherType::CustomGPU(selector) => {
                                             mem_total = selector.get_device().unwrap().memory();
 
@@ -370,7 +367,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                                 //debug!("create column_tree_builder, tree_c {}", i + 1);
                                                 let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
-                                                    Some(batchertype_gpus[locked_gpu][i].clone()),
+                                                    Some(batchertype_gpus[locked_gpu].clone()),
                                                     nodes_count,
                                                     max_gpu_column_batch_size,
                                                     max_gpu_tree_batch_size,
@@ -386,7 +383,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                     // Just add non-final column batches.
                                                     if !is_final {
                                                         
-                                                        debug!("Use {}/{} GB", (mem_used.load(SeqCst) as f64 / (1024 * 1024 * 1024) as f64), (mem_total as f64 / (1024 * 1024 * 1024) as f64));
+                                                        //debug!("Use {}/{} GB", (mem_used.load(SeqCst) as f64 / (1024 * 1024 * 1024) as f64), (mem_total as f64 / (1024 * 1024 * 1024) as f64));
                                                         column_tree_builder
                                                             .add_columns(&columns)
                                                             .expect("failed to add columns");

@@ -105,10 +105,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
         //let batchers_per_gpu = configs.len() / bus_num + 1;
         for gpu_idx in start_idx..start_idx + bus_num {
-            batchertype_gpus.push(Vec::with_capacity(configs.len()));
-            for i in 0..configs.len() {
-                batchertype_gpus[gpu_idx].push(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_idx])));
-            }
+            batchertype_gpus.push(BatcherType::CustomGPU
+                (opencl::GPUSelector::BusId(all_bus_ids[gpu_idx])));
         }
         
         let mut builders_rx_by_gpu = Vec::new();
@@ -309,7 +307,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                             let mut locked_gpu: i32 = -1;
                             for idx in 0..batchertype_gpus.len() {
-                                match &batchertype_gpus[idx][0] {
+                                match &batchertype_gpus[idx] {
                                     BatcherType::CustomGPU(selector) => {
                                         let bus_id = selector.get_device().unwrap().bus_id().unwrap();
                                         if bus_id == target_bus_id {
@@ -332,7 +330,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             let tree_r_last_config = &tree_r_last_config;
                             let batchertype_gpus = &batchertype_gpus;
 
-                            match &batchertype_gpus[locked_gpu][0] {
+                            match &batchertype_gpus[locked_gpu] {
                                 BatcherType::CustomGPU(selector) => {
                                     mem_total = selector.get_device().unwrap().memory();
 
@@ -377,7 +375,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         mem_used.fetch_add(mem_one_thread, SeqCst);
 
                                         let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
-                                            Some(batchertype_gpus[locked_gpu][i].clone()),
+                                            Some(batchertype_gpus[locked_gpu].clone()),
                                             nodes_count,
                                             max_gpu_tree_batch_size,
                                             tree_r_last_config.rows_to_discard,
