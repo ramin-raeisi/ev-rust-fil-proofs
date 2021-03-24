@@ -161,7 +161,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         let last_layer_labels = last_layer_labels.clone();
                         threads.push(s2.spawn(move |_| {
                             let mut node_index = 0;
-                            debug!("run while loop for {}", i + 1);
+                            //debug!("run while loop for {}", i + 1);
                             while node_index != nodes_count {
                                 let chunked_nodes_count =
                                     std::cmp::min(nodes_count - node_index, max_gpu_tree_batch_size);
@@ -178,7 +178,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     end,
                                 );
                                 
-                                debug!("encoded_data, tree_c {}, node_index = {}", i + 1, node_index);
+                                //debug!("encoded_data, tree_c {}, node_index = {}", i + 1, node_index);
                                 let encoded_data = {
                                     use fr32::bytes_into_fr;
 
@@ -187,16 +187,16 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                     {
                                         let last_layer_labels = last_layer_labels.lock().unwrap();
-                                        debug!("read labels, tree_c {}, node_index = {}", i + 1, node_index);
+                                        //debug!("read labels, tree_c {}, node_index = {}", i + 1, node_index);
                                         let labels_start = i * nodes_count + node_index;
                                         let labels_end = labels_start + chunked_nodes_count;
                                         last_layer_labels
                                             .read_range_into(labels_start, labels_end, &mut layer_bytes)
                                             .expect("failed to read layer bytes");
-                                        debug!("read labels end, tree_c {}, node_index = {}", i + 1, node_index);
+                                        //debug!("read labels end, tree_c {}, node_index = {}", i + 1, node_index);
                                     }
 
-                                    debug!("layer_bytes, tree_c {}, node_index = {}", i + 1, node_index);
+                                    //debug!("layer_bytes, tree_c {}, node_index = {}", i + 1, node_index);
                                     /*let mut res = vec![
                                         <Tree::Hasher as Hasher>::Domain::try_from_bytes("".as_bytes()).unwrap();
                                         chunked_nodes_count
@@ -256,10 +256,10 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                             encoded_node
                                         });
-                                    debug!("layer_bytes end, tree_c {}, node_index = {}", i + 1, node_index);
+                                    //debug!("layer_bytes end, tree_c {}, node_index = {}", i + 1, node_index);
                                     res
                                 };
-                                debug!("encoded_data end, tree_c {}, node_index = {}", i + 1, node_index);
+                                //debug!("encoded_data end, tree_c {}, node_index = {}", i + 1, node_index);
 
                                 node_index += chunked_nodes_count;
                                 trace!(
