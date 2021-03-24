@@ -162,6 +162,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         for (&i, builder_tx) in (0..config_count).collect::<Vec<_>>().iter()
                         .zip(builders_tx.into_iter())
                         {
+                            if i != 0 {
+                                thread::sleep(Duration::from_secs(4));
+                            }
                             let labels = labels.clone();
                             debug!("start spawn tree_c {}", i + 1);
                             threads.push(s2.spawn(move |_| {
@@ -350,6 +353,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         for (&i, builder_rx) in config_ids.iter()
                                             .zip(builders_rx.into_iter())
                                             {
+                                            if i != 0 {
+                                                thread::sleep(Duration::from_secs(5));
+                                            }
                                             let writers_tx  = writers_tx.clone();
                                             let mem_used = mem_used.clone();
                                             config_threads.push(s3.spawn(move |_| {
@@ -360,8 +366,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                         info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
                                                         printed = true;
                                                     }
-                                                    thread::sleep(Duration::from_micros(10));
+                                                    thread::sleep(Duration::from_secs(1));
                                                     mem_used_val = mem_used.load(SeqCst);
+                                                }
+                                                if (printed) {
+                                                    thread::sleep(Duration::from_secs(i as u64));
                                                 }
                                                 mem_used.fetch_add(mem_column_add, SeqCst);
 
