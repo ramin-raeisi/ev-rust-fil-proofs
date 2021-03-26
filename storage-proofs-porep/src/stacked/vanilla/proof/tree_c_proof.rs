@@ -162,12 +162,15 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         for (&i, builder_tx) in (0..config_count).collect::<Vec<_>>().iter()
                         .zip(builders_tx.into_iter())
                         {
+                            if i != 0 {
+                                thread::sleep(Duration::from_secs(4));
+                            }
                             let labels = labels.clone();
-                            debug!("start spawn tree_c {}", i + 1);
+                            //info!("s-s2 {}", i + 1);
                             threads.push(s2.spawn(move |_| {
                                 let mut node_index = 0;
                                 while node_index != nodes_count {
-                                    debug!("while tree_c {}, node_index = {}", i + 1, node_index);
+                                    //debug!("while tree_c {}, node_index = {}", i + 1, node_index);
                                     let chunked_nodes_count =
                                         std::cmp::min(nodes_count - node_index, max_gpu_column_batch_size);
                                     trace!(
@@ -180,7 +183,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     let columns: Vec<
                                         GenericArray<Fr, ColumnArity>,
                                     > = {
-                                        debug!("columns, tree_c {}, node_index = {}", i + 1, node_index);
+                                        //debug!("columns, tree_c {}, node_index = {}", i + 1, node_index);
 
                                         // Allocate layer data array and insert a placeholder for each layer.
                                         let mut layer_data: Vec<Vec<u8>> =
@@ -189,12 +192,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                 layers
                                             ];
 
-                                        debug!("loop 1, tree_c {}, node_index = {}", i + 1, node_index);
+                                        //debug!("loop 1, tree_c {}, node_index = {}", i + 1, node_index);
                                         for (layer_index, mut layer_bytes) in
                                             layer_data.iter_mut().enumerate()
                                         {
                                             let labels = labels.lock().unwrap();
-                                            trace!("loop 1 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
+                                            //trace!("loop 1 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
                                             let store = labels.labels_for_layer(layer_index + 1);
                                             let start = (i * nodes_count) + node_index;
                                             let end = start + chunked_nodes_count;
@@ -202,11 +205,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             store
                                                 .read_range_into(start, end, &mut layer_bytes)
                                                 .expect("failed to read store range");
-                                            debug!("loop 1 store, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
+                                            //debug!("loop 1 store, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
                                         }
-                                        debug!("loop 1 end, tree_c {}, node_index = {}", i + 1, node_index);
+                                        //debug!("loop 1 end, tree_c {}, node_index = {}", i + 1, node_index);
 
-                                        debug!("loop 2, tree_c {}, node_index = {}", i + 1, node_index);
+                                        //info!("s-2-2 {}", i + 1);
                                         /*let mut res: Vec<GenericArray<Fr, ColumnArity>> = vec![
                                             GenericArray::<Fr, ColumnArity>::generate(|_i: usize| {
                                                 Fr::zero()
@@ -237,7 +240,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             .map(|index| {
                                                 (0..layers)
                                                     .map(|layer_index| {
-                                                        trace!("loop 2 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
+                                                        //trace!("loop 2 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
                                                         bytes_into_fr(
                                                         &layer_data[layer_index][std::mem::size_of::<Fr>()
                                                             * index
@@ -248,7 +251,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                     .collect::<GenericArray<Fr, ColumnArity>>()
                                             })
                                             .collect();
-                                        debug!("loop 2 end, tree_c {}, node_index = {}", i + 1, node_index);
+                                        //info!("s-2-3{}", i + 1, node_index);
                                         res
                                     }; // columns
 
@@ -261,11 +264,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     );
 
                                     let is_final = node_index == nodes_count;
-                                    debug!("tree_c {}, new node_index = {}, is_final = {}", i + 1, node_index, is_final);
+                                    //debug!("tree_c {}, new node_index = {}, is_final = {}", i + 1, node_index, is_final);
                                     builder_tx
                                         .send((columns, is_final))
                                         .expect("failed to send columns");
-                                    debug!("tree_c {}, new node_index = {}, data was sent", i + 1, node_index);
+                                    //debug!("tree_c {}, new node_index = {}, data was sent", i + 1, node_index);
                                 } // while loop
                             }));
                         } // threads loop
@@ -275,7 +278,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         }
                     }).unwrap(); // scope s2
 
-                    debug!("end spawn");
+                    //debug!("end spawn");
                 })); // spawn
                 
                 let batchertype_gpus = &batchertype_gpus;
@@ -346,10 +349,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                         let writers_tx = Arc::new(writers_tx);
                                         let mem_used = Arc::new(mem_used);
-                                        debug!("run spawn2 inner loop");
+                                        //debug!("run spawn2 inner loop");
                                         for (&i, builder_rx) in config_ids.iter()
                                             .zip(builders_rx.into_iter())
                                             {
+                                            if i != 0 {
+                                                thread::sleep(Duration::from_secs(5));
+                                            }
                                             let writers_tx  = writers_tx.clone();
                                             let mem_used = mem_used.clone();
                                             config_threads.push(s3.spawn(move |_| {
@@ -360,8 +366,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                         info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
                                                         printed = true;
                                                     }
-                                                    thread::sleep(Duration::from_micros(10));
+                                                    thread::sleep(Duration::from_secs(1));
                                                     mem_used_val = mem_used.load(SeqCst);
+                                                }
+                                                if (printed) {
+                                                    thread::sleep(Duration::from_secs(i as u64));
                                                 }
                                                 mem_used.fetch_add(mem_column_add, SeqCst);
 
@@ -434,7 +443,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             t.join().unwrap();
                         }
                     }).unwrap(); //scope s2
-                    debug!("end spawn2");
+                    //debug!("end spawn2");
                 }));
 
                 let configs = configs.clone();
