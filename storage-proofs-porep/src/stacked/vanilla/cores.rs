@@ -129,6 +129,7 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
         Ok(depth) => depth,
         Err(_) => return None,
     };
+    info!("core_depth {}", core_depth);
     let all_cores = topo.objects_with_type(&ObjectType::Core).unwrap();
     let core_count = all_cores.len();
 

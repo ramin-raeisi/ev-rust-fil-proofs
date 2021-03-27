@@ -54,7 +54,6 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
     prover_id: ProverId,
     sector_id: SectorId,
     ticket: Ticket,
-    piece_infos: &[PieceInfo],
 ) -> Result<SealPreCommitPhase1Output<Tree>>
     where
         R: AsRef<Path>,
@@ -163,7 +162,7 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
         Ok((config, comm_d))
     })?;
 
-    info!("verifying pieces");
+    /*info!("verifying pieces");
 
     /*ensure!(
         verify_pieces(&comm_d, piece_infos, porep_config.into())?,
@@ -328,7 +327,6 @@ pub fn seal_commit_phase1<T: AsRef<Path>, Tree: 'static + MerkleTreeTrait>(
     ticket: Ticket,
     seed: Ticket,
     pre_commit: SealPreCommitOutput,
-    piece_infos: &[PieceInfo],
 ) -> Result<SealCommitPhase1Output<Tree>> {
     info!("seal_commit_phase1:start: {:?}", sector_id);
 
@@ -346,10 +344,10 @@ pub fn seal_commit_phase1<T: AsRef<Path>, Tree: 'static + MerkleTreeTrait>(
 
     ensure!(comm_d != [0; 32], "Invalid all zero commitment (comm_d)");
     ensure!(comm_r != [0; 32], "Invalid all zero commitment (comm_r)");
-    ensure!(
+    /*ensure!(
         verify_pieces(&comm_d, piece_infos, porep_config.into())?,
         "pieces and comm_d do not match"
-    );
+    );*/
 
     let p_aux = {
         let p_aux_path = cache_path.as_ref().join(CacheKey::PAux.to_string());
