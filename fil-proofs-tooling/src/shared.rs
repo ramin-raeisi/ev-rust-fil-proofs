@@ -185,7 +185,7 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
                         PROVER_ID,
                         *sector_id,
                         TICKET_BYTES,
-                        piece_infos,
+                        //piece_infos,
                     )
                 },
             )
