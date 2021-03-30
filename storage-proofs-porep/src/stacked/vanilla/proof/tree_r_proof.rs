@@ -127,7 +127,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let bus_num = batchertype_gpus.len();
         assert!(bus_num > 0);
 
-        let mem_one_thread = 1;
+        let mem_one_thread = 200000000;
+        let mem_final = 400000000;
         let gpu_memory_padding = get_memory_padding();
 
         let last_layer_labels = Arc::new(Mutex::new(last_layer_labels));
@@ -196,40 +197,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         //debug!("read labels end, tree_c {}, node_index = {}", i + 1, node_index);
                                     }
 
-                                    //debug!("layer_bytes, tree_c {}, node_index = {}", i + 1, node_index);
-                                    /*let mut res = vec![
-                                        <Tree::Hasher as Hasher>::Domain::try_from_bytes("".as_bytes()).unwrap();
-                                        chunked_nodes_count
-                                    ];
-                                    crossbeam::scope(|s3| {
-                                        for ((chunk, data_node_bytes), res_data) in layer_bytes //.into_iter()
-                                            .chunks(std::mem::size_of::<Fr>())
-                                            /*.map(|chunk| {
-                                                bytes_into_fr(&chunk).expect("Could not create Fr from bytes.")
-                                            })*/
-                                            .zip(data.as_mut()[(start * NODE_SIZE)..(end * NODE_SIZE)]
-                                                .chunks_mut(NODE_SIZE),)
-                                            .zip(res.iter_mut())
-                                            {
-                                                s3.spawn(move |_| {
-                                                    let key = bytes_into_fr(&chunk).expect("Could not create Fr from bytes.");
-                                                    let data_node =
-                                                        <Tree::Hasher as Hasher>::Domain::try_from_bytes(
-                                                            data_node_bytes,
-                                                        )
-                                                        .expect("try_from_bytes failed");
-
-                                                    let encoded_node = encode::<<Tree::Hasher as Hasher>::Domain>(
-                                                        key.into(),
-                                                        data_node,
-                                                    );
-                                                    data_node_bytes
-                                                        .copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
-
-                                                    *res_data = encoded_node;
-                                                });
-                                            }
-                                    }).unwrap();*/
+                                    debug!("layer_bytes, tree_c {}, node_index = {}", i + 1, node_index);
                                     let res = layer_bytes
                                         .into_par_iter() // TODO CROSSBEAM
                                         .chunks(std::mem::size_of::<Fr>())
@@ -366,13 +334,17 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         let mut mem_used_val = mem_used.load(SeqCst);
                                         while (mem_used_val + mem_one_thread) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                             if !printed {
-                                                info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
+                                                info!("gpu memory shortage on {}, waiting", locked_gpu);
                                                 printed = true;
                                             }
-                                            thread::sleep(Duration::from_micros(10));
+                                            thread::sleep(Duration::from_secs(1));
                                             mem_used_val = mem_used.load(SeqCst);
                                         }
                                         mem_used.fetch_add(mem_one_thread, SeqCst);
+
+                                        if printed {
+                                            info!("continue on {}", locked_gpu);
+                                        }
 
                                         let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
                                             Some(batchertype_gpus[locked_gpu].clone()),
@@ -393,6 +365,18 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                     .expect("failed to add leaves");
                                                 continue;
                                             };
+
+                                            let mut printed = false;
+                                            let mut mem_used_val = mem_used.load(SeqCst);
+                                            while (mem_used_val + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
+                                                if !printed {
+                                                    info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
+                                                    printed = true;
+                                                }
+                                                thread::sleep(Duration::from_secs(1));
+                                                mem_used_val = mem_used.load(SeqCst);
+                                            }
+                                            mem_used.fetch_add(mem_final, SeqCst);
     
                                             // If we get here, this is a final leaf batch: build a sub-tree.
                                             let (_, tree_data) = tree_builder
@@ -400,7 +384,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                 .expect("failed to add final leaves");
                     
     
-                                            mem_used.fetch_sub(mem_one_thread, SeqCst);
+                                            mem_used.fetch_sub(mem_one_thread + mem_final, SeqCst);
                                             let writer_tx = writers_tx[i].clone();
                                             writer_tx.send(tree_data).expect("failed to send tree_data");
                                             break;
