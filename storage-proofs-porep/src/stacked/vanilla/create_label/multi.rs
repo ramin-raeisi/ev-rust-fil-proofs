@@ -459,7 +459,6 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    info!("core groups");
     let core_group = Arc::new(checkout_core_group());
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
