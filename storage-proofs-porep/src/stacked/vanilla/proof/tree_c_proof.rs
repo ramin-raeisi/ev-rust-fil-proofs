@@ -347,7 +347,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             config_threads.push(s3.spawn(move |_| {
                                                 let mut printed = false;
                                                 let mut mem_used_val = mem_used.load(SeqCst);
-                                                while (mem_used_val + mem_column_add) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
+                                                while (mem_used_val + mem_column_add + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                                     if !printed {
                                                         info!("gpu memory shortage on {}, waiting", locked_gpu);
                                                         printed = true;
