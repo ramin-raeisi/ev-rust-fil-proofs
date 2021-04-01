@@ -164,10 +164,10 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
 
     /*info!("verifying pieces");
 
-    /*ensure!(
+    ensure!(
         verify_pieces(&comm_d, piece_infos, porep_config.into())?,
         "pieces and comm_d do not match"
-    );*/
+    );
 
     let replica_id = generate_replica_id::<Tree::Hasher, _>(
         &prover_id,
