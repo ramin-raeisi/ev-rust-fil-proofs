@@ -2,7 +2,6 @@ use std::fs;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex};
-use std::time::Instant;
 
 use anyhow::Context;
 use bincode::deserialize;
@@ -311,18 +310,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let mut parent_cache = graph.parent_cache()?;
 
         if SETTINGS.use_multicore_sdr {
-            info!("multi core replication");
-            let now = Instant::now();
-            let res = create_label::multi::create_labels_for_encoding(
+            create_label::multi::create_labels_for_encoding(
                 graph,
                 &parent_cache,
                 layer_challenges.layers(),
                 replica_id,
                 config,
-            );
-            let create_label_time = now.elapsed();
-            info!("create labels time: {:?}", create_label_time);
-            res
+            )
         } else {
             info!("single core replication");
             create_label::single::create_labels_for_encoding(
