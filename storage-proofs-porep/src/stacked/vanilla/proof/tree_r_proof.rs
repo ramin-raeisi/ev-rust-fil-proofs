@@ -270,24 +270,34 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         let writers_tx = writers_tx.clone();
 
                         gpu_threads.push(s2.spawn(move |_| {
-                            let lock = scheduler::get_next_device().lock().unwrap();
-                            let target_bus_id = lock.device().bus_id().unwrap();
-
                             let mut locked_gpu: i32 = -1;
-                            for idx in 0..batchertype_gpus.len() {
-                                match &batchertype_gpus[idx] {
-                                    BatcherType::CustomGPU(selector) => {
-                                        let bus_id = selector.get_device().unwrap().bus_id().unwrap();
-                                        if bus_id == target_bus_id {
-                                            locked_gpu = idx as i32;
-                                        }
+                            let lock = loop {
+                                let lock_inner = scheduler::get_next_device().lock().unwrap();
+                                let target_bus_id = lock_inner.device().bus_id().unwrap();
+                                
+                                for idx in 0..batchertype_gpus.len() {
+                                    match &batchertype_gpus[idx] {
+                                        BatcherType::CustomGPU(selector) => {
+                                            let bus_id = selector.get_device().unwrap().bus_id().unwrap();
+                                            if bus_id == target_bus_id {
+                                                locked_gpu = idx as i32;
+                                            }
 
-                                    }
-                                    _default => {
-                                        info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                                        }
+                                        _default => {
+                                            info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                                        }
                                     }
                                 }
-                            }
+
+                                if locked_gpu != -1 {
+                                    break lock_inner;
+                                }
+                                else {
+                                    drop(lock_inner);
+                                    info!("GPU was excluded from the avaiable GPUs by settings, wait the next one");
+                                }
+                            };
 
                             assert!(locked_gpu >= 0);
                             let locked_gpu: usize = locked_gpu as usize;
@@ -332,7 +342,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                         let mut printed = false;
                                         let mut mem_used_val = mem_used.load(SeqCst);
-                                        while (mem_used_val + mem_one_thread) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
+                                        while (mem_used_val + mem_one_thread + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                             if !printed {
                                                 info!("gpu memory shortage on {}, waiting", locked_gpu);
                                                 printed = true;
