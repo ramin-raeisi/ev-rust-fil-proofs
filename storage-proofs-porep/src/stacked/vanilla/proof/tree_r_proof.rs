@@ -40,7 +40,8 @@ use rust_gpu_tools::opencl;
 
 use crate::encode::{encode};
 
-use bellperson::gpu::{scheduler, get_memory_padding};
+use bellperson::gpu::{scheduler};
+use super::utils::get_memory_padding;
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     pub fn generate_tree_r_last_gpu<TreeArity>(
