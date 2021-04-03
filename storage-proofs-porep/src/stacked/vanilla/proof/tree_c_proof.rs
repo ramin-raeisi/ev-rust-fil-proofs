@@ -279,7 +279,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 gpu_threads.push(s2.spawn(move |_| {
                                     let mut locked_gpu: i32 = -1;
                                     let lock = loop {
-                                        let lock_inner = scheduler::get_next_device().lock().unwrap();
+                                        let lock_inner = scheduler::get_next_device_second_pool().lock().unwrap();
                                         let target_bus_id = lock_inner.device().bus_id().unwrap();
                                         
                                         for idx in 0..batchertype_gpus.len() {
