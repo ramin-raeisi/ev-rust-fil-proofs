@@ -29,6 +29,8 @@ use super::super::{
     proof::StackedDrg,
 };
 
+use super::utils::get_memory_padding;
+
 use ff::Field;
 use generic_array::{GenericArray, sequence::GenericSequence};
 use neptune::batch_hasher::BatcherType;
@@ -36,7 +38,7 @@ use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
 use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
-use bellperson::gpu::{scheduler, get_memory_padding};
+use bellperson::gpu::{scheduler};
 
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> {
@@ -133,9 +135,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let labels = Arc::new(Mutex::new(labels));
 
-            let size_fr = std::mem::size_of::<Fr>() as u64;
-            let size_state: u64 = size_fr * (layers as u64); // state_{width} = ColumnArity = layers
-            let threads_num: u64 = max_gpu_column_batch_size as u64;
+            //let size_fr = std::mem::size_of::<Fr>() as u64;
+            //let size_state: u64 = size_fr * (layers as u64); // state_{width} = ColumnArity = layers
+            //let threads_num: u64 = max_gpu_column_batch_size as u64;
             /*let mut mem_column_add: u64 = 0;
             mem_column_add = mem_column_add + size_fr * ((max_gpu_column_batch_size * layers) as u64); // preimages buffer
             mem_column_add = mem_column_add + size_fr * ((max_gpu_column_batch_size * layers) as u64); // digests buffer
@@ -277,7 +279,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 gpu_threads.push(s2.spawn(move |_| {
                                     let mut locked_gpu: i32 = -1;
                                     let lock = loop {
-                                        let lock_inner = scheduler::get_next_device().lock().unwrap();
+                                        let lock_inner = scheduler::get_next_device_second_pool().lock().unwrap();
                                         let target_bus_id = lock_inner.device().bus_id().unwrap();
                                         
                                         for idx in 0..batchertype_gpus.len() {

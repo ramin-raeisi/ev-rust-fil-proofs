@@ -53,6 +53,7 @@ use crate::{
 mod tree_c_proof;
 mod tree_r_proof;
 mod tree_building_parallel;
+mod utils;
 
 pub const TOTAL_PARENTS: usize = 37;
 
