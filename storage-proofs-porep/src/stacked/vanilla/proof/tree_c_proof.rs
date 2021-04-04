@@ -351,7 +351,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                 let mut mem_used_val = mem_used.load(SeqCst);
                                                 while (mem_used_val + mem_column_add + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                                     if !printed {
-                                                        info!("gpu memory shortage on {}, waiting", locked_gpu);
+                                                        info!("gpu memory shortage on {}, waiting...", locked_gpu);
                                                         printed = true;
                                                     }
                                                     thread::sleep(Duration::from_secs(1));
@@ -392,7 +392,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                     let mut mem_used_val = mem_used.load(SeqCst);
                                                     while (mem_used_val + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                                         if !printed {
-                                                            info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
+                                                            info!("gpu memory shortage on {}, waiting...", locked_gpu);
                                                             printed = true;
                                                         }
                                                         thread::sleep(Duration::from_secs(1));
