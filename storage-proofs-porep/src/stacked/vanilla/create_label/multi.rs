@@ -359,39 +359,222 @@ fn create_layer_labels(
                 cur_parent_ptr = &cur_parent_ptr[EXP_DEGREE..];
                 cur_parent_ptr_offset += EXP_DEGREE;
 
-                if cur_layer == 1 {
-                    // Six rounds of all base parents
-                    for _j in 0..6 {
-                        compress256!(cur_node_ptr, &buf[64..], 3);
-                    }
+                // Two rounds of all parents
+                let blocks = [
+                    *GenericArray::<u8, U64>::from_slice(&buf[64..128]),
+                    *GenericArray::<u8, U64>::from_slice(&buf[128..192]),
+                    *GenericArray::<u8, U64>::from_slice(&buf[192..256]),
+                    *GenericArray::<u8, U64>::from_slice(&buf[256..320]),
+                    *GenericArray::<u8, U64>::from_slice(&buf[320..384]),
+                    *GenericArray::<u8, U64>::from_slice(&buf[384..448]),
+                    *GenericArray::<u8, U64>::from_slice(&buf[448..512]),
+                ];
+                sha2::compress256((&mut cur_node_ptr[..8]).try_into().unwrap(), &blocks);
+                sha2::compress256((&mut cur_node_ptr[..8]).try_into().unwrap(), &blocks);
 
-                    // round 7 is only first parent
-                    memset(&mut buf[96..128], 0); // Zero out upper half of last block
-                    buf[96] = 0x80; // Padding
-                    buf[126] = 0x27;
-                    // Length (0x2700 = 9984 bits -> 1248 bytes)
-                    compress256!(cur_node_ptr, &buf[64..], 1);
-                } else {
-                    // Two rounds of all parents
-                    let blocks = [
-                        *GenericArray::<u8, U64>::from_slice(&buf[64..128]),
-                        *GenericArray::<u8, U64>::from_slice(&buf[128..192]),
-                        *GenericArray::<u8, U64>::from_slice(&buf[192..256]),
-                        *GenericArray::<u8, U64>::from_slice(&buf[256..320]),
-                        *GenericArray::<u8, U64>::from_slice(&buf[320..384]),
-                        *GenericArray::<u8, U64>::from_slice(&buf[384..448]),
-                        *GenericArray::<u8, U64>::from_slice(&buf[448..512]),
-                    ];
-                    sha2::compress256((&mut cur_node_ptr[..8]).try_into().unwrap(), &blocks);
-                    sha2::compress256((&mut cur_node_ptr[..8]).try_into().unwrap(), &blocks);
+                // Final round is only nine parents
+                memset(&mut buf[352..384], 0); // Zero out upper half of last block
+                buf[352] = 0x80; // Padding
+                buf[382] = 0x27;
+                // Length (0x2700 = 9984 bits -> 1248 bytes)
+                compress256!(cur_node_ptr, &buf[64..], 5);
 
-                    // Final round is only nine parents
-                    memset(&mut buf[352..384], 0); // Zero out upper half of last block
-                    buf[352] = 0x80; // Padding
-                    buf[382] = 0x27;
-                    // Length (0x2700 = 9984 bits -> 1248 bytes)
-                    compress256!(cur_node_ptr, &buf[64..], 5);
+                // Fix endianess
+                cur_node_ptr[..8].iter_mut().for_each(|x| *x = x.to_be());
+
+                cur_node_ptr[7] &= 0x3FFF_FFFF; // Strip last two bits to fit in Fr
+
+                // Safety:
+                // It's possible that this increment will trigger moving the cache window.
+                // In that case, we must not access `parents_cache` again but instead replace it.
+                // This will happen above because `parents_cache` will now be empty, if we have
+                // correctly advanced it so far.
+                unsafe {
+                    parents_cache.increment_consumer();
                 }
+                i += 1;
+                cur_slot = (cur_slot + 1) % lookahead;
+            }
+        }
+
+        for runner in runners {
+            runner.join().unwrap().unwrap();
+        }
+    })
+        .unwrap();
+
+    Ok(())
+}
+
+fn create_first_layer_labels(
+    parents_cache: &CacheReader<u32>,
+    replica_id: &[u8],
+    layer_labels: &mut MmapMut,
+    exp_labels: Option<&mut MmapMut>,
+    num_nodes: u64,
+    cur_layer: u32,
+    core_group: Arc<Option<MutexGuard<'_, Vec<CoreIndex>>>>,
+) -> Result<()> {
+    info!("Creating labels for layer {}", cur_layer);
+    // num_producers is the number of producer threads
+    let (lookahead, num_producers, producer_stride) = {
+        let settings = &SETTINGS;
+        let lookahead = settings.multicore_sdr_lookahead;
+        let num_producers = settings.multicore_sdr_producers;
+        // NOTE: Stride must not exceed the number of nodes in parents_cache's window. If it does, the process will deadlock
+        // with producers and consumers waiting for each other.
+        let producer_stride = settings
+            .multicore_sdr_producer_stride
+            .min(parents_cache.window_nodes() as u64);
+
+        (lookahead, num_producers, producer_stride)
+    };
+
+    const BYTES_PER_NODE: usize = (NODE_SIZE * DEGREE) + SHA_BLOCK_SIZE;
+
+    let mut ring_buf = RingBuf::new(BYTES_PER_NODE, lookahead);
+    let mut base_parent_missing = vec![BitMask::default(); lookahead];
+
+    // Fill in the fixed portion of all buffers
+    for buf in ring_buf.iter_slot_mut() {
+        prepare_block(replica_id, cur_layer, buf);
+    }
+
+    // Highest node that is ready from the producer
+    let cur_producer = AtomicU64::new(0);
+    // Next node to be filled
+    let cur_awaiting = AtomicU64::new(1);
+
+    // These UnsafeSlices are managed through the 3 Atomics above, to minimize any locking overhead.
+    let layer_labels = UnsafeSlice::from_slice(layer_labels.as_mut_slice_of::<u32>().unwrap());
+    let exp_labels =
+        exp_labels.map(|m| UnsafeSlice::from_slice(m.as_mut_slice_of::<u32>().unwrap()));
+    let base_parent_missing = UnsafeSlice::from_slice(&mut base_parent_missing);
+
+    crossbeam::thread::scope(|s| {
+        let mut runners = Vec::with_capacity(num_producers);
+
+        for i in 0..num_producers {
+            let layer_labels = &layer_labels;
+            let exp_labels = exp_labels.as_ref();
+            let cur_producer = &cur_producer;
+            let cur_awaiting = &cur_awaiting;
+            let ring_buf = &ring_buf;
+            let base_parent_missing = &base_parent_missing;
+
+            let core_index = if let Some(cg) = &*core_group {
+                cg.get(i + 1)
+            } else {
+                None
+            };
+            runners.push(s.spawn(move |_| {
+                // This could fail, but we will ignore the error if so.
+                // It will be logged as a warning by `bind_core`.
+                debug!("binding core in producer thread {}", i);
+                // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
+                let _cleanup_handle = core_index.map(|c| bind_core(*c));
+
+                create_label_runner(
+                    parents_cache,
+                    layer_labels,
+                    exp_labels,
+                    num_nodes,
+                    cur_producer,
+                    cur_awaiting,
+                    producer_stride,
+                    lookahead as u64,
+                    ring_buf,
+                    base_parent_missing,
+                )
+            }));
+        }
+        let mut cur_node_ptr = unsafe { layer_labels.as_mut_slice() };
+        let mut cur_parent_ptr = unsafe { parents_cache.consumer_slice_at(DEGREE) };
+        let mut cur_parent_ptr_offset = DEGREE;
+
+        // Calculate node 0 (special case with no parents)
+        // Which is replica_id || cur_layer || 0
+        // TODO - Hash and save intermediate result: replica_id || cur_layer
+        let mut buf = [0u8; (NODE_SIZE * DEGREE) + 64];
+        prepare_block(replica_id, cur_layer, &mut buf);
+
+        cur_node_ptr[..8].copy_from_slice(&SHA256_INITIAL_DIGEST);
+        compress256!(cur_node_ptr, buf, 2);
+
+        // Fix endianess
+        cur_node_ptr[..8].iter_mut().for_each(|x| *x = x.to_be());
+
+        cur_node_ptr[7] &= 0x3FFF_FFFF; // Strip last two bits to ensure in Fr
+
+        // Keep track of which node slot in the ring_buffer to use
+        let mut cur_slot = 0;
+        let mut _count_not_ready = 0;
+        // Calculate nodes 1 to n
+
+        // Skip first node.
+        parents_cache.store_consumer(1);
+        let mut i = 1;
+        while i < num_nodes {
+            // Ensure next buffer is ready
+            let mut printed = false;
+            let mut producer_val = cur_producer.load(SeqCst);
+
+            while producer_val < i {
+                if !printed {
+                    debug!("PRODUCER NOT READY! {}", i);
+                    printed = true;
+                    _count_not_ready += 1;
+                }
+                thread::sleep(Duration::from_micros(10));
+                producer_val = cur_producer.load(SeqCst);
+            }
+
+            // Process as many nodes as are ready
+            let ready_count = producer_val - i + 1;
+            for _count in 0..ready_count {
+                // If we have used up the last cache window's parent data, get some more.
+                if cur_parent_ptr.is_empty() {
+                    // Safety: values read from `cur_parent_ptr` before calling `increment_consumer`
+                    // must not be read again after.
+                    unsafe {
+                        cur_parent_ptr = parents_cache.consumer_slice_at(cur_parent_ptr_offset);
+                    }
+                }
+
+                cur_node_ptr = &mut cur_node_ptr[8..];
+                // Grab the current slot of the ring_buf
+                let buf = unsafe { ring_buf.slot_mut(cur_slot) };
+                // Fill in the base parents
+                for k in 0..BASE_DEGREE {
+                    let bpm = unsafe { base_parent_missing.get(cur_slot) };
+                    if bpm.get(k) {
+                        let source = unsafe {
+                            let start = cur_parent_ptr[0] as usize * NODE_WORDS;
+                            let end = start + NODE_WORDS;
+                            &layer_labels.as_slice()[start..end]
+                        };
+
+                        buf[64 + (NODE_SIZE * k)..64 + (NODE_SIZE * (k + 1))]
+                            .copy_from_slice(source.as_byte_slice());
+                    }
+                    cur_parent_ptr = &cur_parent_ptr[1..];
+                    cur_parent_ptr_offset += 1;
+                }
+                // Expanders are already all filled in (layer 1 doesn't use expanders)
+                cur_parent_ptr = &cur_parent_ptr[EXP_DEGREE..];
+                cur_parent_ptr_offset += EXP_DEGREE;
+
+                // Six rounds of all base parents
+                for _j in 0..6 {
+                    compress256!(cur_node_ptr, &buf[64..], 3);
+                }
+
+                // round 7 is only first parent
+                memset(&mut buf[96..128], 0); // Zero out upper half of last block
+                buf[96] = 0x80; // Padding
+                buf[126] = 0x27;
+                // Length (0x2700 = 9984 bits -> 1248 bytes)
+                compress256!(cur_node_ptr, &buf[64..], 1);
 
                 // Fix endianess
                 cur_node_ptr[..8].iter_mut().for_each(|x| *x = x.to_be());
