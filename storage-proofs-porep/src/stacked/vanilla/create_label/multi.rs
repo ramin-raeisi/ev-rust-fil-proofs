@@ -198,7 +198,6 @@ fn create_label_runner(
         // Mark our work as done
         cur_producer.fetch_add(count, SeqCst);
     }
-    info!("finished label runner");
     Ok(())
 }
 
@@ -284,7 +283,6 @@ fn create_layer_labels(
                 )
             }));
         }
-        info!("start: calculate node 0");
         let mut cur_node_ptr = unsafe { layer_labels.as_mut_slice() };
         let mut cur_parent_ptr = unsafe { parents_cache.consumer_slice_at(DEGREE) };
         let mut cur_parent_ptr_offset = DEGREE;
@@ -306,15 +304,11 @@ fn create_layer_labels(
         // Keep track of which node slot in the ring_buffer to use
         let mut cur_slot = 0;
         let mut _count_not_ready = 0;
-        info!("finish: calculate node 0");
         // Calculate nodes 1 to n
 
         // Skip first node.
         parents_cache.store_consumer(1);
         let mut i = 1;
-        let mut tmp_p = false;
-        let mut tmp_f = false;
-        info!("start: calculate nodes 2..n ");
         while i < num_nodes {
             // Ensure next buffer is ready
             let mut printed = false;
@@ -332,9 +326,6 @@ fn create_layer_labels(
 
             // Process as many nodes as are ready
             let ready_count = producer_val - i + 1;
-            if !tmp_p {
-                info!("start: process nodes");
-            }
             for _count in 0..ready_count {
                 // If we have used up the last cache window's parent data, get some more.
                 if cur_parent_ptr.is_empty() {
@@ -349,9 +340,6 @@ fn create_layer_labels(
                 // Grab the current slot of the ring_buf
                 let buf = unsafe { ring_buf.slot_mut(cur_slot) };
                 // Fill in the base parents
-                if !tmp_f {
-                    info!("start: fill base parents");
-                }
                 for k in 0..BASE_DEGREE {
                     let bpm = unsafe { base_parent_missing.get(cur_slot) };
                     if bpm.get(k) {
@@ -366,10 +354,6 @@ fn create_layer_labels(
                     }
                     cur_parent_ptr = &cur_parent_ptr[1..];
                     cur_parent_ptr_offset += 1;
-                }
-                if !tmp_f {
-                    info!("finish: fill base parents");
-                    tmp_f = true;
                 }
                 // Expanders are already all filled in (layer 1 doesn't use expanders)
                 cur_parent_ptr = &cur_parent_ptr[EXP_DEGREE..];
@@ -425,12 +409,7 @@ fn create_layer_labels(
                 i += 1;
                 cur_slot = (cur_slot + 1) % lookahead;
             }
-            if !tmp_p {
-                info!("finish: process nodes");
-                tmp_p = true;
-            }
         }
-        info!("finish: calculate nodes 2..n ");
 
         for runner in runners {
             runner.join().unwrap().unwrap();
