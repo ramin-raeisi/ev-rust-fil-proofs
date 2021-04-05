@@ -16,7 +16,6 @@ use merkletree::merkle::{
 };
 use merkletree::store::{StoreConfig};
 use rayon::prelude::*;
-use crossbeam;
 use storage_proofs_core::{
     data::Data,
     error::Result,
@@ -325,7 +324,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             }
 
                             // Loop until all trees for all configs have been built.
-                            let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
+                            let config_ids: Vec<_> = (gpu_index..config_count).step_by(bus_num).collect();
 
                             crossbeam::scope(|s3| {
                                 let mut config_threads = Vec::new();
@@ -421,7 +420,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             main_threads.push(s.spawn(move |_| {
                 configs.iter().enumerate()
                     .zip(writers_rx.iter())
-                    .for_each(|((i, config), writer_rx)| {
+                    .for_each(|((_i, config), writer_rx)| {
 
                     let tree_data = writer_rx
                         .recv()

@@ -9,7 +9,6 @@ use generic_array::typenum::{self, Unsigned};
 use log::*;
 use merkletree::store::{DiskStore, StoreConfig};
 use rayon::prelude::*;
-use crossbeam;
 use storage_proofs_core::{
     error::Result,
     measurements::{
@@ -31,8 +30,7 @@ use super::super::{
 
 use super::utils::get_memory_padding;
 
-use ff::Field;
-use generic_array::{GenericArray, sequence::GenericSequence};
+use generic_array::{GenericArray};
 use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
 use fr32::{bytes_into_fr, fr_into_bytes};
@@ -329,7 +327,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     }
 
                                     // Loop until all trees for all configs have been built.
-                                    let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
+                                    let config_ids: Vec<_> = (gpu_index..config_count).step_by(bus_num).collect();
 
                                     
                                     crossbeam::scope(|s3| {
@@ -451,7 +449,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 main_threads.push(s.spawn(move |_| {
                     configs.iter().enumerate()
                         .zip(writers_rx.iter())
-                        .for_each(|((i, config), writer_rx)| {
+                        .for_each(|((_i, config), writer_rx)| {
                         //debug!("writing tree_c {}", i + 1);
                         let (base_data, tree_data) = writer_rx
                             .recv()
