@@ -450,6 +450,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         config: StoreConfig,
         replica_path: PathBuf,
     ) -> Result<TransformedLayers<Tree, G>> {
+        use crate::stacked::vanilla::proof::utils::get_gpu_for_parallel_tree_r;
+        
         // Generate key layers.
         let labels = measure_op(Operation::EncodeWindowTimeAll, || {
             Self::generate_labels_for_encoding(graph, layer_challenges, replica_id, config.clone())
@@ -457,7 +459,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         })?
         .0;
 
-        if SETTINGS.gpu_for_parallel_tree_r == 0 {
+        if  get_gpu_for_parallel_tree_r() == 0 {
             Self::transform_and_replicate_layers_inner(
                 graph,
                 layer_challenges,

@@ -40,7 +40,7 @@ use rust_gpu_tools::opencl;
 use crate::encode::{encode};
 
 use bellperson::gpu::{scheduler};
-use super::utils::get_memory_padding;
+use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r};
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     pub fn generate_tree_r_last_gpu<TreeArity>(
@@ -75,7 +75,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let bus_num = all_bus_ids.len();
         assert!(bus_num > 0);
 
-        let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
+        let tree_r_gpu = get_gpu_for_parallel_tree_r();
         let mut start_idx = 0;
         if tree_r_gpu > 0 { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
             assert!(tree_r_gpu < bus_num, 
