@@ -656,19 +656,36 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
             parents_cache.finish_reset()?;
         }
 
-        create_layer_labels(
-            &parents_cache,
-            &replica_id.as_ref(),
-            &mut layer_labels,
-            if layer == 1 {
-                None
-            } else {
-                Some(&mut exp_labels)
-            },
-            node_count,
-            layer as u32,
-            core_group.clone(),
-        )?;
+        if layer == 1 {
+            create_first_layer_labels(
+                &parents_cache,
+                &replica_id.as_ref(),
+                &mut layer_labels,
+                if layer == 1 {
+                    None
+                } else {
+                    Some(&mut exp_labels)
+                },
+                node_count,
+                layer as u32,
+                core_group.clone(),
+            )?;
+        }
+        else {
+            create_layer_labels(
+                &parents_cache,
+                &replica_id.as_ref(),
+                &mut layer_labels,
+                if layer == 1 {
+                    None
+                } else {
+                    Some(&mut exp_labels)
+                },
+                node_count,
+                layer as u32,
+                core_group.clone(),
+            )?;
+        }
 
         // Cache reset happens in two parts.
         // The first part (the start) happens after each layer but the last.
