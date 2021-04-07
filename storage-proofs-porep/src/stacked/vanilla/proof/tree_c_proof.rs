@@ -28,7 +28,7 @@ use super::super::{
     proof::StackedDrg,
 };
 
-use super::utils::get_memory_padding;
+use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r};
 
 use generic_array::{GenericArray};
 use neptune::batch_hasher::BatcherType;
@@ -79,7 +79,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let bus_num = all_bus_ids.len();
             assert!(bus_num > 0);
 
-            let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
+            let tree_r_gpu = get_gpu_for_parallel_tree_r();
             let mut last_idx = bus_num;
             if tree_r_gpu > 0 { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
                 assert!(tree_r_gpu < bus_num, 

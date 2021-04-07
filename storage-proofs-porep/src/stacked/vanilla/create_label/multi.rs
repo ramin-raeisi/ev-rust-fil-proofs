@@ -6,7 +6,7 @@ use std::sync::{
     Arc, MutexGuard,
 };
 use std::thread;
-use std::time::Duration;
+use std::time::{Instant, Duration};
 
 use anyhow::{Context, Result};
 use byte_slice_cast::{AsByteSlice, AsMutSliceOf};
@@ -506,6 +506,107 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
             );
         }
     }
+
+    Ok((
+        Labels::<Tree> {
+            labels: layer_states.iter().map(|s| s.config.clone()).collect(),
+            _h: PhantomData,
+        },
+        layer_states,
+    ))
+}
+
+#[allow(clippy::type_complexity)]
+pub fn create_labels_for_encoding_bench<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]>>(
+    graph: &StackedBucketGraph<Tree::Hasher>,
+    parents_cache: &ParentCache,
+    layers: usize,
+    replica_id: T,
+    config: StoreConfig,
+) -> Result<(Labels<Tree>, Vec<LayerState>)> {
+    info!("create labels");
+
+    let labels_start = Instant::now();
+
+    let layer_states = prepare_layers::<Tree>(graph, &config, layers);
+
+    let sector_size = graph.size() * NODE_SIZE;
+    let node_count = graph.size() as u64;
+    let cache_window_nodes = SETTINGS.sdr_parents_cache_size as usize;
+
+    let default_cache_size = DEGREE * 4 * cache_window_nodes;
+
+    let core_group = Arc::new(checkout_core_group());
+
+    // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
+    let _cleanup_handle = (*core_group).as_ref().map(|group| {
+        // This could fail, but we will ignore the error if so.
+        // It will be logged as a warning by `bind_core`.
+        debug!("binding core in main thread");
+        group.get(0).map(|core_index| bind_core(*core_index))
+    });
+
+    // NOTE: this means we currently keep 2x sector size around, to improve speed
+    let (parents_cache, mut layer_labels, mut exp_labels) = setup_create_label_memory(
+        sector_size,
+        DEGREE,
+        Some(default_cache_size as usize),
+        &parents_cache.path,
+    )?;
+
+    for (layer, layer_state) in (1..=layers).zip(layer_states.iter()) {
+        info!("Layer {}", layer);
+
+        if layer_state.generated {
+            info!("skipping layer {}, already generated", layer);
+
+            // load the already generated layer into exp_labels
+            read_layer(&layer_state.config, &mut exp_labels)?;
+            continue;
+        }
+
+        // Cache reset happens in two parts.
+        // The second part (the finish) happens before each layer but the first.
+        if layers != 1 {
+            parents_cache.finish_reset()?;
+        }
+
+        create_layer_labels(
+            &parents_cache,
+            &replica_id.as_ref(),
+            &mut layer_labels,
+            if layer == 1 {
+                None
+            } else {
+                Some(&mut exp_labels)
+            },
+            node_count,
+            layer as u32,
+            core_group.clone(),
+        )?;
+
+        // Cache reset happens in two parts.
+        // The first part (the start) happens after each layer but the last.
+        if layer != layers {
+            parents_cache.start_reset()?;
+        }
+
+        mem::swap(&mut layer_labels, &mut exp_labels);
+        {
+            let layer_config = &layer_state.config;
+
+            info!("  storing labels on disk");
+            write_layer(&exp_labels, layer_config).context("failed to store labels")?;
+
+            info!(
+                "  generated layer {} store with id {}",
+                layer, layer_config.id
+            );
+        }
+    }
+
+    let labels_time = labels_start.elapsed();
+    info!("encodint labels time: {:?}", labels_time);
 
     Ok((
         Labels::<Tree> {
