@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex};
 
-use anyhow::Context;
+use anyhow::{ensure, Context};
 use bincode::deserialize;
 use fdlimit::raise_fd_limit;
 use filecoin_hashers::{Domain, HashFunction, Hasher, PoseidonArity};
@@ -330,6 +330,31 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         }
     }
 
+    /// Generates the layers as needed for encoding.
+    pub fn generate_labels_for_encoding_bench(
+        graph: &StackedBucketGraph<Tree::Hasher>,
+        layer_challenges: &LayerChallenges,
+        replica_id: &<Tree::Hasher as Hasher>::Domain,
+        config: StoreConfig,
+        layers_bound: usize,
+    ) -> Result<(Labels<Tree>, Vec<LayerState>)> {
+        let mut parent_cache = graph.parent_cache()?;
+
+        ensure!(layers_bound <= layer_challenges.layers(), "layers bound must be less or equal than the number of layers");
+
+        if SETTINGS.use_multicore_sdr {
+            create_label::multi::create_labels_for_encoding_bench(
+                graph,
+                &parent_cache,
+                layers_bound,
+                replica_id,
+                config,
+            )
+        } else {
+            panic!("generate labels bench is used only for multicore sdr")
+        }
+    }
+
     /// Generates the layers, as needed for decoding.
     fn generate_labels_for_decoding(
         graph: &StackedBucketGraph<Tree::Hasher>,
@@ -450,6 +475,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         config: StoreConfig,
         replica_path: PathBuf,
     ) -> Result<TransformedLayers<Tree, G>> {
+        use crate::stacked::vanilla::proof::utils::get_gpu_for_parallel_tree_r;
+        
         // Generate key layers.
         let labels = measure_op(Operation::EncodeWindowTimeAll, || {
             Self::generate_labels_for_encoding(graph, layer_challenges, replica_id, config.clone())
@@ -457,7 +484,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         })?
         .0;
 
-        if SETTINGS.gpu_for_parallel_tree_r == 0 {
+        if  get_gpu_for_parallel_tree_r() == 0 {
             Self::transform_and_replicate_layers_inner(
                 graph,
                 layer_challenges,
@@ -710,6 +737,23 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         )?;
 
         Ok((tau, (paux, taux)))
+    }
+
+
+    pub fn replicate_phase1_bench(
+        pp: &'a PublicParams<Tree>,
+        replica_id: &<Tree::Hasher as Hasher>::Domain,
+        config: StoreConfig,
+        layers_bound: usize,
+    ) -> Result<Labels<Tree>> {
+        info!("replicate_phase1");
+
+        let labels = measure_op(Operation::EncodeWindowTimeAll, || {
+            Self::generate_labels_for_encoding_bench(&pp.graph, &pp.layer_challenges, replica_id, config, layers_bound)
+        })?
+        .0;
+
+        Ok(labels)
     }
 
     // Assumes data is all zeros.

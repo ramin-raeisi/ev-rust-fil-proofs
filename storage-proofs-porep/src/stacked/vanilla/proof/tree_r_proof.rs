@@ -16,7 +16,6 @@ use merkletree::merkle::{
 };
 use merkletree::store::{StoreConfig};
 use rayon::prelude::*;
-use crossbeam;
 use storage_proofs_core::{
     data::Data,
     error::Result,
@@ -41,7 +40,7 @@ use rust_gpu_tools::opencl;
 use crate::encode::{encode};
 
 use bellperson::gpu::{scheduler};
-use super::utils::get_memory_padding;
+use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r};
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     pub fn generate_tree_r_last_gpu<TreeArity>(
@@ -76,7 +75,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let bus_num = all_bus_ids.len();
         assert!(bus_num > 0);
 
-        let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
+        let tree_r_gpu = get_gpu_for_parallel_tree_r();
         let mut start_idx = 0;
         if tree_r_gpu > 0 { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
             assert!(tree_r_gpu < bus_num, 
@@ -325,7 +324,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             }
 
                             // Loop until all trees for all configs have been built.
-                            let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
+                            let config_ids: Vec<_> = (gpu_index..config_count).step_by(bus_num).collect();
 
                             crossbeam::scope(|s3| {
                                 let mut config_threads = Vec::new();
@@ -421,7 +420,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             main_threads.push(s.spawn(move |_| {
                 configs.iter().enumerate()
                     .zip(writers_rx.iter())
-                    .for_each(|((i, config), writer_rx)| {
+                    .for_each(|((_i, config), writer_rx)| {
 
                     let tree_data = writer_rx
                         .recv()
