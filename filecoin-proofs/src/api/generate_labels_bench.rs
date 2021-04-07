@@ -31,18 +31,16 @@ use crate::{
 use super::seal::compute_comm_d;
 
 #[allow(clippy::too_many_arguments)]
-pub fn generate_labels_bench<R, S, T, Tree: 'static + MerkleTreeTrait>(
+pub fn generate_labels_bench<R, Tree: 'static + MerkleTreeTrait>(
     porep_config: PoRepConfig,
     cache_path: R,
     prover_id: ProverId,
     sector_id: SectorId,
     ticket: Ticket,
     piece_infos: &[PieceInfo],
-) -> Result<SealPreCommitPhase1Output<Tree>>
+) -> Result<()>
     where
         R: AsRef<Path>,
-        S: AsRef<Path>,
-        T: AsRef<Path>,
 {
     info!("generate_labels_bench:start: {:?}", sector_id);
 
@@ -87,19 +85,13 @@ pub fn generate_labels_bench<R, S, T, Tree: 'static + MerkleTreeTrait>(
         &porep_config.porep_id,
     );
 
-    let labels = StackedDrg::<Tree, DefaultPieceHasher>::replicate_phase1_bench(
+    let _labels = StackedDrg::<Tree, DefaultPieceHasher>::replicate_phase1_bench(
         &compound_public_params.vanilla_params,
         &replica_id,
         config.clone(),
         2,
     )?;
 
-    let out = SealPreCommitPhase1Output {
-        labels,
-        config,
-        comm_d,
-    };
-
-    info!("seal_pre_commit_phase1:finish: {:?}", sector_id);
-    Ok(out)
+    info!("generate_labels_bench:finish: {:?}", sector_id);
+    Ok(())
 }
