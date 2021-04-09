@@ -80,4 +80,15 @@ impl AllocatedColumn {
         );
         &self.rows[layer - 1]
     }
+
+    pub fn get_mut_value(&mut self, layer: usize) -> &mut AllocatedNum<Bls12> {
+        assert!(layer > 0, "layers are 1 indexed");
+        assert!(
+            layer <= self.rows.len(),
+            "layer {} out of range: 1..={}",
+            layer,
+            self.rows.len()
+        );
+        &mut self.rows[layer - 1]
+    }
 }
