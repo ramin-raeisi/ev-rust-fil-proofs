@@ -345,99 +345,44 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
 
         let len = drg_parents_proofs.len();
         
-        let mut one = cs.make_vector(len)?;
-        let mut two = cs.make_vector(1 as usize)?;
-        let aux1 = cs.get_aux_assigment_len();
-        info!("aux1 = {}",aux1 );
+        let mut drg_cs = cs.make_vector(drg_parents_proofs.len())?;
+        let aux_len = cs.get_aux_assigment_len();
+        info!("aux_len = {}",aux_len );
 
-        for (i, parent) in drg_parents_proofs.into_iter().enumerate() {
-            if i != len - 1 {
-                let (parent_col, inclusion_path) =
-                    parent.alloc(cs.namespace(|| format!("drg_parent_{}_num", i)))?;
-                assert_eq!(layers, parent_col.len());
+        for ((i, parent), other_cs) in drg_parents_proofs.into_iter().enumerate().zip(drg_cs.iter_mut()) {
+            let (parent_col, inclusion_path) = 
+            parent.alloc(other_cs.namespace(|| format!("drg_parent_{}_num", i)))?;
+            assert_eq!(layers, parent_col.len());
 
-                // calculate column hash
-                let val = parent_col.hash(cs.namespace(|| format!("drg_parent_{}_constraint", i)))?;
-                // enforce inclusion of the column hash in the tree C
-                enforce_inclusion(
-                    cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
-                    inclusion_path,
-                // &comm_c_copy,
-                    comm_c,
-                    &val,
-                )?;
-                drg_parents.push(parent_col);
-                if i == 0 {
-                    let aux2 = cs.get_aux_assigment_len();
-                    info!("aux2 = {}",aux2);
-                }
+            let val = parent_col.hash(other_cs.namespace(|| format!("drg_parent_{}_constraint", i)))?;
+            info!{"get val"};
+
+            drg_parents.push(parent_col);
+
+            let parent = &mut drg_parents[i]; 
+            for j in 1..parent.len() + 1 {
+                let mut row = parent.get_mut_value(j);
+                let mut v = row.get_mut_variable();
+                cs.align_variable(&mut v, 0, aux_len + j - 1 + i*5979);
             }
-            else {
-                    let (parent_col, inclusion_path) = 
-                    parent.alloc(one[0].namespace(|| format!("drg_parent_{}_num", i)))?;
-                    //parent.alloc(cs.namespace(|| format!("drg_parent_{}_num", i)))?;
-                    assert_eq!(layers, parent_col.len());
+            info!("finish align()");
 
-                    let aux_len = cs.get_aux_assigment_len();
-
-                    let val = parent_col.hash(one[0].namespace(|| format!("drg_parent_{}_constraint", i)))?;
-                    info!{"get val"};
-
-                    drg_parents.push(parent_col);
-
-                    let parent = &mut drg_parents[len - 1]; 
-                    for j in 1..parent.len() + 1 {
-                        let mut row = parent.get_mut_value(j);
-                        let mut v = row.get_mut_variable();
-                        cs.align_variable(&mut v, j - 1,  aux_len + j - 1);
-                        //cs.print_index(&mut v);
-                    }
-                    info!("finish align()");
-
-                    let comm_c_copy = AllocatedNum::alloc(one[0].namespace(|| format!("comm_c_{}_num", 0)), 
-                    || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
-                    info!{"alloc comm_c_copy"};
-                    one[0].align_variable(&mut comm_c_copy.get_variable(), 0, cs.get_index(&mut comm_c.get_variable()));
-                    info!{"align comm_c_copy"};
-                    enforce_inclusion(
-                        one[0].namespace(|| format!("drg_parent_{}_inclusion", i)),
-                        inclusion_path,
-                        &comm_c_copy,
-                        &val,
-                    )?;
-                    info!{"enforce inclusion"};
-                    one[0].deallocate(comm_c_copy.get_variable()).unwrap();
-
-                    // calculate column hash
-                    //let val = parent_col.hash(one[0].namespace(|| format!("drg_parent_{}_constraint", i)))?;
-                    //let val = parent_col.hash(cs.namespace(|| format!("drg_parent_{}_constraint", i)))?;
-                    // enforce inclusion of the column hash in the tree C
-                    //let comm_c_copy = AllocatedNum::alloc(one[0].namespace(|| format!("comm_c_{}_num", 0)), 
-                    //let comm_c_copy = AllocatedNum::alloc(cs.namespace(|| format!("comm_c_{}_num", 0)), 
-                    //|| { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
-                    //one[0].align_variable(&mut comm_c_copy.get_variable(), 0, cs.get_index(&mut comm_c.get_variable()));
-                   /* enforce_inclusion(
-                        one[0].namespace(|| format!("drg_parent_{}_inclusion", i)),
-                        //cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
-                        inclusion_path,
-                        &comm_c_copy,
-                        //comm_c,
-                        &val,
-                    )?;*/
-                    //one[0].deallocate(comm_c_copy.get_variable()).unwrap();
-                    //cs.deallocate(comm_c_copy.get_variable()).unwrap();
-                    //let len = parent_col.len();
-                    /*for j in 1..(len + 1) {
-                        let row = parent_col.get_value(j);
-                        let mut v = row.get_variable();
-                        //cs.print_index(&mut v);
-                        cs.align_variable(&mut v, j - 1,  j - 1);
-                        cs.print_index(&mut v);
-                    }*/
-                }
+            let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
+            || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
+            info!{"alloc comm_c_copy"};
+            other_cs.align_variable(&mut comm_c_copy.get_variable(), 0, cs.get_index(&mut comm_c.get_variable()));
+            info!{"align comm_c_copy"};
+            enforce_inclusion(
+                other_cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
+                inclusion_path,
+                &comm_c_copy,
+                &val,
+            )?;
+            info!{"enforce inclusion"};
+            other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
         }
         //let aux_len = cs.get_aux_assigment_len();
-        cs.aggregate(one);
+        cs.aggregate(drg_cs);
         //cs.deallocate(comm_c_copy.get_variable()).unwrap();
 
         //cs.set_var_density(comm_c.get_variable(), true);
@@ -453,7 +398,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                 }
             }
         }*/
-        let mut c = 0;
+        /*let mut c = 0;
         for parent in &drg_parents {
             c = c + 1;
             if c == len -1 {
@@ -463,7 +408,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                     cs.print_index(&mut v);
                 }
             }
-        }
+        }*/
 
        // Private Inputs for the Expander parent nodes.
        let mut exp_parents = Vec::new();
