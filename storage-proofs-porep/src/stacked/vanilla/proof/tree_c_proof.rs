@@ -9,7 +9,6 @@ use generic_array::typenum::{self, Unsigned};
 use log::*;
 use merkletree::store::{DiskStore, StoreConfig};
 use rayon::prelude::*;
-use crossbeam;
 use storage_proofs_core::{
     error::Result,
     measurements::{
@@ -29,14 +28,15 @@ use super::super::{
     proof::StackedDrg,
 };
 
-use ff::Field;
-use generic_array::{GenericArray, sequence::GenericSequence};
+use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r};
+
+use generic_array::{GenericArray};
 use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
 use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
-use bellperson::gpu::{scheduler, get_memory_padding};
+use bellperson::gpu::{scheduler};
 
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> {
@@ -79,7 +79,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let bus_num = all_bus_ids.len();
             assert!(bus_num > 0);
 
-            let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
+            let tree_r_gpu = get_gpu_for_parallel_tree_r();
             let mut last_idx = bus_num;
             if tree_r_gpu > 0 { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
                 assert!(tree_r_gpu < bus_num, 
@@ -133,9 +133,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let labels = Arc::new(Mutex::new(labels));
 
-            let size_fr = std::mem::size_of::<Fr>() as u64;
-            let size_state: u64 = size_fr * (layers as u64); // state_{width} = ColumnArity = layers
-            let threads_num: u64 = max_gpu_column_batch_size as u64;
+            //let size_fr = std::mem::size_of::<Fr>() as u64;
+            //let size_state: u64 = size_fr * (layers as u64); // state_{width} = ColumnArity = layers
+            //let threads_num: u64 = max_gpu_column_batch_size as u64;
             /*let mut mem_column_add: u64 = 0;
             mem_column_add = mem_column_add + size_fr * ((max_gpu_column_batch_size * layers) as u64); // preimages buffer
             mem_column_add = mem_column_add + size_fr * ((max_gpu_column_batch_size * layers) as u64); // digests buffer
@@ -277,7 +277,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 gpu_threads.push(s2.spawn(move |_| {
                                     let mut locked_gpu: i32 = -1;
                                     let lock = loop {
-                                        let lock_inner = scheduler::get_next_device().lock().unwrap();
+                                        let lock_inner = scheduler::get_next_device_second_pool().lock().unwrap();
                                         let target_bus_id = lock_inner.device().bus_id().unwrap();
                                         
                                         for idx in 0..batchertype_gpus.len() {
@@ -327,7 +327,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     }
 
                                     // Loop until all trees for all configs have been built.
-                                    let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
+                                    let config_ids: Vec<_> = (gpu_index..config_count).step_by(bus_num).collect();
 
                                     
                                     crossbeam::scope(|s3| {
@@ -349,7 +349,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                 let mut mem_used_val = mem_used.load(SeqCst);
                                                 while (mem_used_val + mem_column_add + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                                     if !printed {
-                                                        info!("gpu memory shortage on {}, waiting", locked_gpu);
+                                                        info!("gpu memory shortage on {}, waiting...", locked_gpu);
                                                         printed = true;
                                                     }
                                                     thread::sleep(Duration::from_secs(1));
@@ -390,7 +390,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                     let mut mem_used_val = mem_used.load(SeqCst);
                                                     while (mem_used_val + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                                         if !printed {
-                                                            info!("GPU MEMORY SHORTAGE ON {}, WAITING!", locked_gpu);
+                                                            info!("gpu memory shortage on {}, waiting...", locked_gpu);
                                                             printed = true;
                                                         }
                                                         thread::sleep(Duration::from_secs(1));
@@ -449,7 +449,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 main_threads.push(s.spawn(move |_| {
                     configs.iter().enumerate()
                         .zip(writers_rx.iter())
-                        .for_each(|((i, config), writer_rx)| {
+                        .for_each(|((_i, config), writer_rx)| {
                         //debug!("writing tree_c {}", i + 1);
                         let (base_data, tree_data) = writer_rx
                             .recv()

@@ -254,7 +254,7 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
         let groth_proofs = groth16::create_proof_batch(circuits, groth_params)?;
 
 
-        groth_proofs.clone()
+        groth_proofs
             .into_iter()
             .map(|groth_proof| {
                 let mut proof_vec = vec![];
