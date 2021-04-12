@@ -94,210 +94,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             _t: PhantomData,
         }
     }
-
-    /// Circuit synthesis.
-    #[allow(clippy::too_many_arguments)]
-    pub fn synthesize2<CS: ConstraintSystem<Bls12>>(
-        self,
-        mut cs: CS,
-        layers: usize,
-        comm_d: &AllocatedNum<Bls12>,
-        comm_c: &AllocatedNum<Bls12>,
-        comm_r_last: &AllocatedNum<Bls12>,
-        replica_id: &[Boolean],
-    ) -> Result<(), SynthesisError> {
-        let Proof {
-            comm_d_path,
-            data_leaf,
-            challenge,
-            comm_r_last_path,
-            comm_c_path,
-            drg_parents_proofs,
-            exp_parents_proofs,
-            ..
-        } = self;
-
-        assert!(!drg_parents_proofs.is_empty());
-        assert!(!exp_parents_proofs.is_empty());
-
-        // -- verify initial data layer
-
-        // PrivateInput: data_leaf
-        let data_leaf_num = AllocatedNum::alloc(cs.namespace(|| "data_leaf"), || {
-            data_leaf.ok_or_else(|| SynthesisError::AssignmentMissing)
-        })?;
-
-        // enforce inclusion of the data leaf in the tree D
-        enforce_inclusion(
-            cs.namespace(|| "comm_d_inclusion"),
-            comm_d_path,
-            comm_d,
-            &data_leaf_num,
-        )?;
-
-        // -- verify replica column openings
-
-        // Private Inputs for the DRG parent nodes.
-        let mut drg_parents = Vec::with_capacity(layers);
-
-        let mut drg_cs = cs.make_vector(drg_parents_proofs.len())?;
-
-        for ((i, parent), cs) in drg_parents_proofs.into_iter().enumerate()
-            .zip(drg_cs.iter_mut()) {
-
-            let (parent_col, inclusion_path) =
-                parent.alloc(cs.namespace(|| format!("drg_parent_{}_num", i)))?;
-            assert_eq!(layers, parent_col.len());
-
-            let comm_c_copy = AllocatedNum::alloc(cs.namespace(|| format!("comm_c_{}_num", i)), 
-            || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
-
-            // calculate column hash
-            let val = parent_col.hash(cs.namespace(|| format!("drg_parent_{}_constraint", i)))?;
-            // enforce inclusion of the column hash in the tree C
-            enforce_inclusion(
-                cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
-                inclusion_path,
-                &comm_c_copy,
-                &val,
-            )?;
-            cs.deallocate(comm_c_copy.get_variable()).unwrap();
-            drg_parents.push(parent_col);
-        }
-
-        cs.set_var_density(comm_c.get_variable(), true);
-
-        for (i, other_cs) in drg_cs.into_iter().enumerate() {
-            let col = &drg_parents[i];
-            for j in 1..=col.len() {
-                let row = col.get_value(j);
-                let mut v = row.get_variable();
-                cs.align_variable(&mut v, 0, 0);
-            }
-            cs.aggregate(vec![other_cs]);
-        }
-
-        // Private Inputs for the Expander parent nodes.
-        let mut exp_parents = Vec::new();
-
-        for (i, parent) in exp_parents_proofs.into_iter().enumerate() {
-
-            let (parent_col, inclusion_path) =
-                parent.alloc(cs.namespace(|| format!("exp_parent_{}_num", i)))?;
-            assert_eq!(layers, parent_col.len());
-
-            // calculate column hash
-            let val = parent_col.hash(cs.namespace(|| format!("exp_parent_{}_constraint", i)))?;
-            // enforce inclusion of the column hash in the tree C
-            enforce_inclusion(
-                cs.namespace(|| format!("exp_parent_{}_inclusion", i)),
-                inclusion_path,
-                comm_c,
-                &val,
-            )?;
-            exp_parents.push(parent_col);
-        }
-
-        // -- Verify labeling and encoding
-
-        // stores the labels of the challenged column
-        let mut column_labels = Vec::new();
-
-        // PublicInput: challenge index
-        let challenge_num = UInt64::alloc(cs.namespace(|| "challenge"), challenge)?;
-        challenge_num.pack_into_input(cs.namespace(|| "challenge input"))?;
-
-        for layer in 1..=layers {
-            let layer_num = UInt32::constant(layer as u32);
-
-            let mut cs = cs.namespace(|| format!("labeling_{}", layer));
-
-            // Collect the parents
-            let mut parents = Vec::new();
-
-            // all layers have drg parents
-            for parent_col in &drg_parents {
-                let parent_val_num = parent_col.get_value(layer);
-                let parent_val_bits =
-                    reverse_bit_numbering(parent_val_num.to_bits_le(
-                        cs.namespace(|| format!("drg_parent_{}_bits", parents.len())),
-                    )?);
-                parents.push(parent_val_bits);
-            }
-
-            // the first layer does not contain expander parents
-            if layer > 1 {
-                for parent_col in &exp_parents {
-                    // subtract 1 from the layer index, as the exp parents, are shifted by one, as they
-                    // do not store a value for the first layer
-                    let parent_val_num = parent_col.get_value(layer - 1);
-                    let parent_val_bits = reverse_bit_numbering(parent_val_num.to_bits_le(
-                        cs.namespace(|| format!("exp_parent_{}_bits", parents.len())),
-                    )?);
-                    parents.push(parent_val_bits);
-                }
-            }
-
-            // Duplicate parents, according to the hashing algorithm.
-            let mut expanded_parents = parents.clone();
-            if layer > 1 {
-                expanded_parents.extend_from_slice(&parents); // 28
-                expanded_parents.extend_from_slice(&parents[..9]); // 37
-            } else {
-                // layer 1 only has drg parents
-                expanded_parents.extend_from_slice(&parents); // 12
-                expanded_parents.extend_from_slice(&parents); // 18
-                expanded_parents.extend_from_slice(&parents); // 24
-                expanded_parents.extend_from_slice(&parents); // 30
-                expanded_parents.extend_from_slice(&parents); // 36
-                expanded_parents.push(parents[0].clone()); // 37
-            };
-
-            // Reconstruct the label
-            let label = create_label_circuit(
-                cs.namespace(|| "create_label"),
-                replica_id,
-                expanded_parents,
-                layer_num,
-                challenge_num.clone(),
-            )?;
-            column_labels.push(label);
-        }
-
-        // -- encoding node
-        {
-            // encode the node
-
-            // key is the last label
-            let key = &column_labels[column_labels.len() - 1];
-            let encoded_node = encode(cs.namespace(|| "encode_node"), key, &data_leaf_num)?;
-
-            // verify inclusion of the encoded node
-            enforce_inclusion(
-                cs.namespace(|| "comm_r_last_data_inclusion"),
-                comm_r_last_path,
-                comm_r_last,
-                &encoded_node,
-            )?;
-        }
-
-        // -- ensure the column hash of the labels is included
-        {
-            // calculate column_hash
-            let column_hash =
-                hash_single_column(cs.namespace(|| "c_x_column_hash"), &column_labels)?;
-
-            // enforce inclusion of the column hash in the tree C
-            enforce_inclusion(
-                cs.namespace(|| "c_x_inclusion"),
-                comm_c_path,
-                comm_c,
-                &column_hash,
-            )?;
-        }
-
-        Ok(())
-    }
     #[allow(clippy::too_many_arguments)]
     pub fn synthesize<CS: ConstraintSystem<Bls12>>(
         self,
@@ -352,7 +148,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
         
         let mut drg_cs = cs.make_vector(drg_parents_proofs.len())?;
         let aux_len = cs.get_aux_assigment_len();
-        info!("aux_len = {}",aux_len );
 
         drg_parents_proofs.into_par_iter().enumerate()
         .zip(drg_cs.par_iter_mut()
@@ -363,27 +158,19 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             assert_eq!(layers, parent_col.len());
 
             let val = parent_col.hash(other_cs.namespace(|| format!("drg_parent_{}_constraint", i))).unwrap();
-            info!{"get val"};
 
             *drg_parent = parent_col;
-
-            //drg_parents_lock.write().unwrap()[i] = parent_col;
-
-            //let parent = &mut drg_parents_lock.read().unwrap()[i]; 
 
             for j in 1..drg_parent.len() + 1 {
                 let mut row = drg_parent.get_mut_value(j);
                 let mut v = row.get_mut_variable();
                 other_cs.align_variable(&mut v, 0, aux_len + j - 1 + i*5979);
             }
-            info!("finish align()");
 
             let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
             || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
-            info!{"alloc comm_c_copy"};
             let idx = other_cs.get_index(&mut comm_c.get_variable());
             other_cs.align_variable(&mut comm_c_copy.get_variable(), 0, idx);
-            info!{"align comm_c_copy"};
             enforce_inclusion(
                 other_cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
                 inclusion_path,
@@ -392,34 +179,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             );
             other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
         });
-        //let aux_len = cs.get_aux_assigment_len();
         cs.aggregate(drg_cs);
-        //cs.deallocate(comm_c_copy.get_variable()).unwrap();
-
-        //cs.set_var_density(comm_c.get_variable(), true);
-        for parent in &mut drg_parents {
-            for j in 1..parent.len() + 1 {
-                let mut row = parent.get_value(j);
-                let value = row.get_value();
-                if value == None {
-                    info!("Err(SynthesisError::AssignmentMissing), {}", j);
-                }
-                else {
-                    info!{"no err, {}", j};
-                }
-            }
-        }
-        /*let mut c = 0;
-        for parent in &drg_parents {
-            c = c + 1;
-            if c == len -1 {
-                for j in 1..parent.len() + 1 {
-                    let row = parent.get_value(j);
-                    let mut v = row.get_variable();
-                    cs.print_index(&mut v);
-                }
-            }
-        }*/
 
        // Private Inputs for the Expander parent nodes.
        info!{"expander parents"};
@@ -463,12 +223,10 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
            
            for parent_col in &drg_parents {
                let parent_val_num = parent_col.get_value(layer);
-               info!{"drg_parents bits"};
                let parent_val_bits =
                    reverse_bit_numbering(parent_val_num.to_bits_le(
                        cs.namespace(|| format!("drg_parent_{}_bits", parents.len())),
                    )?);
-                info!{"finish: drg_parents bits"};
                parents.push(parent_val_bits);
            }
 
