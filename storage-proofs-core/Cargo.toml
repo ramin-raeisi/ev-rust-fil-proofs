@@ -14,7 +14,7 @@ bench = false
 [dependencies]
 filecoin-hashers = { path = "../filecoin-hashers", version = "1.0.0", default-features = false, features = ["sha256", "poseidon"] }
 rand = "0.7"
-merkletree = { git = "ssh://git@github.com/NilFoundation/merkletree", branch = "master"}
+merkletree = { git = "ssh://git@github.com/nilfoundation/eliovp-merkletree.git", branch = "master" }
 byteorder = "1"
 config = { version = "0.10.1", default-features = false, features = ["toml"] }
 itertools = "0.9"
