@@ -22,6 +22,7 @@ There are currently several different crates:
     `storage-proofs-post` is intended to serve as a reference implementation for _**Proof-of-Space-time**_ (**PoSt**), for `filecoin-proofs`.
 
     Primary Components:
+    
      -   **PoSt** (Proof-of-Spacetime)
 
 
@@ -249,6 +250,54 @@ FIL_PROOFS_COLUMN_WRITE_BATCH_SIZE=Y
 ```
 
 Note that this value affects the degree of parallelism used when persisting the column tree to disk, and may exhaust system file descriptors if the limit is not adjusted appropriately (e.g. using `ulimit -n`).  If persisting the tree is failing due to a 'bad file descriptor' error, try adjusting this value to something larger (e.g. 524288, or 1048576).  Increasing this value processes larger chunks at once, which results in larger (but fewer) disk writes in parallel.
+
+### Advanced GPU Usage 2
+
+The optimized rust-fil-proofs version contains new GPU settings. 
+
+* `FIL_PROOFS_GPU_FOR_PARALLEL_TREE_R`
+
+  * Possible values: `[0, n]` (integer), where `n` is the number of GPUs - 1.
+  * Default value: `0`
+
+  The pre-commit-2 phase contains the building of two sets of Merkle-trees: `tree_c` and `tree_r`. The building of `tree_r` takes fewer resources. For systems with several GPU devices, `tree_r` building may be run in parallel with `tree_c`. `FIL_PROOFS_GPU_FOR_PARALLEL_TREE_R` defines the number of GPUs available for `tree_r` (the rest devices are used by `tree_c`). If `FIL_PROOFS_GPU_FOR_PARALLEL_TREE_R = 0` then the trees are being built in a serial way.
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_GPU_FOR_PARALLEL_TREE_R", "1");
+  ```
+
+* `FIL_PROOFS_TREE_PER_GPU`
+
+  * Possible values: `[0, n]` (integer), where `n = 8` for 32GiB sectors and `n = 16` for 64 GiB sectors.
+  * Default value: `0`
+
+  The algorithms in the pre-commit-2 phase try to use all available GPUs and distribute the load evenly between them. `FIL_PROOFS_TREE_PER_GPU` defines the number of trees (the load) that is built by each GPU. 
+
+  For instance, if there are 4 GPUs then for a 32GiB sector each GPU builds 2 trees (8 trees total). If `FIL_PROOFS_TREE_PER_GPU = 3` then only three GPUs will be used (two of them build 3 trees and the last one builds only 2 trees). 
+
+  __Important note__: If `FIL_PROOFS_TREE_PER_GPU = 0` then the algorithm distributes the number of threes per GPU uniformly. 
+
+  __Important note 2__: `FIL_PROOFS_TREE_PER_GPU` will be changed soon to provide a more convenient way to control GPUs usage.
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_TREE_PER_GPU", "4");
+  ```
+
+* `FIL_PROOFS_GPU_MEMORY_PADDING`
+
+  * Possible values: `[0, 1]` (float)
+  * Default value: `0.35`
+
+  Determines the proportion of free GPU memory, i.e. 0.1 ≅ 10% (not exactly, but close) of free GPU memory. By default, the algorithm trying to use as much memory as it can. However, in many cases, it's not necessary. So the one can try higher values, the results depend on the used hardware. 
+
+  __Important note__: The upper bound of the variable depends on the GPU model. The algorithm uses at least ~850 MiB.
+  
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_GPU_MEMORY_PADDING", "0.6");
+  ```
 
 ### Memory
 
