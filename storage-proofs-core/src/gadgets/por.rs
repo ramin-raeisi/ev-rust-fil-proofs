@@ -149,14 +149,11 @@ impl<H: Hasher, Arity: 'static + PoseidonArity> SubPath<H, Arity> {
 
         assert_eq!(1, arity.count_ones(), "arity must be a power of two");
         let index_bit_count = arity.trailing_zeros() as usize;
-        //info!{"index_bit_count: {}", index_bit_count};
-        //info!{"path len: {}", self.path.len()};
 
         let mut auth_path_bits = Vec::with_capacity(self.path.len());
 
         for (i, path_element) in self.path.into_iter().enumerate() {
             let path_hashes = path_element.hashes;
-            //info!{"path hash len: {}, i = {}", path_hashes.len(), i};
             let optional_index = path_element.index; // Optional because of Bellman blank-circuit construction mechanics.
 
             let cs = &mut cs.namespace(|| format!("merkle tree hash {}", i));
