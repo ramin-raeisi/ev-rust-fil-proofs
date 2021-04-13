@@ -96,7 +96,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
     }
     /// Circuit synthesis.
     #[allow(clippy::too_many_arguments)]
-    pub fn synthesize2<CS: ConstraintSystem<Bls12>>(
+    pub fn synthesize<CS: ConstraintSystem<Bls12>>(
         self,
         mut cs: CS,
         layers: usize,
@@ -139,15 +139,12 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
         // Private Inputs for the DRG parent nodes.
         let mut drg_parents = Vec::with_capacity(layers);
 
-        info!{"aux_len start = {}", cs.get_aux_assigment_len()};
         for (i, parent) in drg_parents_proofs.into_iter().enumerate() {
             let (parent_col, inclusion_path) =
                 parent.alloc(cs.namespace(|| format!("drg_parent_{}_num", i)))?;
             assert_eq!(layers, parent_col.len());
-            info!{"aux_len parent alloc = {}", cs.get_aux_assigment_len()};
             // calculate column hash
             let val = parent_col.hash(cs.namespace(|| format!("drg_parent_{}_constraint", i)))?;
-            info!{"aux_len hash = {}", cs.get_aux_assigment_len()};
             // enforce inclusion of the column hash in the tree C
             enforce_inclusion(
                 cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
@@ -155,18 +152,15 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                 comm_c,
                 &val,
             )?;
-            info!{"aux_len enforce = {}", cs.get_aux_assigment_len()};
             drg_parents.push(parent_col);
         }
 
         // Private Inputs for the Expander parent nodes.
         let mut exp_parents = Vec::new();
-
         for (i, parent) in exp_parents_proofs.into_iter().enumerate() {
             let (parent_col, inclusion_path) =
                 parent.alloc(cs.namespace(|| format!("exp_parent_{}_num", i)))?;
             assert_eq!(layers, parent_col.len());
-
             // calculate column hash
             let val = parent_col.hash(cs.namespace(|| format!("exp_parent_{}_constraint", i)))?;
             // enforce inclusion of the column hash in the tree C
@@ -281,7 +275,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn synthesize<CS: ConstraintSystem<Bls12>>(
+    pub fn synthesize2<CS: ConstraintSystem<Bls12>>(
         self,
         mut cs: CS,
         layers: usize,
@@ -323,8 +317,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
 
         // Private Inputs for the DRG parent nodes.
         let mut drg_parents = Vec::with_capacity(layers); 
-
-        //let drg_parents_lock = Arc::new(RwLock::new(drg_parents));
 
         let len = drg_parents_proofs.len();
 
@@ -377,24 +369,46 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
        // Private Inputs for the Expander parent nodes.
        info!{"expander parents"};
        let mut exp_parents = Vec::new();
+        let len = exp_parents_proofs.len();
 
-       for (i, parent) in exp_parents_proofs.into_iter().enumerate() {
-           let (parent_col, inclusion_path) =
-               parent.alloc(cs.namespace(|| format!("exp_parent_{}_num", i)))?;
-           assert_eq!(layers, parent_col.len());
+        for i in 0..len {
+            exp_parents.push(AllocatedColumn::empty(layers));
+        }
+        
+        let mut exp_cs = cs.make_vector(exp_parents_proofs.len())?;
+        let aux_len = cs.get_aux_assigment_len();
 
-           // calculate column hash
-           let val = parent_col.hash(cs.namespace(|| format!("exp_parent_{}_constraint", i)))?;
-           // enforce inclusion of the column hash in the tree C
-           enforce_inclusion(
-               cs.namespace(|| format!("exp_parent_{}_inclusion", i)),
-               inclusion_path,
-               comm_c,
-               &val,
-           )?;
-           exp_parents.push(parent_col);
-       }
+        exp_parents_proofs.into_par_iter().enumerate()
+        .zip(exp_cs.par_iter_mut()
+        .zip(exp_parents.par_iter_mut()))
+        .for_each(|((i, parent), (other_cs, exp_parent))| {
+            let (parent_col, inclusion_path) = 
+            parent.alloc(other_cs.namespace(|| format!("drg_parent_{}_num", i))).unwrap();
+            assert_eq!(layers, parent_col.len());
 
+            let val = parent_col.hash(other_cs.namespace(|| format!("drg_parent_{}_constraint", i))).unwrap();
+
+            *exp_parent = parent_col;
+
+            for j in 1..exp_parent.len() + 1 {
+                let mut row = exp_parent.get_mut_value(j);
+                let mut v = row.get_mut_variable();
+                other_cs.align_variable(&mut v, 0, aux_len + j - 1 + i*alloc_count);
+            }
+
+            let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
+            || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
+            let idx = other_cs.get_index(&mut comm_c.get_variable());
+            other_cs.align_variable(&mut comm_c_copy.get_variable(), 0, idx);
+            enforce_inclusion(
+                other_cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
+                inclusion_path,
+                &comm_c_copy,
+                &val,
+            );
+            other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
+        });
+        cs.aggregate(exp_cs);
        // -- Verify labeling and encoding
 
        // stores the labels of the challenged column
