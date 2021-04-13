@@ -134,19 +134,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             &data_leaf_num,
         )?;
 
-        // -- verify replica column openings
-
-        // Private Inputs for the DRG parent nodes.
-        let mut drg_parents = Vec::with_capacity(layers); 
-
-        let len = drg_parents_proofs.len();
-
-        for i in 0..len {
-            drg_parents.push(AllocatedColumn::empty(layers));
-        }
-        
-        let mut drg_cs = cs.make_vector(drg_parents_proofs.len())?;
-        let aux_len = cs.get_aux_assigment_len();
         let alloc_count;
         if layers == 2 {
             alloc_count = 4609;
@@ -155,40 +142,69 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             alloc_count = 5979;
         }
 
-        drg_parents_proofs.into_par_iter().enumerate()
-        .zip(drg_cs.par_iter_mut()
-        .zip(drg_parents.par_iter_mut()))
-        .for_each(|((i, parent), (other_cs, drg_parent))| {
-            let (parent_col, inclusion_path) = 
-            parent.alloc(other_cs.namespace(|| format!("drg_parent_{}_num", i))).unwrap();
-            assert_eq!(layers, parent_col.len());
+        // -- verify replica column openings
 
-            let val = parent_col.hash(other_cs.namespace(|| format!("drg_parent_{}_constraint", i))).unwrap();
+        // Private Inputs for the DRG parent nodes.
+        let drg_len = drg_parents_proofs.len();
+        let exp_len = exp_parents_proofs.len();
+        let parents_proofs = vec![drg_parents_proofs, exp_parents_proofs];
+        let mut drg_parents = Vec::new();
+        let mut exp_parents = Vec::new();
+        let mut drg_cs = cs.make_vector(drg_len)?;
+        let mut exp_cs = cs.make_vector(exp_len)?;
+        let mut data_parents = vec![&mut drg_parents, &mut exp_parents];
+        let mut all_cs = vec![drg_cs, exp_cs];
+        let aux_len = cs.get_aux_assigment_len();
 
-            *drg_parent = parent_col;
+        parents_proofs.into_par_iter().enumerate()
+        .zip(data_parents.par_iter_mut()
+        .zip(all_cs.par_iter_mut()))
+        .for_each( |((k, proofs), (parents, css))| {
+            let len = proofs.len();
+            info!{"len = {}", len};
+    
+            for i in 0..len {
+                parents.push(AllocatedColumn::empty(layers));
+            }    
 
-            for j in 1..drg_parent.len() + 1 {
-                let mut row = drg_parent.get_mut_value(j);
-                let mut v = row.get_mut_variable();
-                other_cs.align_variable(&mut v, 0, aux_len + j - 1 + i*alloc_count);
-            }
+            proofs.into_par_iter().enumerate()
+            .zip(css.par_iter_mut()
+            .zip(parents.par_iter_mut()))
+            .for_each(|((i, parent), (other_cs, drg_parent))| {
+                let (parent_col, inclusion_path) = 
+                parent.alloc(other_cs.namespace(|| format!("drg_parent_{}_num", i))).unwrap();
+                assert_eq!(layers, parent_col.len());
 
-            let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
-            || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
-            let idx = other_cs.get_index(&mut comm_c.get_variable());
-            other_cs.align_variable(&mut comm_c_copy.get_variable(), 0, idx);
-            enforce_inclusion(
-                other_cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
-                inclusion_path,
-                &comm_c_copy,
-                &val,
-            );
-            other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
+                let val = parent_col.hash(other_cs.namespace(|| format!("drg_parent_{}_constraint", i))).unwrap();
+
+                *drg_parent = parent_col;
+
+                for j in 1..drg_parent.len() + 1 {
+                    let mut row = drg_parent.get_mut_value(j);
+                    let mut v = row.get_mut_variable();
+                    other_cs.align_variable(&mut v, 0, aux_len + j - 1 + (i + k*drg_len)*alloc_count);
+                }
+
+                let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
+                || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
+                let idx = other_cs.get_index(&mut comm_c.get_variable());
+                other_cs.align_variable(&mut comm_c_copy.get_variable(), 0, idx);
+                enforce_inclusion(
+                    other_cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
+                    inclusion_path,
+                    &comm_c_copy,
+                    &val,
+                );
+                other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
+            });
         });
-        cs.aggregate(drg_cs);
+        for new_cs in all_cs {
+            cs.aggregate(new_cs);
+        }
+
 
        // Private Inputs for the Expander parent nodes.
-       let mut exp_parents = Vec::new();
+       /*let mut exp_parents = Vec::new();
         let len = exp_parents_proofs.len();
 
         for i in 0..len {
@@ -228,7 +244,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             );
             other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
         });
-        cs.aggregate(exp_cs);
+        cs.aggregate(exp_cs);*/
        // -- Verify labeling and encoding
 
        // stores the labels of the challenged column
