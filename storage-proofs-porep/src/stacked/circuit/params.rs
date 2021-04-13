@@ -188,7 +188,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
         cs.aggregate(drg_cs);
 
        // Private Inputs for the Expander parent nodes.
-       info!{"expander parents"};
        let mut exp_parents = Vec::new();
         let len = exp_parents_proofs.len();
 
