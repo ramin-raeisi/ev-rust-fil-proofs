@@ -141,8 +141,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             mem_column_add = mem_column_add + size_fr * ((max_gpu_column_batch_size * layers) as u64); // digests buffer
             mem_column_add = mem_column_add + size_state * threads_num; // states per thread*/
             //let mem_column_add = 858993459;
-            let mem_column_add = 650000000;
-            let mem_final = 200000000;
+            let mem_column_add = 850000000;
             let gpu_memory_padding = get_memory_padding();
 
             let configs =  Arc::new(configs);
@@ -347,9 +346,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             config_threads.push(s3.spawn(move |_| {
                                                 let mut printed = false;
                                                 let mut mem_used_val = mem_used.load(SeqCst);
-                                                while (mem_used_val + mem_column_add + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
+                                                while (mem_used_val + mem_column_add) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                                     if !printed {
-                                                        info!("gpu memory shortage on {}, waiting...", locked_gpu);
+                                                        info!("gpu memory shortage on {}, waiting ({})...", locked_gpu, i);
                                                         printed = true;
                                                     }
                                                     thread::sleep(Duration::from_secs(1));
@@ -357,7 +356,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                 }
                                                 mem_used.fetch_add(mem_column_add, SeqCst);
                                                 if printed {
-                                                    info!("continue on {}", locked_gpu);
+                                                    info!("continue on {} ({})", locked_gpu, i);
                                                     thread::sleep(Duration::from_secs(i as u64));
                                                 }
 
@@ -386,18 +385,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                         continue;
                                                     };
 
-                                                    let mut printed = false;
-                                                    let mut mem_used_val = mem_used.load(SeqCst);
-                                                    while (mem_used_val + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
-                                                        if !printed {
-                                                            info!("gpu memory shortage on {}, waiting...", locked_gpu);
-                                                            printed = true;
-                                                        }
-                                                        thread::sleep(Duration::from_secs(1));
-                                                        mem_used_val = mem_used.load(SeqCst);
-                                                    }
-                                                    mem_used.fetch_add(mem_final, SeqCst);
-
                                                     // If we get here, this is a final column: build a sub-tree.
                                                     let (base_data, tree_data) = column_tree_builder
                                                         .add_final_columns(&columns)
@@ -419,7 +406,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                                     let writer_tx = writers_tx[i].clone();
 
-                                                    mem_used.fetch_sub(mem_column_add + mem_final, SeqCst);
+                                                    mem_used.fetch_sub(mem_column_add, SeqCst);
                                                     writer_tx
                                                         .send((base_data, tree_data))
                                                         .expect("failed to send base_data, tree_data");
