@@ -127,8 +127,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let bus_num = batchertype_gpus.len();
         assert!(bus_num > 0);
 
-        let mem_one_thread = 250000000;
-        let mem_final = 600000000;
+        let mem_one_thread = 800000000;
         let gpu_memory_padding = get_memory_padding();
 
         let last_layer_labels = Arc::new(Mutex::new(last_layer_labels));
@@ -342,9 +341,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                         let mut printed = false;
                                         let mut mem_used_val = mem_used.load(SeqCst);
-                                        while (mem_used_val + mem_one_thread + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
+                                        while (mem_used_val + mem_one_thread) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
                                             if !printed {
-                                                info!("gpu memory shortage on {}, waiting...", locked_gpu);
+                                                info!("gpu memory shortage on {}, waiting ({})...", locked_gpu, i);
                                                 printed = true;
                                             }
                                             thread::sleep(Duration::from_secs(1));
@@ -353,7 +352,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         mem_used.fetch_add(mem_one_thread, SeqCst);
 
                                         if printed {
-                                            info!("continue on {}", locked_gpu);
+                                            info!("continue on {} ({})", locked_gpu, i);
                                         }
 
                                         let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
@@ -375,18 +374,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                     .expect("failed to add leaves");
                                                 continue;
                                             };
-
-                                            let mut printed = false;
-                                            let mut mem_used_val = mem_used.load(SeqCst);
-                                            while (mem_used_val + mem_final) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
-                                                if !printed {
-                                                    info!("gpu memory shortage on {}, waiting...", locked_gpu);
-                                                    printed = true;
-                                                }
-                                                thread::sleep(Duration::from_secs(1));
-                                                mem_used_val = mem_used.load(SeqCst);
-                                            }
-                                            mem_used.fetch_add(mem_final, SeqCst);
     
                                             // If we get here, this is a final leaf batch: build a sub-tree.
                                             let (_, tree_data) = tree_builder
@@ -394,7 +381,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                 .expect("failed to add final leaves");
                     
     
-                                            mem_used.fetch_sub(mem_one_thread + mem_final, SeqCst);
+                                            mem_used.fetch_sub(mem_one_thread, SeqCst);
                                             let writer_tx = writers_tx[i].clone();
                                             writer_tx.send(tree_data).expect("failed to send tree_data");
                                             break;
