@@ -15,7 +15,7 @@ use generic_array::{
     typenum::{Unsigned, U64},
     GenericArray,
 };
-use log::{debug, info};
+use log::{debug, info, warn};
 use mapr::MmapMut;
 use merkletree::store::{DiskStore, Store, StoreConfig};
 use storage_proofs_core::{
@@ -265,7 +265,8 @@ fn create_layer_labels(
             runners.push(s.spawn(move |_| {
                 // This could fail, but we will ignore the error if so.
                 // It will be logged as a warning by `bind_core`.
-                debug!("binding core in producer thread {}", i);
+                //debug!("binding core in producer thread {}", i);
+                info!("binding core in producer thread {:?}", core_index);
                 // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
                 let _cleanup_handle = core_index.map(|c| bind_core(*c));
 
@@ -437,14 +438,14 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
     let cache_window_nodes = SETTINGS.sdr_parents_cache_size as usize;
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
-
     let core_group = Arc::new(checkout_core_group());
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
     let _cleanup_handle = (*core_group).as_ref().map(|group| {
         // This could fail, but we will ignore the error if so.
         // It will be logged as a warning by `bind_core`.
-        debug!("binding core in main thread");
+        //debug!("binding core in main thread");
+        info!("binding core in main thread");
         group.get(0).map(|core_index| bind_core(*core_index))
     });
 
@@ -536,7 +537,14 @@ pub fn create_labels_for_encoding_bench<Tree: 'static + MerkleTreeTrait, T: AsRe
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    let core_group = Arc::new(checkout_core_group());
+    let core_group = checkout_core_group();
+    match &core_group {
+        Some(c) => { debug!("core group {:?} is used", c); }
+        None => { warn!("all core groups are locked, no-binding"); }
+        _ => { debug!("wtf"); }
+    }
+
+    let core_group = Arc::new(core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
     let _cleanup_handle = (*core_group).as_ref().map(|group| {
