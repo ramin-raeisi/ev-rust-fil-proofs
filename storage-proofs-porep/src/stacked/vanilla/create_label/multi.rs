@@ -6,7 +6,7 @@ use std::sync::{
     Arc, MutexGuard,
 };
 use std::thread;
-use std::time::Duration;
+use std::time::{Instant, Duration};
 
 use anyhow::{Context, Result};
 use byte_slice_cast::{AsByteSlice, AsMutSliceOf};
@@ -15,7 +15,7 @@ use generic_array::{
     typenum::{Unsigned, U64},
     GenericArray,
 };
-use log::{debug, info};
+use log::{debug, info, warn};
 use mapr::MmapMut;
 use merkletree::store::{DiskStore, Store, StoreConfig};
 use storage_proofs_core::{
@@ -198,7 +198,6 @@ fn create_label_runner(
         // Mark our work as done
         cur_producer.fetch_add(count, SeqCst);
     }
-    info!("finished label runner");
     Ok(())
 }
 
@@ -266,7 +265,8 @@ fn create_layer_labels(
             runners.push(s.spawn(move |_| {
                 // This could fail, but we will ignore the error if so.
                 // It will be logged as a warning by `bind_core`.
-                debug!("binding core in producer thread {}", i);
+                //debug!("binding core in producer thread {}", i);
+                info!("binding core in producer thread {:?}", core_index);
                 // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
                 let _cleanup_handle = core_index.map(|c| bind_core(*c));
 
@@ -284,7 +284,6 @@ fn create_layer_labels(
                 )
             }));
         }
-        info!("start: calculate node 0");
         let mut cur_node_ptr = unsafe { layer_labels.as_mut_slice() };
         let mut cur_parent_ptr = unsafe { parents_cache.consumer_slice_at(DEGREE) };
         let mut cur_parent_ptr_offset = DEGREE;
@@ -306,15 +305,11 @@ fn create_layer_labels(
         // Keep track of which node slot in the ring_buffer to use
         let mut cur_slot = 0;
         let mut _count_not_ready = 0;
-        info!("finish: calculate node 0");
         // Calculate nodes 1 to n
 
         // Skip first node.
         parents_cache.store_consumer(1);
         let mut i = 1;
-        let mut tmp_p = false;
-        let mut tmp_f = false;
-        info!("start: calculate nodes 2..n ");
         while i < num_nodes {
             // Ensure next buffer is ready
             let mut printed = false;
@@ -332,9 +327,6 @@ fn create_layer_labels(
 
             // Process as many nodes as are ready
             let ready_count = producer_val - i + 1;
-            if !tmp_p {
-                info!("start: process nodes");
-            }
             for _count in 0..ready_count {
                 // If we have used up the last cache window's parent data, get some more.
                 if cur_parent_ptr.is_empty() {
@@ -349,9 +341,6 @@ fn create_layer_labels(
                 // Grab the current slot of the ring_buf
                 let buf = unsafe { ring_buf.slot_mut(cur_slot) };
                 // Fill in the base parents
-                if !tmp_f {
-                    info!("start: fill base parents");
-                }
                 for k in 0..BASE_DEGREE {
                     let bpm = unsafe { base_parent_missing.get(cur_slot) };
                     if bpm.get(k) {
@@ -366,10 +355,6 @@ fn create_layer_labels(
                     }
                     cur_parent_ptr = &cur_parent_ptr[1..];
                     cur_parent_ptr_offset += 1;
-                }
-                if !tmp_f {
-                    info!("finish: fill base parents");
-                    tmp_f = true;
                 }
                 // Expanders are already all filled in (layer 1 doesn't use expanders)
                 cur_parent_ptr = &cur_parent_ptr[EXP_DEGREE..];
@@ -425,12 +410,7 @@ fn create_layer_labels(
                 i += 1;
                 cur_slot = (cur_slot + 1) % lookahead;
             }
-            if !tmp_p {
-                info!("finish: process nodes");
-                tmp_p = true;
-            }
         }
-        info!("finish: calculate nodes 2..n ");
 
         for runner in runners {
             runner.join().unwrap().unwrap();
@@ -458,9 +438,113 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
     let cache_window_nodes = SETTINGS.sdr_parents_cache_size as usize;
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
-
-    info!("core groups");
     let core_group = Arc::new(checkout_core_group());
+
+    // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
+    let _cleanup_handle = (*core_group).as_ref().map(|group| {
+        // This could fail, but we will ignore the error if so.
+        // It will be logged as a warning by `bind_core`.
+        //debug!("binding core in main thread");
+        info!("binding core in main thread");
+        group.get(0).map(|core_index| bind_core(*core_index))
+    });
+
+    // NOTE: this means we currently keep 2x sector size around, to improve speed
+    let (parents_cache, mut layer_labels, mut exp_labels) = setup_create_label_memory(
+        sector_size,
+        DEGREE,
+        Some(default_cache_size as usize),
+        &parents_cache.path,
+    )?;
+
+    for (layer, layer_state) in (1..=layers).zip(layer_states.iter()) {
+        info!("Layer {}", layer);
+
+        if layer_state.generated {
+            info!("skipping layer {}, already generated", layer);
+
+            // load the already generated layer into exp_labels
+            read_layer(&layer_state.config, &mut exp_labels)?;
+            continue;
+        }
+
+        // Cache reset happens in two parts.
+        // The second part (the finish) happens before each layer but the first.
+        if layers != 1 {
+            parents_cache.finish_reset()?;
+        }
+
+        create_layer_labels(
+            &parents_cache,
+            &replica_id.as_ref(),
+            &mut layer_labels,
+            if layer == 1 {
+                None
+            } else {
+                Some(&mut exp_labels)
+            },
+            node_count,
+            layer as u32,
+            core_group.clone(),
+        )?;
+
+        // Cache reset happens in two parts.
+        // The first part (the start) happens after each layer but the last.
+        if layer != layers {
+            parents_cache.start_reset()?;
+        }
+
+        mem::swap(&mut layer_labels, &mut exp_labels);
+        {
+            let layer_config = &layer_state.config;
+
+            info!("  storing labels on disk");
+            write_layer(&exp_labels, layer_config).context("failed to store labels")?;
+
+            info!(
+                "  generated layer {} store with id {}",
+                layer, layer_config.id
+            );
+        }
+    }
+
+    Ok((
+        Labels::<Tree> {
+            labels: layer_states.iter().map(|s| s.config.clone()).collect(),
+            _h: PhantomData,
+        },
+        layer_states,
+    ))
+}
+
+#[allow(clippy::type_complexity)]
+pub fn create_labels_for_encoding_bench<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]>>(
+    graph: &StackedBucketGraph<Tree::Hasher>,
+    parents_cache: &ParentCache,
+    layers: usize,
+    replica_id: T,
+    config: StoreConfig,
+) -> Result<(Labels<Tree>, Vec<LayerState>)> {
+    info!("create labels");
+
+    let labels_start = Instant::now();
+
+    let layer_states = prepare_layers::<Tree>(graph, &config, layers);
+
+    let sector_size = graph.size() * NODE_SIZE;
+    let node_count = graph.size() as u64;
+    let cache_window_nodes = SETTINGS.sdr_parents_cache_size as usize;
+
+    let default_cache_size = DEGREE * 4 * cache_window_nodes;
+
+    let core_group = checkout_core_group();
+    match &core_group {
+        Some(c) => { debug!("core group {:?} is used", c); }
+        None => { warn!("all core groups are locked, no-binding"); }
+        _ => { debug!("wtf"); }
+    }
+
+    let core_group = Arc::new(core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
     let _cleanup_handle = (*core_group).as_ref().map(|group| {
@@ -528,6 +612,9 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
             );
         }
     }
+
+    let labels_time = labels_start.elapsed();
+    info!("encodint labels time: {:?}", labels_time);
 
     Ok((
         Labels::<Tree> {

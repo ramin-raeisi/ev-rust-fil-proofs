@@ -92,7 +92,8 @@ pub fn bind_core(core_index: CoreIndex) -> Result<Cleanup> {
     // Thread binding before explicit set.
     let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);
 
-    debug!("binding to {:?}", bind_to);
+    //debug!("binding to {:?}", bind_to);
+    info!("binding to {:?}", bind_to);
     // Set the binding.
     let result = locked_topo
         .set_cpubind_for_thread(tid, bind_to, CpuBindFlags::CPUBIND_THREAD)
@@ -125,6 +126,17 @@ fn get_core_by_index<'a>(topo: &'a Topology, index: CoreIndex) -> Result<&'a Top
 fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
     let topo = TOPOLOGY.lock().expect("poisoned lock");
 
+
+    let mut topo_info: String = "".to_string();
+    for i in 0..topo.depth() {
+        topo_info.push_str(&format!("Objects at level {} (total {})\n", i, topo.objects_at_depth(i).len()));
+
+        for (idx, object) in topo.objects_at_depth(i).iter().enumerate() {
+            topo_info.push_str(&format!("{}: {}\n", idx, object));
+        }
+    }
+    info!("{}", topo_info);
+
     let core_depth = match topo.depth_or_below_for_type(&ObjectType::Core) {
         Ok(depth) => depth,
         Err(_) => return None,
@@ -132,6 +144,7 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
     info!("core_depth {}", core_depth);
     let all_cores = topo.objects_with_type(&ObjectType::Core).unwrap();
     let core_count = all_cores.len();
+    info!("found cores: {}", core_count);
 
     let mut cache_depth = core_depth;
     let mut cache_count = 0;
@@ -139,6 +152,7 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
     while cache_depth > 0 {
         let objs = topo.objects_at_depth(cache_depth);
         let obj_count = objs.len();
+        info!("depth: {}, objects: {}", cache_depth, obj_count);
         if obj_count < core_count {
             cache_count = obj_count;
             break;
@@ -163,7 +177,8 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
             cache_count, group_count
         );
     } else {
-        debug!(
+        //debug!(
+        info!(
             "Cores: {}, Shared Caches: {}, cores per cache (group_size): {}",
             core_count, cache_count, group_size
         );
