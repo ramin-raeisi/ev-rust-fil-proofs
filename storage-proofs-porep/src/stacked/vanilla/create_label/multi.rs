@@ -541,7 +541,6 @@ pub fn create_labels_for_encoding_bench<Tree: 'static + MerkleTreeTrait, T: AsRe
     match &core_group {
         Some(c) => { debug!("core group {:?} is used", c); }
         None => { warn!("all core groups are locked, no-binding"); }
-        _ => { debug!("wtf"); }
     }
 
     let core_group = Arc::new(core_group);

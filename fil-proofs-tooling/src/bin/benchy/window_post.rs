@@ -178,7 +178,7 @@ fn run_pre_commit_phases<Tree: 'static + MerkleTreeTrait>(
                 PROVER_ID,
                 sector_id,
                 TICKET_BYTES,
-                //&piece_infos,
+                &piece_infos,
             )
         })
             .expect("failed in seal_pre_commit_phase1");
@@ -371,7 +371,7 @@ pub fn run_window_post_bench<Tree: 'static + MerkleTreeTrait>(
         )
     }?;
 
-    let _piece_infos = {
+    let piece_infos = {
         let piece_infos_path = cache_dir.join(PIECE_INFOS_FILE);
         info!("*** Restoring piece infos file");
         let piece_infos_json = read_to_string(&piece_infos_path).with_context(|| {
@@ -433,7 +433,7 @@ pub fn run_window_post_bench<Tree: 'static + MerkleTreeTrait>(
                 TICKET_BYTES,
                 seed,
                 seal_pre_commit_output,
-                //&piece_infos,
+                &piece_infos,
             )
         })
             .expect("failed in seal_commit_phase1");

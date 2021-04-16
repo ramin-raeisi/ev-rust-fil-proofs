@@ -224,7 +224,7 @@ pub fn run(
                     TICKET_BYTES,
                     RANDOMNESS,
                     value.clone(),
-                    //&replica_info.piece_info,
+                    &replica_info.piece_info,
                 )?;
 
                 clear_cache::<DefaultOctLCTree>(
