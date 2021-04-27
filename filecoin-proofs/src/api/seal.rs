@@ -26,6 +26,9 @@ use storage_proofs_porep::stacked::{
     TemporaryAux, TemporaryAuxCache,
 };
 
+use rayon::prelude::*;
+use std::sync::{mpsc};
+
 use crate::{
     api::{as_safe_commitment, commitment_from_fr, get_base_tree_leafs, get_base_tree_size, calibrate_filsettings},
     caches::{get_stacked_params, get_stacked_verifying_key},
@@ -542,7 +545,7 @@ pub fn seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
 pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
     porep_config: PoRepConfig,
     phase1_output: SealCommitPhase1Output<Tree>,
-    _prover_id: ProverId,
+    prover_id: ProverId,
     sector_id: SectorId,
 ) -> Result<SealCommitOutput> {
     info!("seal_commit_phase2:start: {:?}", sector_id);
@@ -551,9 +554,9 @@ pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
         vanilla_proofs,
         comm_d,
         comm_r,
-        replica_id, 
+        replica_id,
         seed,
-        ..
+        ticket,
     } = phase1_output;
 
     ensure!(comm_d != [0; 32], "Invalid all zero commitment (comm_d)");
@@ -597,9 +600,9 @@ pub fn calibrate_seal_commit_phase2<Tree: 'static + MerkleTreeTrait>(
 
     info!("snark_proof calibration: start"); 
     calibrate_filsettings::<StackedDrg<'_, Tree, DefaultPieceHasher>>(&public_inputs, vanilla_proofs, &compound_public_params.vanilla_params, &groth_params,
-         &StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs)?;
+         &StackedCompound::<Tree, DefaultPieceHasher>::circuit_proofs);
 
-    info!("snark_proof calibration: finish"); 
+    info!("snark_proof calibration: finish");
     let mut tmp_vec = Vec::new();
     tmp_vec.push(0);
     let out = SealCommitOutput { proof: tmp_vec};

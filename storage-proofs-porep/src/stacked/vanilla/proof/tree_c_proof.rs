@@ -1,4 +1,7 @@
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::{mpsc, Arc, RwLock, Mutex,
+    atomic::{AtomicU64, Ordering::SeqCst}};
+use std::thread;
+use std::time::Duration;
 
 use bellperson::bls::Fr;
 use filecoin_hashers::{Hasher, PoseidonArity};
@@ -25,15 +28,15 @@ use super::super::{
     proof::StackedDrg,
 };
 
+use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r};
+
 use generic_array::{GenericArray};
 use neptune::batch_hasher::BatcherType;
 use neptune::column_tree_builder::{ColumnTreeBuilder, ColumnTreeBuilderTrait};
 use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
-
-use bellperson::gpu::scheduler;
-
+use bellperson::gpu::{scheduler};
 
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> {
@@ -76,7 +79,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let bus_num = all_bus_ids.len();
             assert!(bus_num > 0);
 
-            let tree_r_gpu = settings::SETTINGS.gpu_for_parallel_tree_r as usize;
+            let tree_r_gpu = get_gpu_for_parallel_tree_r();
             let mut last_idx = bus_num;
             if tree_r_gpu > 0 { // tree_r_lats will be calculated in parallel with tree_c using tree_r_gpu GPU
                 assert!(tree_r_gpu < bus_num, 
@@ -104,6 +107,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let bus_num = last_idx;
 
+            //let batchers_per_gpu = configs.len() / bus_num + 1;
             for gpu_idx in 0..bus_num {
                 batchertype_gpus.push(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_idx])));
             }
@@ -126,201 +130,314 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             assert!(bus_num > 0);
 
             let config_count = configs.len(); // Don't move config into closure below.
-            rayon::scope(|s| {
+
+            let labels = Arc::new(Mutex::new(labels));
+
+            //let size_fr = std::mem::size_of::<Fr>() as u64;
+            //let size_state: u64 = size_fr * (layers as u64); // state_{width} = ColumnArity = layers
+            //let threads_num: u64 = max_gpu_column_batch_size as u64;
+            /*let mut mem_column_add: u64 = 0;
+            mem_column_add = mem_column_add + size_fr * ((max_gpu_column_batch_size * layers) as u64); // preimages buffer
+            mem_column_add = mem_column_add + size_fr * ((max_gpu_column_batch_size * layers) as u64); // digests buffer
+            mem_column_add = mem_column_add + size_state * threads_num; // states per thread*/
+            //let mem_column_add = 858993459;
+            let mem_column_add = 850000000;
+            let gpu_memory_padding = get_memory_padding();
+
+            let configs =  Arc::new(configs);
+            crossbeam::scope(|s| {
+                let mut main_threads = Vec::new();
                 // This channel will receive the finished tree data to be written to disk.
                 let mut writers_tx = Vec::new();
                 let mut writers_rx = Vec::new();
                 for _i in 0..config_count {
-                    let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(0);
+                    let (writer_tx, writer_rx) = mpsc::sync_channel::<(Vec<Fr>, Vec<Fr>)>(1);
                     writers_tx.push(writer_tx);
                     writers_rx.push(writer_rx);
                 }
 
-
-                s.spawn(move |_| {
-                    (0..config_count).collect::<Vec<_>>().par_iter()
-                        .zip(builders_tx.into_par_iter())
-                        .for_each( |(&i, builder_tx)| {
-                        
-                        let mut node_index = 0;
-                        while node_index != nodes_count {
-                            let chunked_nodes_count =
-                                std::cmp::min(nodes_count - node_index, max_gpu_column_batch_size);
-                            trace!(
-                                "processing config {}/{} with column nodes {}",
-                                i + 1,
-                                tree_count,
-                                chunked_nodes_count,
-                            );
-
-                            // Allocate layer data array and insert a placeholder for each layer.
-                            let mut layer_data: Vec<Vec<u8>> =
-                                vec![
-                                    vec![0u8; chunked_nodes_count * std::mem::size_of::<Fr>()];
-                                    layers
-                                ];
-
-                            for (layer_index, mut layer_bytes) in
-                                layer_data.iter_mut().enumerate()
-                            {
-                                let store = labels.labels_for_layer(layer_index + 1);
-                                let start = (i * nodes_count) + node_index;
-                                let end = start + chunked_nodes_count;
-                                store
-                                    .read_range_into(start, end, &mut layer_bytes)
-                                    .expect("failed to read store range");
+                main_threads.push(s.spawn(move |_| {
+                    crossbeam::scope(|s2| {
+                        let mut threads = Vec::new();
+                        for (&i, builder_tx) in (0..config_count).collect::<Vec<_>>().iter()
+                        .zip(builders_tx.into_iter())
+                        {
+                            if i != 0 {
+                                thread::sleep(Duration::from_secs(4));
                             }
+                            let labels = labels.clone();
+                            //info!("s-s2 {}", i + 1);
+                            threads.push(s2.spawn(move |_| {
+                                let mut node_index = 0;
+                                while node_index != nodes_count {
+                                    //debug!("while tree_c {}, node_index = {}", i + 1, node_index);
+                                    let chunked_nodes_count =
+                                        std::cmp::min(nodes_count - node_index, max_gpu_column_batch_size);
+                                    trace!(
+                                        "processing config {}/{} with column nodes {}",
+                                        i + 1,
+                                        tree_count,
+                                        chunked_nodes_count,
+                                    );
 
-                            // Copy out all layer data arranged into columns.
-                            let columns: Vec<GenericArray<Fr, ColumnArity>> =
-                                (0..chunked_nodes_count)
-                                    .into_par_iter()
-                                    .map(|index| {
-                                        (0..layers)
-                                            .map(|layer_index| {
-                                                bytes_into_fr(
-                                                &layer_data[layer_index][std::mem::size_of::<Fr>()
-                                                    * index
-                                                    ..std::mem::size_of::<Fr>() * (index + 1)],
-                                            ).expect("Could not create Fr from bytes.")
+                                    let columns: Vec<
+                                        GenericArray<Fr, ColumnArity>,
+                                    > = {
+                                        //debug!("columns, tree_c {}, node_index = {}", i + 1, node_index);
+
+                                        // Allocate layer data array and insert a placeholder for each layer.
+                                        let mut layer_data: Vec<Vec<u8>> =
+                                            vec![
+                                                vec![0u8; chunked_nodes_count * std::mem::size_of::<Fr>()];
+                                                layers
+                                            ];
+
+                                        //debug!("loop 1, tree_c {}, node_index = {}", i + 1, node_index);
+                                        for (layer_index, mut layer_bytes) in
+                                            layer_data.iter_mut().enumerate()
+                                        {
+                                            let labels = labels.lock().unwrap();
+                                            //trace!("loop 1 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
+                                            let store = labels.labels_for_layer(layer_index + 1);
+                                            let start = (i * nodes_count) + node_index;
+                                            let end = start + chunked_nodes_count;
+
+                                            store
+                                                .read_range_into(start, end, &mut layer_bytes)
+                                                .expect("failed to read store range");
+                                            //debug!("loop 1 store, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
+                                        }
+                                        //debug!("loop 1 end, tree_c {}, node_index = {}", i + 1, node_index);
+
+                                        debug!("loop 2, tree_c {}, node_index = {}", i + 1, node_index);
+                                        let res = (0..chunked_nodes_count)
+                                            .into_par_iter() // TODO: CROSSBEAM
+                                            .map(|index| {
+                                                (0..layers)
+                                                    .map(|layer_index| {
+                                                        //trace!("loop 2 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
+                                                        bytes_into_fr(
+                                                        &layer_data[layer_index][std::mem::size_of::<Fr>()
+                                                            * index
+                                                            ..std::mem::size_of::<Fr>() * (index + 1)],
+                                                    )
+                                                    .expect("Could not create Fr from bytes.")
+                                                    })
+                                                    .collect::<GenericArray<Fr, ColumnArity>>()
                                             })
-                                            .collect::<GenericArray<Fr, ColumnArity>>()
-                                    })
-                                    .collect();
+                                            .collect();
+                                        //info!("s-2-3{}", i + 1, node_index);
+                                        res
+                                    }; // columns
 
-                            drop(layer_data);
+                                    node_index += chunked_nodes_count;
+                                    trace!(
+                                        "node index {}/{}/{}",
+                                        node_index,
+                                        chunked_nodes_count,
+                                        nodes_count,
+                                    );
 
-                            node_index += chunked_nodes_count;
-                            trace!(
-                                "node index {}/{}/{}",
-                                node_index,
-                                chunked_nodes_count,
-                                nodes_count,
-                            );
+                                    let is_final = node_index == nodes_count;
+                                    //debug!("tree_c {}, new node_index = {}, is_final = {}", i + 1, node_index, is_final);
+                                    builder_tx
+                                        .send((columns, is_final))
+                                        .expect("failed to send columns");
+                                    //debug!("tree_c {}, new node_index = {}, data was sent", i + 1, node_index);
+                                } // while loop
+                            }));
+                        } // threads loop
 
-                            let is_final = node_index == nodes_count;
-                            builder_tx
-                                .send((columns, is_final))
-                                .expect("failed to send columns");
+                        for t in threads {
+                            t.join().unwrap();
                         }
-                    });
-                }); // spawn
+                    }).unwrap(); // scope s2
 
+                    //debug!("end spawn");
+                })); // spawn
+                
                 let batchertype_gpus = &batchertype_gpus;
                 let gpu_indexes: Vec<usize> = (0.. bus_num).collect();
 
                 //Parallel tuning GPU computing
-                s.spawn(move |_| {
-                    gpu_indexes.par_iter()
-                        .zip(builders_rx_by_gpu.into_par_iter())
-                        .for_each( |(&gpu_index, builders_rx)| {
+                main_threads.push(s.spawn(move |_| {
 
+                    crossbeam::scope(|s2| {
+                        let mut gpu_threads = Vec::new();
 
-                        let lock = scheduler::get_next_device().lock().unwrap();
-                        let target_bus_id = lock.device().bus_id().unwrap();
-                        
-                        let mut locked_gpu: i32 = -1;
-                        for idx in 0..batchertype_gpus.len() {
-                            match &batchertype_gpus[idx] {
-                                BatcherType::CustomGPU(selector) => {
-                                    let bus_id = selector.get_device().unwrap().bus_id().unwrap();
-                                    if bus_id == target_bus_id {
-                                        locked_gpu = idx as i32;
+                        let writers_tx = Arc::new(writers_tx);
+
+                        //debug!("start spawn2");
+                        for (&gpu_index, builders_rx) in gpu_indexes.iter()
+                            .zip(builders_rx_by_gpu.into_iter())
+                            {
+                                let writers_tx = writers_tx.clone();
+
+                                gpu_threads.push(s2.spawn(move |_| {
+                                    let mut locked_gpu: i32 = -1;
+                                    let lock = loop {
+                                        let lock_inner = scheduler::get_next_device_second_pool().lock().unwrap();
+                                        let target_bus_id = lock_inner.device().bus_id().unwrap();
+                                        
+                                        for idx in 0..batchertype_gpus.len() {
+                                            match &batchertype_gpus[idx] {
+                                                BatcherType::CustomGPU(selector) => {
+                                                    let bus_id = selector.get_device().unwrap().bus_id().unwrap();
+                                                    if bus_id == target_bus_id {
+                                                        locked_gpu = idx as i32;
+                                                    }
+
+                                                }
+                                                _default => {
+                                                    info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                                                }
+                                            }
+                                        }
+
+                                        if locked_gpu != -1 {
+                                            break lock_inner;
+                                        }
+                                        else {
+                                            drop(lock_inner);
+                                            info!("GPU was excluded from the avaiable GPUs by settings, wait the next one");
+                                        }
+                                    };
+
+                                    assert!(locked_gpu >= 0);
+                                    let locked_gpu: usize = locked_gpu as usize;
+
+                                    let mut mem_total: u64 = 0;
+                                    let mem_used = AtomicU64::new(0);
+
+                                    match &batchertype_gpus[locked_gpu] {
+                                        BatcherType::CustomGPU(selector) => {
+                                            mem_total = selector.get_device().unwrap().memory();
+
+                                            info!("[tree_c] Run ColumnTreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {}, memory: {})",
+                                            gpu_index,
+                                            selector.get_device().unwrap().name(),
+                                            selector.get_device().unwrap().bus_id().unwrap(),
+                                            mem_total,
+                                            );
+                                        }
+                                        _default => {
+                                            info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
+                                        }
                                     }
 
-                                }
-                                _default => {
-                                    info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
-                                }
-                            }
+                                    // Loop until all trees for all configs have been built.
+                                    let config_ids: Vec<_> = (gpu_index..config_count).step_by(bus_num).collect();
+
+                                    
+                                    crossbeam::scope(|s3| {
+                                        let mut config_threads = Vec::new();
+
+                                        let writers_tx = Arc::new(writers_tx);
+                                        let mem_used = Arc::new(mem_used);
+                                        //debug!("run spawn2 inner loop");
+                                        for (&i, builder_rx) in config_ids.iter()
+                                            .zip(builders_rx.into_iter())
+                                            {
+                                            if i != 0 {
+                                                thread::sleep(Duration::from_secs(5));
+                                            }
+                                            let writers_tx  = writers_tx.clone();
+                                            let mem_used = mem_used.clone();
+                                            config_threads.push(s3.spawn(move |_| {
+                                                let mut printed = false;
+                                                let mut mem_used_val = mem_used.load(SeqCst);
+                                                while (mem_used_val + mem_column_add) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
+                                                    if !printed {
+                                                        info!("gpu memory shortage on {}, waiting ({})...", locked_gpu, i);
+                                                        printed = true;
+                                                    }
+                                                    thread::sleep(Duration::from_secs(1));
+                                                    mem_used_val = mem_used.load(SeqCst);
+                                                }
+                                                mem_used.fetch_add(mem_column_add, SeqCst);
+                                                if printed {
+                                                    info!("continue on {} ({})", locked_gpu, i);
+                                                    thread::sleep(Duration::from_secs(i as u64));
+                                                }
+
+                                                //debug!("create column_tree_builder, tree_c {}", i + 1);
+                                                let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
+                                                    Some(batchertype_gpus[locked_gpu].clone()),
+                                                    nodes_count,
+                                                    max_gpu_column_batch_size,
+                                                    max_gpu_tree_batch_size,
+                                                )
+                                                .expect("failed to create ColumnTreeBuilder");
+                                                
+                                                //debug!("loop, tree_c {}", i + 1);
+                                                loop {
+                                                    //debug!("get columns, tree_c {}", i + 1);
+                                                    let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
+                                                        builder_rx.recv().expect("failed to recv columns");
+                                                    //debug!("got columns, tree_c {}, is_final = {}", i + 1, is_final);
+                                                    // Just add non-final column batches.
+                                                    if !is_final {
+                                                        
+                                                        //debug!("Use {}/{} GB", (mem_used.load(SeqCst) as f64 / (1024 * 1024 * 1024) as f64), (mem_total as f64 / (1024 * 1024 * 1024) as f64));
+                                                        column_tree_builder
+                                                            .add_columns(&columns)
+                                                            .expect("failed to add columns");
+                                                        continue;
+                                                    };
+
+                                                    // If we get here, this is a final column: build a sub-tree.
+                                                    let (base_data, tree_data) = column_tree_builder
+                                                        .add_final_columns(&columns)
+                                                        .expect("failed to add final columns");
+                                                    trace!(
+                                                        "base data len {}, tree data len {}",
+                                                        base_data.len(),
+                                                        tree_data.len()
+                                                    );
+
+                                                    let tree_len = base_data.len() + tree_data.len();
+
+                                                    info!(
+                                                        "persisting base tree_c {}/{} of length {}",
+                                                        i + 1,
+                                                        tree_count,
+                                                        tree_len,
+                                                    );
+
+                                                    let writer_tx = writers_tx[i].clone();
+
+                                                    mem_used.fetch_sub(mem_column_add, SeqCst);
+                                                    writer_tx
+                                                        .send((base_data, tree_data))
+                                                        .expect("failed to send base_data, tree_data");
+                                                    break;
+                                                }
+                                            }));
+                                        } // configs loop
+
+                                        for t in config_threads {
+                                            t.join().unwrap();
+                                        }
+                                    }).unwrap(); // scope s3
+
+                                    drop(lock);
+                                    trace!("[tree_c] set gpu idle={}", locked_gpu);
+                                })); // spawn
+                        } // gpu loop
+
+                        for t in gpu_threads {
+                            t.join().unwrap();
                         }
+                    }).unwrap(); //scope s2
+                    //debug!("end spawn2");
+                }));
 
-                        assert!(locked_gpu >= 0);
-                        let locked_gpu: usize = locked_gpu as usize;
-
-                        match &batchertype_gpus[locked_gpu] {
-                            BatcherType::CustomGPU(selector) => {
-                                info!("[tree_c] Run ColumnTreeBuilder over indexes i % gpu_num = {} on {} (buis_id: {})",
-                                gpu_index,
-                                selector.get_device().unwrap().name(),
-                                selector.get_device().unwrap().bus_id().unwrap(),
-                                );
-                            }
-                            _default => {
-                                info!("Run ColumnTreeBuilder on non-CustromGPU batcher");
-                            }
-                        }
-
-                        // Loop until all trees for all configs have been built.
-                        let config_ids: Vec<_> = (0 + gpu_index..config_count).step_by(bus_num).collect();
-
-                        config_ids.par_iter()
-                            .zip(builders_rx.into_par_iter())
-                            .for_each( |(&i, builder_rx)| {
-
-                            let mut column_tree_builder = ColumnTreeBuilder::<ColumnArity, TreeArity>::new(
-                                Some(batchertype_gpus[locked_gpu].clone()),
-                                nodes_count,
-                                max_gpu_column_batch_size,
-                                max_gpu_tree_batch_size,
-                            )
-                            .expect("failed to create ColumnTreeBuilder");
-
-                            info!("Run builder for tree_c {}/{}", i + 1, tree_count);
-                            
-                            loop {
-                                let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
-                                    builder_rx.recv().expect("failed to recv columns");
-
-                                // Just add non-final column batches.
-                                if !is_final {
-                                    column_tree_builder
-                                        .add_columns(&columns)
-                                        .expect("failed to add columns");
-                                    continue;
-                                };
-
-                                // If we get here, this is a final column: build a sub-tree.
-                                let (base_data, tree_data) = column_tree_builder
-                                    .add_final_columns(&columns)
-                                    .expect("failed to add final columns");
-                                trace!(
-                                    "base data len {}, tree data len {}",
-                                    base_data.len(),
-                                    tree_data.len()
-                                );
-
-                                let tree_len = base_data.len() + tree_data.len();
-
-                                info!(
-                                    "persisting base tree_c {}/{} of length {}",
-                                    i + 1,
-                                    tree_count,
-                                    tree_len,
-                                );
-
-                                let writer_tx = writers_tx[i].clone();
-
-                                writer_tx
-                                    .send((base_data, tree_data))
-                                    .expect("failed to send base_data, tree_data");
-                                break;
-                            }
-                        }); // configs loop
-
-                        drop(lock);
-                        trace!("[tree_c] set gpu idle={}", locked_gpu);
-                    }); // gpu loop
-                });
-
-                let configs = &configs;
-                s.spawn(move |_| {
+                let configs = configs.clone();
+                main_threads.push(s.spawn(move |_| {
                     configs.iter().enumerate()
                         .zip(writers_rx.iter())
-                        .for_each(|((i, config), writer_rx)| {
-
-                        info!("writing tree_c {}", i + 1);
-
+                        .for_each(|((_i, config), writer_rx)| {
+                        //debug!("writing tree_c {}", i + 1);
                         let (base_data, tree_data) = writer_rx
                             .recv()
                             .expect("failed to receive base_data, tree_data for tree_c");
@@ -378,8 +495,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             .expect("store sync failure");
                         trace!("done writing tree_c store data");
                     });
-                }); // spawn
-            }); // rayon::scope
+                }));
+
+                for t in main_threads {
+                    t.join().unwrap();
+                }
+            }).unwrap(); // scope
             
             create_disk_tree::<
                 DiskTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,
