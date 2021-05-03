@@ -16,6 +16,7 @@ ff = { version = "0.2.3", package = "fff" }
 anyhow = "1.0.34"
 serde = "1.0.117"
 rand = "0.7.3"
+log = "0.4.7"
 
 neptune = { git = "ssh://git@github.com/NilFoundation/crusty3-neptune", branch = "parallel-cs", default-features = false, features = ["opencl"], optional = true }
 lazy_static = { version = "1.4.0", optional = true }
