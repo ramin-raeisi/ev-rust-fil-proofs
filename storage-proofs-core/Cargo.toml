@@ -14,7 +14,7 @@ bench = false
 [dependencies]
 filecoin-hashers = { path = "../filecoin-hashers", version = "1.0.0", default-features = false, features = ["sha256", "poseidon"] }
 rand = "0.7"
-merkletree = { git = "ssh://git@github.com/NilFoundation/merkletree", branch = "master"}
+merkletree = { git = "ssh://git@github.com/NilFoundation/eliovp-merkletree.git", branch = "master"}
 byteorder = "1"
 config = { version = "0.10.1", default-features = false, features = ["toml"] }
 itertools = "0.9"
@@ -32,7 +32,7 @@ serde = { version = "1.0", features = ["derive"] }
 blake2b_simd = "0.5"
 blake2s_simd = "0.5"
 toml = "0.5"
-bellperson = { git = "ssh://git@github.com/nilfoundation/fil-zk.git", branch = "master", default-features = false }
+bellperson = { git = "ssh://git@github.com/nilfoundation/eliovp-fil-zk.git", branch = "master", default-features = false }
 ff = { version = "0.2.3", package = "fff" }
 serde_json = "1.0"
 log = "0.4.7"
@@ -41,7 +41,7 @@ hex = "0.4.0"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
 thiserror = "1.0.6"
-neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune.git", branch = "master", default-features = false, features = ["opencl"] }
+neptune = { git = "ssh://git@github.com/nilfoundation/eliovp-neptune.git", branch = "master", default-features = false, features = ["opencl"] }
 cpu-time = { version = "1.0", optional = true }
 gperftools = { version = "0.2", optional = true }
 num_cpus = "1.10.1"
