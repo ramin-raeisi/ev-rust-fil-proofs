@@ -5,8 +5,10 @@ use hwloc2::{Bitmap, ObjectType, Topology, TopologyObject, CpuBindFlags};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
+use super::utils::{env_lock_p2_cores};
 
 type CoreGroup = Vec<CoreIndex>;
+
 lazy_static! {
     pub static ref TOPOLOGY: Mutex<Topology> = Mutex::new(Topology::new().unwrap());
     pub static ref CORE_GROUPS: Option<Vec<Mutex<CoreGroup>>> = {
@@ -20,7 +22,7 @@ lazy_static! {
 #[derive(Clone, Copy, Debug, PartialEq)]
 /// `CoreIndex` is a simple wrapper type for indexes into the set of vixible cores. A `CoreIndex` should only ever be
 /// created with a value known to be less than the number of visible cores.
-pub struct CoreIndex(usize);
+pub struct CoreIndex(pub usize);
 
 pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
     match &*CORE_GROUPS {
@@ -33,6 +35,35 @@ pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
                     }
                     Err(_) => debug!("core group {} locked, could not checkout", i),
                 }
+            }
+            None
+        }
+        None => None,
+    }
+}
+
+pub fn get_p2_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
+    match &*CORE_GROUPS {
+        Some(groups) => {
+            let total_size = env_lock_p2_cores();
+            let mut current_size: usize = 0;
+            let mut res = vec![];
+            for (i, group) in groups.iter().enumerate() {
+                match group.try_lock() {
+                    Ok(guard) => {
+                        let n = guard.len();
+                        res.push(guard);
+                        current_size += n;
+                        if current_size >= total_size {
+                            return Some(res);
+                        }
+                    }
+                    Err(_) => debug!("core group {} locked, could not checkout", i),
+                }
+            }
+            if res.len() > 0 {
+                info!("not enough free cores, P2 uses only {}", current_size);
+                return Some(res);
             }
             None
         }

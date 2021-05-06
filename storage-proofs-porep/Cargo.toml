@@ -43,6 +43,7 @@ libc = "0.2"
 fdlimit = "0.2.0"
 rust-gpu-tools = { version = "0.3.0" }
 fr32 = { path = "../fr32", default-features = false }
+thread_binder = {git = "ssh://git@github.com/NilFoundation/thread_binder"}
 
 [dev-dependencies]
 tempfile = "3"

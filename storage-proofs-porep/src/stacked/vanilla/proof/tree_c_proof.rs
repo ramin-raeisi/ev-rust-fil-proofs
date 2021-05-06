@@ -26,6 +26,7 @@ use super::super::{
         LabelsCache
     },
     proof::StackedDrg,
+    cores::{bind_core, get_p2_core_group, CoreIndex, Cleanup},
 };
 
 use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r};
@@ -37,6 +38,8 @@ use fr32::{bytes_into_fr, fr_into_bytes};
 
 use rust_gpu_tools::opencl;
 use bellperson::gpu::{scheduler};
+
+use thread_binder;
 
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> {
@@ -70,6 +73,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let max_gpu_tree_batch_size = settings::SETTINGS.max_gpu_tree_batch_size as usize;
             let column_write_batch_size = settings::SETTINGS.column_write_batch_size as usize;
 
+            //  ============== GPU POOL ================
             let mut batchertype_gpus = Vec::new();
             //let mut builders_rx = Vec::new();
             let all_bus_ids = opencl::Device::all()
@@ -111,6 +115,58 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             for gpu_idx in 0..bus_num {
                 batchertype_gpus.push(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_idx])));
             }
+
+            // ================= CPU POOL ===============
+            let groups = get_p2_core_group();
+            let mut core_group: Vec<CoreIndex> = vec![];
+            let mut core_group_usize: Vec<usize> = vec![];
+            if let Some(groups) = groups {
+                for cg in groups {
+                    for core_id in 0..cg.len() {
+                        let core_index = cg.get(core_id);
+                        if let Some(core_index) = core_index {
+                            core_group.push(core_index.clone());
+                            core_group_usize.push(core_index.0);
+                        }
+                    }
+                }
+            }
+            let total_cores = core_group.len();
+            let core_group = if total_cores > 0 {
+                Some(core_group)
+            } else {
+                None
+            };
+            let core_group = Arc::new(core_group);
+            let core_group_usize = Arc::new(core_group_usize);
+            let current_core: usize = 0;
+            let current_core = Arc::new(Mutex::new(current_core));
+
+            let get_core_index = |i: usize| -> Option<CoreIndex> {
+                if let Some(cg) = &*core_group {
+                    Some(cg[i])
+                } else {
+                    None
+                }
+            };
+
+            let increment_core = || {
+                let mut cc = current_core.lock().unwrap();
+                *cc = (*cc + 1) % total_cores;
+            };
+
+            let bind_thread = || -> Option<Result<Cleanup>> {
+                let cleanup_handle = get_core_index(*current_core.lock().unwrap()).map(
+                    |core_index| bind_core(core_index)
+                );
+                increment_core();
+                cleanup_handle
+            };
+            // =====
+
+            let _cleanup_handle = bind_thread();
+
+
 
             let mut builders_rx_by_gpu = Vec::new();
             let mut builders_tx = Vec::new();
@@ -157,6 +213,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 }
 
                 main_threads.push(s.spawn(move |_| {
+                    let _cleanup_handle_prepare = bind_thread();
                     crossbeam::scope(|s2| {
                         let mut threads = Vec::new();
                         for (&i, builder_tx) in (0..config_count).collect::<Vec<_>>().iter()
@@ -167,7 +224,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             }
                             let labels = labels.clone();
                             debug!("start spawn tree_c {}", i + 1);
+                            let core_group_usize = core_group_usize.clone();
                             threads.push(s2.spawn(move |_| {
+                                let _cleanup_handle_prepare_i = bind_thread();
                                 let mut node_index = 0;
                                 while node_index != nodes_count {
                                     debug!("while tree_c {}, node_index = {}", i + 1, node_index);
@@ -210,24 +269,28 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                         debug!("loop 1 end, tree_c {}, node_index = {}", i + 1, node_index);
 
                                         debug!("loop 2, tree_c {}, node_index = {}", i + 1, node_index);
-                                        let res = (0..chunked_nodes_count)
-                                            .into_par_iter() // TODO: CROSSBEAM
-                                            .map(|index| {
-                                                (0..layers)
-                                                    .map(|layer_index| {
-                                                        trace!("loop 2 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
-                                                        bytes_into_fr(
-                                                        &layer_data[layer_index][std::mem::size_of::<Fr>()
-                                                            * index
-                                                            ..std::mem::size_of::<Fr>() * (index + 1)],
-                                                    )
-                                                    .expect("Could not create Fr from bytes.")
-                                                    })
-                                                    .collect::<GenericArray<Fr, ColumnArity>>()
-                                            })
-                                            .collect();
-                                        debug!("loop 2 end, tree_c {}, node_index = {}", i + 1, node_index);
-                                        res
+                                        let pool = thread_binder::ThreadPoolBuilder::new_with_core_set(core_group_usize.clone()).build().unwrap();
+                                        pool.install(|| {
+                                            let res = (0..chunked_nodes_count)
+                                                .into_par_iter()
+                                                .map(|index| {
+                                                    let _cleanup_handle_pool = bind_thread();
+                                                    (0..layers)
+                                                        .map(|layer_index| {
+                                                            trace!("loop 2 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
+                                                            bytes_into_fr(
+                                                            &layer_data[layer_index][std::mem::size_of::<Fr>()
+                                                                * index
+                                                                ..std::mem::size_of::<Fr>() * (index + 1)],
+                                                        )
+                                                        .expect("Could not create Fr from bytes.")
+                                                        })
+                                                        .collect::<GenericArray<Fr, ColumnArity>>()
+                                                })
+                                                .collect();
+                                            debug!("loop 2 end, tree_c {}, node_index = {}", i + 1, node_index);
+                                            res
+                                        })
                                     }; // columns
 
                                     node_index += chunked_nodes_count;
@@ -261,6 +324,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                 //Parallel tuning GPU computing
                 main_threads.push(s.spawn(move |_| {
+                    let _cleanup_handle_gpu = bind_thread();
 
                     crossbeam::scope(|s2| {
                         let mut gpu_threads = Vec::new();
@@ -274,6 +338,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 let writers_tx = writers_tx.clone();
 
                                 gpu_threads.push(s2.spawn(move |_| {
+                                    let _cleanup_handle_gpu_i = bind_thread();
                                     let mut locked_gpu: i32 = -1;
                                     let lock = loop {
                                         let lock_inner = scheduler::get_next_device_second_pool().lock().unwrap();
@@ -344,6 +409,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             let writers_tx  = writers_tx.clone();
                                             let mem_used = mem_used.clone();
                                             config_threads.push(s3.spawn(move |_| {
+                                                let _cleanup_handle_gpu_inner = bind_thread();
                                                 let mut printed = false;
                                                 let mut mem_used_val = mem_used.load(SeqCst);
                                                 while (mem_used_val + mem_column_add) as f64 >= (1.0 - gpu_memory_padding) * (mem_total as f64) {
@@ -434,6 +500,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                 let configs = configs.clone();
                 main_threads.push(s.spawn(move |_| {
+                    let _cleanup_handle_write = bind_thread();
                     configs.iter().enumerate()
                         .zip(writers_rx.iter())
                         .for_each(|((_i, config), writer_rx)| {
