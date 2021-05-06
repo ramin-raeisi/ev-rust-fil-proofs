@@ -266,7 +266,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                     .par_chunks_mut(NODE_SIZE),
                                             )
                                             .map(|(key, data_node_bytes)| {
-                                                let _cleanup_handle_pool = bind_thread();
                                                 let data_node =
                                                     <Tree::Hasher as Hasher>::Domain::try_from_bytes(
                                                         data_node_bytes,

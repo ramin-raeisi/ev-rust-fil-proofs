@@ -274,7 +274,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             let res = (0..chunked_nodes_count)
                                                 .into_par_iter()
                                                 .map(|index| {
-                                                    let _cleanup_handle_pool = bind_thread();
                                                     (0..layers)
                                                         .map(|layer_index| {
                                                             trace!("loop 2 into, tree_c {}, node_index = {}, layer_index = {}", i + 1, node_index, layer_index);
