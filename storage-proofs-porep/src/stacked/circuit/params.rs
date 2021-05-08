@@ -191,18 +191,18 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                     other_cs.print_index(&mut v);
                 }
 
-                /*let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
+                let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
                 || { comm_c.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
                 let idx = other_cs.get_index(&mut comm_c.get_variable());
-                other_cs.align_variable(&mut comm_c_copy.get_variable(), 0, idx);*/
+                other_cs.align_variable(&mut comm_c_copy.get_variable(), 0, idx);
                 enforce_inclusion(
                     other_cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
                     inclusion_path,
-                    //&comm_c_copy,
-                    comm_c,
+                    &comm_c_copy,
+                    //comm_c,
                     &val,
                 );
-                //other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
+                other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
             });
         });
         let time = start.elapsed();

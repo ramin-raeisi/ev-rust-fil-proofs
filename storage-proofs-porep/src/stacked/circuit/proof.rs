@@ -5,7 +5,7 @@ use std::time::Instant;
 use bellperson::{
     bls::{Bls12, Fr},
     gadgets::{num::AllocatedNum, uint32::UInt32},
-    Circuit, ConstraintSystem, SynthesisError,
+    Circuit, ConstraintSystem, SynthesisError, groth16::prover::ProvingAssignment,
 };
 use filecoin_hashers::{HashFunction, Hasher};
 use fr32::u64_into_fr;
@@ -473,19 +473,25 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
         }
         let layers = public_params.layer_challenges.layers();
 
-        let mut drg_parents_vec = Vec::new();
-        let mut exp_parents_vec = Vec::new();
+        //let mut drg_parents_vec = Vec::new();
+        //let mut exp_parents_vec = Vec::new();
         let proofs_copy = proofs.clone();
         let len = proofs.len();
-        let mut gen_cs = cs.make_vector(len)?;
+        info!{"make a cs copy"}
+        let mut gen_cs = cs.make_vector_copy(len)?;
+        //let mut gen_cs = Vec::new();
+        let mut unit = cs.make_copy()?;
+        /*for i in 0.. len {
+            let mut new = cs.clone();
+            gen_cs.push(new);
+        }*/
         let mut data_leaf_num_vec = Vec::new();
         let global_aux_len = cs.get_aux_assigment_len();
         let proof_alloc_aux = 7231629;
         let proof_alloc_input = 18;
-        
+        info!{"start several gen_cs"};
         for ((p, proof), other_gen_cs) in proofs.into_iter().enumerate()
         .zip(gen_cs.iter_mut()) {
-            let aux_len1 = other_gen_cs.get_aux_assigment_len();
                 let Proof {
                     comm_d_path,
                     data_leaf,
@@ -503,27 +509,32 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                 // -- verify initial data layer
 
                 // PrivateInput: data_leaf
+                info!{"alloc data_leaf_num, p = {}", p};
                 let data_leaf_num = AllocatedNum::alloc(other_gen_cs.namespace(|| "data_leaf"), || {
                     data_leaf.ok_or_else(|| SynthesisError::AssignmentMissing)
                 })?;
-                other_gen_cs.align_variable(&mut data_leaf_num.get_variable(), 0, global_aux_len);
+                /*let aux_len1 = other_gen_cs.get_aux_assigment_len();
+                other_gen_cs.align_variable(&mut data_leaf_num.get_variable(), 0, global_aux_len + aux_len1 + proof_alloc_aux*p);
 
                 let comm_d_copy = AllocatedNum::alloc(other_gen_cs.namespace(|| format!("comm_c_{}_num", 0)), 
                 || { comm_d_num.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
+                comm_d_copy.inputize(other_gen_cs.namespace(|| "comm_d_input"))?;
                 let idx = other_gen_cs.get_index(&mut comm_d_num.get_variable());
-                other_gen_cs.align_variable(&mut comm_d_copy.get_variable(), 0, idx);
-
-                other_gen_cs.deallocate(comm_d_copy.get_variable()).unwrap();
+                other_gen_cs.align_variable(&mut comm_d_copy.get_variable(), idx, 0);*/
 
                 // enforce inclusion of the data leaf in the tree D
+                info!{"enforce inclusion of the data leaf in the tree D, p = {}", p};
                 enforce_inclusion(
                     other_gen_cs.namespace(|| "comm_d_inclusion"),
-                    comm_d_path,
-                    &comm_d_copy,
+                    comm_d_path, // to do
+                    &comm_d_num,
+                    //&comm_d_copy,
                     &data_leaf_num,
                 )?;
 
-                let alloc_count;
+                //other_gen_cs.deallocate(comm_d_copy.get_variable()).unwrap();
+
+                /*let alloc_count;
                 if layers == 2 {
                     alloc_count = 4609;
                 }
@@ -602,14 +613,16 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                 }
                 drg_parents_vec.push(drg_parents);
                 exp_parents_vec.push(exp_parents);
+                */
                 data_leaf_num_vec.push(data_leaf_num);
+                
             }
-            
-            for ((i, proof), (drg_parents, (exp_parents, (data_leaf_num, agg_cs)))) in proofs_copy.into_iter().enumerate()
-            .zip(drg_parents_vec.into_iter()
-            .zip(exp_parents_vec.into_iter()
+            info!{"start serial"};
+            for ((i, proof), (data_leaf_num, agg_cs)) in proofs_copy.into_iter().enumerate()
+            //.zip(drg_parents_vec.into_iter()
+            //.zip(exp_parents_vec.into_iter()
             .zip(data_leaf_num_vec.into_iter()
-            .zip(gen_cs.into_iter())))) {
+            .zip(gen_cs.into_iter())) {
                 let Proof {
                     comm_d_path,
                     data_leaf,
@@ -620,13 +633,85 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                     exp_parents_proofs,
                     ..
                 } = proof;
+                info!{"start aggregate cs, i = {}", i};
+                cs.part_aggregate_element(agg_cs, &unit);
+                info!{"start drg\exp parents, i =  ", i};
+                let alloc_count;
+                if layers == 2 {
+                    alloc_count = 4609;
+                }
+                else {
+                    alloc_count = 5979;
+                }
 
+                // -- verify replica column openings
 
-                cs.aggregate_element(agg_cs);
+                // Private Inputs for the DRG parent nodes.
+                let drg_len = drg_parents_proofs.len();
+                let exp_len = exp_parents_proofs.len();
+                let parents_proofs = vec![drg_parents_proofs, exp_parents_proofs];
+                let mut drg_parents = Vec::new();
+                let mut exp_parents = Vec::new();
+                let mut drg_cs = cs.make_vector(drg_len).unwrap();
+                let mut exp_cs = cs.make_vector(exp_len).unwrap();
+                let mut data_parents = vec![&mut drg_parents, &mut exp_parents];
+                let mut all_cs = vec![drg_cs, exp_cs];
+                let aux_len = cs.get_aux_assigment_len();
+
+                let start = Instant::now();
+                parents_proofs.into_par_iter().enumerate()
+                .zip(data_parents.par_iter_mut()
+                .zip(all_cs.par_iter_mut()))
+                .for_each( |((k, proofs), (parents, css))| {
+                    let len = proofs.len();
+            
+                    for i in 0..len {
+                        parents.push(AllocatedColumn::empty(layers));
+                    }    
+
+                    proofs.into_par_iter().enumerate()
+                    .zip(css.par_iter_mut()
+                    .zip(parents.par_iter_mut()))
+                    .for_each(|((i, parent), (other_cs, node_parent))| {
+                        let (parent_col, inclusion_path) = 
+                        parent.alloc(other_cs.namespace(|| format!("drg_parent_{}_num", i))).unwrap();
+                        assert_eq!(layers, parent_col.len());
+
+                        let val = parent_col.hash(other_cs.namespace(|| format!("drg_parent_{}_constraint", i))).unwrap();
+
+                        *node_parent = parent_col;
+
+                        for j in 1..node_parent.len() + 1 {
+                            let mut row = node_parent.get_mut_value(j);
+                            let mut v = row.get_mut_variable();
+                            other_cs.align_variable(&mut v, 0, aux_len + j - 1 + (i + k*drg_len)*alloc_count);
+                            other_cs.print_index(&mut v);
+                        }
+
+                        let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
+                        || { comm_c_num.get_value().ok_or_else(|| SynthesisError::AssignmentMissing) }).unwrap();
+                        let idx = other_cs.get_index(&mut comm_c_num.get_variable());
+                        other_cs.align_variable(&mut comm_c_copy.get_variable(), 0, idx);
+                        info!{"enforce inclusion of data_parent"};
+                        enforce_inclusion(
+                            other_cs.namespace(|| format!("drg_parent_{}_inclusion", i)),
+                            inclusion_path,
+                            &comm_c_copy,
+                            //comm_c,
+                            &val,
+                        );
+                        other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
+                    });
+                });
+                let time = start.elapsed();
+                info!{"parallel computation: {:?}", time};
+                for new_cs in all_cs {
+                    cs.aggregate(new_cs);
+                }
 
 
                 // -- Verify labeling and encoding
-
+                info!{"start labeling, i = {}", i};
                 // stores the labels of the challenged column
                 let mut column_labels = Vec::new();
 
@@ -699,7 +784,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                     // key is the last label
                     let key = &column_labels[column_labels.len() - 1];
                     let encoded_node = encode(cs.namespace(|| "encode_node"), key, &data_leaf_num)?;
-
+                    info!{"enforce inclusion of encoded node, i = {}", i};
                     // verify inclusion of the encoded node
                     enforce_inclusion(
                         cs.namespace(|| "comm_r_last_data_inclusion"),
@@ -716,6 +801,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                         hash_single_column(cs.namespace(|| "c_x_column_hash"), &column_labels)?;
 
                     // enforce inclusion of the column hash in the tree C
+                    info!{"enforce inclusion of column labels hash, i = {}", i}
                     enforce_inclusion(
                         cs.namespace(|| "c_x_inclusion"),
                         comm_c_path,
@@ -727,7 +813,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
         Ok(())
     } 
 
-    /*fn synthesize<CS: ConstraintSystem<Bls12>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
+    /* fn synthesize<CS: ConstraintSystem<Bls12>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         let StackedCircuit {
             public_params,
             proofs,
