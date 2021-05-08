@@ -15,7 +15,7 @@ storage-proofs-core = { path = "../storage-proofs-core", version = "^6.0.0", def
 sha2raw = { path = "../sha2raw", version = "^2.0.0"}
 filecoin-hashers = { path = "../filecoin-hashers", version = "1.0.0", default-features = false, features = ["poseidon", "sha256"]}
 rand = "0.7"
-merkletree = "0.21.0"
+merkletree = { git = "ssh://git@github.com/NilFoundation/merkletree", branch = "master"}
 mapr = "0.8.0"
 num-bigint = "0.2"
 num-traits = "0.2"
@@ -38,11 +38,14 @@ bincode = "1.1.2"
 byteorder = "1.3.4"
 lazy_static = "1.2"
 byte-slice-cast = "1.0.0"
-hwloc2 = "2.2.0"
+hwloc2 = { git = "ssh://git@github.com/NilFoundation/hwloc2-rs" }
 libc = "0.2"
 fdlimit = "0.2.0"
 rust-gpu-tools = { version = "0.3.0" }
 fr32 = { path = "../fr32", default-features = false }
+thread_binder = {git = "ssh://git@github.com/NilFoundation/thread_binder", branch = "develop"}
+enum_derive = "0.1.7"
+custom_derive = "0.1.7"
 
 [dev-dependencies]
 tempfile = "3"

@@ -35,7 +35,7 @@ rayon-core = "1.6.1"
 rayon-futures = "0.1.1"
 blake2s_simd = "0.5.8"
 hex = "0.4.0"
-merkletree = "0.21.0"
+merkletree = { git = "ssh://git@github.com/NilFoundation/merkletree", branch = "master"}
 bincode = "1.1.2"
 anyhow = "1.0.23"
 rand_xorshift = "0.2.0"
