@@ -168,10 +168,7 @@ pub fn bind_core_set(core_set: Arc<Vec<CoreIndex>>) -> Result<Cleanup> {
         acc_cpuset = CpuSet::or(acc_cpuset, x);
     }
     debug!("allowed cpuset: {:?}", acc_cpuset);
-    let mut bind_to = acc_cpuset;
-
-    // Get only one logical processor (in case the core is SMT/hyper-threaded).
-    //bind_to.singlify();
+    let bind_to = acc_cpuset;
 
     // Thread binding before explicit set.
     let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);

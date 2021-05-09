@@ -44,8 +44,6 @@ use crate::encode::{encode};
 use bellperson::gpu::{scheduler};
 use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r, get_p2_pool};
 
-use thread_binder;
-
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     pub fn generate_tree_r_last_gpu<TreeArity>(
         data: &mut Data<'_>,
