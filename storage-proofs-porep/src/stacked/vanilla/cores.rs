@@ -1,12 +1,14 @@
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, Arc};
 
 use anyhow::{format_err, Result};
-use hwloc2::{Bitmap, ObjectType, Topology, TopologyObject, CpuBindFlags};
+use hwloc2::{Bitmap, ObjectType, Topology, TopologyObject, CpuBindFlags, CpuSet};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
+use super::utils::{env_lock_p2_cores, p2_binding_policy, P2BoundPolicy};
 
 type CoreGroup = Vec<CoreIndex>;
+
 lazy_static! {
     pub static ref TOPOLOGY: Mutex<Topology> = Mutex::new(Topology::new().unwrap());
     pub static ref CORE_GROUPS: Option<Vec<Mutex<CoreGroup>>> = {
@@ -20,7 +22,7 @@ lazy_static! {
 #[derive(Clone, Copy, Debug, PartialEq)]
 /// `CoreIndex` is a simple wrapper type for indexes into the set of vixible cores. A `CoreIndex` should only ever be
 /// created with a value known to be less than the number of visible cores.
-pub struct CoreIndex(usize);
+pub struct CoreIndex(pub usize);
 
 pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
     match &*CORE_GROUPS {
@@ -33,6 +35,44 @@ pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
                     }
                     Err(_) => debug!("core group {} locked, could not checkout", i),
                 }
+            }
+            None
+        }
+        None => None,
+    }
+}
+
+pub fn get_p2_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
+    match &*CORE_GROUPS {
+        Some(groups) => {
+            let binding_policy = p2_binding_policy();
+            if binding_policy == P2BoundPolicy::NoBinding {
+                return None;
+            }
+
+            let total_size = env_lock_p2_cores();
+            let mut current_size: usize = 0;
+            let mut res = vec![];
+            for (i, group) in groups.iter().enumerate() {
+                match group.try_lock() {
+                    Ok(guard) => {
+                        let n = guard.len();
+                        res.push(guard);
+                        current_size += n;
+                        if current_size >= total_size {
+                            return Some(res);
+                        }
+                    }
+                    Err(_) => debug!("core group {} locked, could not checkout", i),
+                }
+            }
+            if res.len() < total_size && binding_policy == P2BoundPolicy::Strict {
+                info!("not enough free cores, Strict bound policy implies not use binding");
+                return None;
+            }
+            if res.len() > 0 {
+                info!("not enough free cores, Weak bound policy, P2 uses only {}", current_size);
+                return Some(res);
             }
             None
         }
@@ -88,6 +128,47 @@ pub fn bind_core(core_index: CoreIndex) -> Result<Cleanup> {
 
     // Get only one logical processor (in case the core is SMT/hyper-threaded).
     bind_to.singlify();
+
+    // Thread binding before explicit set.
+    let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);
+
+    debug!("binding to {:?}", bind_to);
+    // Set the binding.
+    let result = locked_topo
+        .set_cpubind_for_thread(tid, bind_to, CpuBindFlags::CPUBIND_THREAD)
+        .map_err(|err| format_err!("failed to bind CPU: {:?}", err));
+
+    if result.is_err() {
+        warn!("error in bind_core, {:?}", result);
+    }
+
+    Ok(Cleanup {
+        tid,
+        prior_state: before,
+    })
+}
+
+pub fn bind_core_set(core_set: Arc<Vec<CoreIndex>>) -> Result<Cleanup> {
+    let child_topo = &TOPOLOGY;
+    let tid = get_thread_id();
+    let mut locked_topo = child_topo.lock().expect("poisoned lock");
+
+    let mut cpu_sets = Vec::new();
+    for i in 0..core_set.len() {
+        let core_index = core_set[i].clone();
+        let core = get_core_by_index(&locked_topo, core_index)
+            .map_err(|err| format_err!("failed to get core at index {}: {:?}", core_index.0, err))?;
+        let cpuset = core
+            .cpuset()
+            .ok_or_else(|| format_err!("no allowed cpuset for core at index {}", core_index.0,))?;
+        cpu_sets.push(cpuset);
+    }
+    let mut acc_cpuset = CpuSet::new();
+    for x in cpu_sets {
+        acc_cpuset = CpuSet::or(acc_cpuset, x);
+    }
+    debug!("allowed cpuset: {:?}", acc_cpuset);
+    let bind_to = acc_cpuset;
 
     // Thread binding before explicit set.
     let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);

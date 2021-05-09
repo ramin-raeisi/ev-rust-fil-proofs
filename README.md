@@ -298,6 +298,38 @@ The optimized rust-fil-proofs version contains new GPU settings.
   // Example
   env::set_var("FIL_PROOFS_GPU_MEMORY_PADDING", "0.6");
   ```
+### Advanced CPU Usage
+The optimized rust-fil-proofs provide settings for P2 core binding.
+* `FIL_PROOFS_P2_BINDING_POLICY`
+
+  * Possible values: `[NoBinding, Weak, Strict]`
+  * Default value: `NoBinding`
+
+  Defines core binding policy for P2 phase.
+  It allows running P2 in parallel with P1 using separate cores for these tasks. 
+  * `NoBinding`: no CPU binding, as in original rust-fil-proofs;
+  * `Weak`: bind the number of cores defined by `FIL_PROOFS_P2_BOUND_CORES` if there are enough free cores. Otherwise bind as many cores as available;
+  * `Strict`: bind only if there are enough free cores (see `FIL_PROOFS_P2_BOUND_CORES`). Otherwise use `NoBinding` policy. 
+
+  __Important note__: Currently, CPU cores are allocated in groups of `x` where `x` is equal to the number of multicore SDR producers + 1 (see `FIL_PROOFS_MULTICORE_SDR_PRODUCERS`).  
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_P2_BINDING_POLICY", "Weak");
+  ```
+
+* `FIL_PROOFS_P2_BOUND_CORES`
+
+  * Possible values: `[0, n]` where `n` is an amount of CPU cores. 
+  * Default value: `8`
+
+  Defines the number of bound cores per P2 instance. See also `FIL_PROOFS_P2_BINDING_POLICY`.
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_P2_BOUND_CORES", "15");
+  ```
+  __Important note__: Currently, CPU cores are allocated in groups of `x` where `x` is equal to the amount of multicore SDR producers + 1 (see `FIL_PROOFS_MULTICORE_SDR_PRODUCERS`).  
 
 ### Memory
 
