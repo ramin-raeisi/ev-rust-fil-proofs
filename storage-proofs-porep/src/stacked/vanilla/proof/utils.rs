@@ -1,6 +1,9 @@
 use log::*;
-
+use std::sync::{Arc};
 use storage_proofs_core::settings::SETTINGS;
+use num_cpus;
+
+use super::super::utils::{P2BoundPolicy, p2_binding_policy, env_lock_p2_cores};
 
 const MEMORY_PADDING: f64 = 0.35f64;
 
@@ -28,4 +31,16 @@ pub fn get_gpu_for_parallel_tree_r() -> usize {
                     }
                 })
                 .unwrap_or(SETTINGS.gpu_for_parallel_tree_r) as usize
+}
+
+pub fn get_p2_pool(core_group: Arc<Vec<usize>>) -> rayon::ThreadPool {
+    let pool;
+    let binding_policy = p2_binding_policy();
+    if binding_policy == P2BoundPolicy::Weak || (binding_policy == P2BoundPolicy::Strict && core_group.len() >= env_lock_p2_cores()) {
+        pool = thread_binder::ThreadPoolBuilder::new_with_core_set(core_group.clone()).build().expect("failed creating pool for P2");
+    } else {
+        let cpus = num_cpus::get();
+        pool = rayon::ThreadPoolBuilder::new().num_threads(cpus).build().expect("failed creating pool for P2");
+    }
+    pool
 }
