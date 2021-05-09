@@ -5,7 +5,7 @@ use hwloc2::{Bitmap, ObjectType, Topology, TopologyObject, CpuBindFlags, CpuSet}
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
-use super::utils::{env_lock_p2_cores};
+use super::utils::{env_lock_p2_cores, p2_binding_policy, P2BoundPolicy};
 
 type CoreGroup = Vec<CoreIndex>;
 
@@ -45,6 +45,11 @@ pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
 pub fn get_p2_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
     match &*CORE_GROUPS {
         Some(groups) => {
+            let binding_policy = p2_binding_policy();
+            if binding_policy == P2BoundPolicy::NoBinding {
+                return None;
+            }
+
             let total_size = env_lock_p2_cores();
             let mut current_size: usize = 0;
             let mut res = vec![];
@@ -61,8 +66,12 @@ pub fn get_p2_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
                     Err(_) => debug!("core group {} locked, could not checkout", i),
                 }
             }
+            if res.len() < total_size && binding_policy == P2BoundPolicy::Strict {
+                info!("not enough free cores, Strict bound policy implies not use binding");
+                return None;
+            }
             if res.len() > 0 {
-                info!("not enough free cores, P2 uses only {}", current_size);
+                info!("not enough free cores, Weak bound policy, P2 uses only {}", current_size);
                 return Some(res);
             }
             None

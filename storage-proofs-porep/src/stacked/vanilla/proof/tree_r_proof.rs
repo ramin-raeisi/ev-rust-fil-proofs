@@ -30,6 +30,7 @@ use super::super::{
     },
     proof::StackedDrg,
     cores::{bind_core_set, get_p2_core_group, CoreIndex, Cleanup},
+    utils::{P2BoundPolicy, p2_binding_policy}
 };
 
 use neptune::batch_hasher::BatcherType;
@@ -41,7 +42,7 @@ use rust_gpu_tools::opencl;
 use crate::encode::{encode};
 
 use bellperson::gpu::{scheduler};
-use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r};
+use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r, get_p2_pool};
 
 use thread_binder;
 
@@ -131,8 +132,10 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let core_group = Arc::new(core_group);
         let core_group_usize = Arc::new(core_group_usize);
 
-        let bind_thread = || -> Option<Result<Cleanup>> {
-            if core_group.len() > 0 {
+        let binding_policy = p2_binding_policy();
+        let bind_thread = || -> Option<Result<Cleanup>> 
+        {
+            if binding_policy != P2BoundPolicy::NoBinding && core_group.len() > 0 {
                 return Some(bind_core_set(core_group.clone()));
             }
             None
@@ -230,7 +233,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                     }
 
                                     debug!("layer_bytes, tree_r {}, node_index = {}", i + 1, node_index);
-                                    let pool = thread_binder::ThreadPoolBuilder::new_with_core_set(core_group_usize.clone()).build().unwrap();
+                                    let pool = get_p2_pool(core_group_usize.clone());
                                     pool.install(|| {
                                         let res = layer_bytes
                                             .into_par_iter() // TODO CROSSBEAM

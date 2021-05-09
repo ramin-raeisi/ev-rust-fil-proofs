@@ -298,7 +298,7 @@ The optimized rust-fil-proofs version contains new GPU settings.
   // Example
   env::set_var("FIL_PROOFS_GPU_MEMORY_PADDING", "0.6");
   ```
-### Advance CPU Usage
+### Advanced CPU Usage
 The optimized rust-fil-proofs provide settings for P2 core binding.
 * `FIL_PROOFS_P2_BINDING_POLICY`
 
