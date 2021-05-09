@@ -1,7 +1,7 @@
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, Arc};
 
 use anyhow::{format_err, Result};
-use hwloc2::{Bitmap, ObjectType, Topology, TopologyObject, CpuBindFlags};
+use hwloc2::{Bitmap, ObjectType, Topology, TopologyObject, CpuBindFlags, CpuSet};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
@@ -119,6 +119,50 @@ pub fn bind_core(core_index: CoreIndex) -> Result<Cleanup> {
 
     // Get only one logical processor (in case the core is SMT/hyper-threaded).
     bind_to.singlify();
+
+    // Thread binding before explicit set.
+    let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);
+
+    debug!("binding to {:?}", bind_to);
+    // Set the binding.
+    let result = locked_topo
+        .set_cpubind_for_thread(tid, bind_to, CpuBindFlags::CPUBIND_THREAD)
+        .map_err(|err| format_err!("failed to bind CPU: {:?}", err));
+
+    if result.is_err() {
+        warn!("error in bind_core, {:?}", result);
+    }
+
+    Ok(Cleanup {
+        tid,
+        prior_state: before,
+    })
+}
+
+pub fn bind_core_set(core_set: Arc<Vec<CoreIndex>>) -> Result<Cleanup> {
+    let child_topo = &TOPOLOGY;
+    let tid = get_thread_id();
+    let mut locked_topo = child_topo.lock().expect("poisoned lock");
+
+    let mut cpu_sets = Vec::new();
+    for i in 0..core_set.len() {
+        let core_index = core_set[i].clone();
+        let core = get_core_by_index(&locked_topo, core_index)
+            .map_err(|err| format_err!("failed to get core at index {}: {:?}", core_index.0, err))?;
+        let cpuset = core
+            .cpuset()
+            .ok_or_else(|| format_err!("no allowed cpuset for core at index {}", core_index.0,))?;
+        cpu_sets.push(cpuset);
+    }
+    let mut acc_cpuset = CpuSet::new();
+    for x in cpu_sets {
+        acc_cpuset = CpuSet::or(acc_cpuset, x);
+    }
+    debug!("allowed cpuset: {:?}", acc_cpuset);
+    let mut bind_to = acc_cpuset;
+
+    // Get only one logical processor (in case the core is SMT/hyper-threaded).
+    //bind_to.singlify();
 
     // Thread binding before explicit set.
     let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);

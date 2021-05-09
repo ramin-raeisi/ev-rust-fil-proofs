@@ -26,7 +26,7 @@ use super::super::{
         LabelsCache
     },
     proof::StackedDrg,
-    cores::{bind_core, get_p2_core_group, CoreIndex, Cleanup},
+    cores::{get_p2_core_group, CoreIndex, Cleanup, bind_core_set},
 };
 
 use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r};
@@ -75,7 +75,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             //  ============== GPU POOL ================
             let mut batchertype_gpus = Vec::new();
-            //let mut builders_rx = Vec::new();
             let all_bus_ids = opencl::Device::all()
                 .iter()
                 .map(|d| d.bus_id().unwrap())
@@ -111,7 +110,6 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
             let bus_num = last_idx;
 
-            //let batchers_per_gpu = configs.len() / bus_num + 1;
             for gpu_idx in 0..bus_num {
                 batchertype_gpus.push(BatcherType::CustomGPU(opencl::GPUSelector::BusId(all_bus_ids[gpu_idx])));
             }
@@ -126,45 +124,22 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         let core_index = cg.get(core_id);
                         if let Some(core_index) = core_index {
                             core_group.push(core_index.clone());
-                            core_group_usize.push(core_index.0);
+                            core_group_usize.push(core_index.0)
                         }
                     }
                 }
             }
-            let total_cores = core_group.len();
-            let core_group = if total_cores > 0 {
-                Some(core_group)
-            } else {
-                None
-            };
+            
             let core_group = Arc::new(core_group);
             let core_group_usize = Arc::new(core_group_usize);
-            let current_core: usize = 0;
-            let current_core = Arc::new(Mutex::new(current_core));
-
-            let get_core_index = |i: usize| -> Option<CoreIndex> {
-                if let Some(cg) = &*core_group {
-                    Some(cg[i])
-                } else {
-                    None
-                }
-            };
-
-            let increment_core = || {
-                let mut cc = current_core.lock().unwrap();
-                *cc = (*cc + 1) % total_cores;
-            };
 
             let bind_thread = || -> Option<Result<Cleanup>> {
-                let cleanup_handle = get_core_index(*current_core.lock().unwrap()).map(
-                    |core_index| bind_core(core_index)
-                );
-                increment_core();
-                cleanup_handle
+                if core_group.len() > 0 {
+                    return Some(bind_core_set(core_group.clone()));
+                }
+                None
             };
             // =====
-
-            let _cleanup_handle = bind_thread();
 
 
 
