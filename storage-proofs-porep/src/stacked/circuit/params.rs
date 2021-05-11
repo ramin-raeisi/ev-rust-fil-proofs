@@ -128,6 +128,8 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             data_leaf.ok_or_else(|| SynthesisError::AssignmentMissing)
         })?;
 
+        info!{"data leaf index = {}", cs.get_index(&mut data_leaf_num.get_variable())};
+
         // enforce inclusion of the data leaf in the tree D
         enforce_inclusion(
             cs.namespace(|| "comm_d_inclusion"),
