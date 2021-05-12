@@ -117,8 +117,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             ..
         } = self;
 
-        let start = Instant::now();
-
         assert!(!drg_parents_proofs.is_empty());
         assert!(!exp_parents_proofs.is_empty());
 
@@ -156,10 +154,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
         let mut all_cs = vec![drg_cs, exp_cs];
         let aux_len = cs.get_aux_assigment_len();
 
-        let time = start.elapsed();
-        info!{"initial params: {:?}", time};
-
-        let start = Instant::now();
         parents_proofs.into_par_iter().enumerate()
         .zip(data_parents.par_iter_mut()
         .zip(all_cs.par_iter_mut()))
@@ -186,7 +180,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                     let mut row = node_parent.get_mut_value(j);
                     let mut v = row.get_mut_variable();
                     other_cs.align_variable(&mut v, 0, aux_len + j - 1 + (i + k*drg_len)*alloc_count);
-                    other_cs.print_index(&mut v);
                 }
 
                 let comm_c_copy = AllocatedNum::alloc(other_cs.namespace(|| format!("comm_c_{}_num", 0)), 
@@ -202,13 +195,10 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                 other_cs.deallocate(comm_c_copy.get_variable()).unwrap();
             });
         });
-        let time = start.elapsed();
-        info!{"parallel computation: {:?}", time};
         for new_cs in all_cs {
             cs.aggregate(new_cs);
         }
        // -- Verify labeling and encoding
-       let start = Instant::now();
        // stores the labels of the challenged column
        let mut column_labels = Vec::new();
 
@@ -289,7 +279,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             ).unwrap();
         }
       
-       info!("start : enforce hash");
        // -- ensure the column hash of the labels is included
        {
            // calculate column_hash
@@ -305,9 +294,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
            )?;
        }
 
-
-       let time = start.elapsed();
-       info!{"labeling: {:?}", time};
        Ok(())
    }
 
