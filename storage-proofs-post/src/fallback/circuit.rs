@@ -4,8 +4,9 @@ use bellperson::{
     Circuit, ConstraintSystem, SynthesisError,
 };
 use ff::Field;
+use log::*;
 use filecoin_hashers::{HashFunction, Hasher};
-use rayon::prelude::{ParallelIterator, ParallelSlice};
+use rayon::prelude::*;
 use storage_proofs_core::{
     compound_proof::CircuitComponent,
     error::Result,
@@ -163,17 +164,25 @@ impl<Tree: 'static + MerkleTreeTrait> Circuit<Bls12> for &Sector<Tree> {
                 &comm_r_num,
                 &hash_num,
             );
-        }
+        } 
 
+        let len = leafs.len();
+        let mut gen_cs = cs.make_vector_copy(len)?;
+        let mut unit = cs.make_copy()?;
         // 2. Verify Inclusion Paths
-        for (i, (leaf, path)) in leafs.iter().zip(paths.iter()).enumerate() {
+        leafs.into_par_iter().zip(paths.into_par_iter()
+        .zip(gen_cs.par_iter_mut())).enumerate()
+        .for_each( | (i, (leaf, (path, other_cs))) | {
             PoRCircuit::<Tree>::synthesize(
-                cs.namespace(|| format!("challenge_inclusion_{}", i)),
+                other_cs.namespace(|| format!("challenge_inclusion_{}", i)),
                 Root::Val(*leaf),
                 path.clone(),
                 Root::from_allocated::<CS>(comm_r_last_num.clone()),
                 true,
-            )?;
+            ).unwrap();
+        });
+        for other_cs in gen_cs {
+            cs.part_aggregate_element(other_cs, &unit);
         }
 
         Ok(())
@@ -190,7 +199,13 @@ impl<Tree: MerkleTreeTrait> CircuitComponent for FallbackPoStCircuit<Tree> {
 impl<Tree: 'static + MerkleTreeTrait> Circuit<Bls12> for FallbackPoStCircuit<Tree> {
     fn synthesize<CS: ConstraintSystem<Bls12>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         if CS::is_extensible() {
-            return self.synthesize_extendable(cs);
+            let algo_type = get_algorithm_type();
+            return match algo_type {
+                1 => self.synthesize_extendable1(cs),
+                2 => self.synthesize_extendable2(cs),
+                3 => self.synthesize_extendable3(cs),
+                _ => self.synthesize_extendable1(cs),
+            };
         }
 
         self.synthesize_default(cs)
@@ -203,7 +218,6 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let cs = &mut cs.namespace(|| "outer namespace".to_string());
-
         for (i, sector) in self.sectors.iter().enumerate() {
             let cs = &mut cs.namespace(|| format!("sector_{}", i));
             sector.synthesize(cs)?;
@@ -211,7 +225,7 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
         Ok(())
     }
 
-    fn synthesize_extendable<CS: ConstraintSystem<Bls12>>(
+    fn synthesize_extendable1<CS: ConstraintSystem<Bls12>>(
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
@@ -241,4 +255,75 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
 
         Ok(())
     }
+
+    fn synthesize_extendable2<CS: ConstraintSystem<Bls12>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+        let FallbackPoStCircuit { sectors, .. } = self;
+
+        let css = sectors
+            .into_par_iter()
+            .map(|sector| {
+                let mut cs = CS::new();
+                cs.alloc_input(|| "temp ONE", || Ok(Fr::one()))?;
+                sector.synthesize(&mut cs)?;
+                Ok(cs)
+            })
+            .collect::<Result<Vec<_>, SynthesisError>>()?;
+
+        for sector_cs in css.into_iter() {
+            cs.extend(sector_cs);
+        }
+
+        Ok(())
+    }
+
+    fn synthesize_extendable3<CS: ConstraintSystem<Bls12>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+        let FallbackPoStCircuit { sectors, .. } = self;
+
+        let num_chunks = SETTINGS.window_post_synthesis_num_cpus as usize;
+
+        let chunk_size = (sectors.len() / num_chunks).max(1);
+        let css = sectors
+            .par_chunks(chunk_size)
+            .map(|sector_group| {
+                let mut cs = CS::new();
+                cs.alloc_input(|| "temp ONE", || Ok(Fr::one()))?;
+                let len = sector_group.len();
+                let mut gen_cs = cs.make_vector(len).unwrap();
+
+                sector_group.into_par_iter().enumerate()
+                .zip(gen_cs.par_iter_mut())
+                .for_each( |((i, sector), sector_cs)| {
+                    let mut sector_cs = sector_cs.namespace(|| format!("sector_{}", i));
+                    sector.synthesize(&mut sector_cs).unwrap();
+                });
+                for other_cs in gen_cs {
+                    cs.aggregate_element(other_cs);
+                }
+                Ok(cs)
+            })
+            .collect::<Result<Vec<_>, SynthesisError>>()?;
+
+        for sector_cs in css.into_iter() {
+            cs.extend(sector_cs);
+        }
+
+        Ok(())
+    }
+}
+pub fn get_algorithm_type() -> usize {
+    std::env::var("FIL_PROOFS_ALGORITHM")
+        .and_then(|v| match v.parse() {
+            Ok(val) => Ok(val),
+            Err(_) => {
+                error!("Invalid FIL_PROOFS__ALGORITHM! Defaulting to {}", 1);
+                Ok(1)
+            }
+        })
+        .unwrap_or(1)
 }
