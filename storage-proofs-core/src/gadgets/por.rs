@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::marker::PhantomData;
+use log::*;
 
 use anyhow::ensure;
 use bellperson::{
