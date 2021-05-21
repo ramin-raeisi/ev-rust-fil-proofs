@@ -1,5 +1,8 @@
 use std::cell::UnsafeCell;
 use std::slice::{self, ChunksExactMut};
+use log::error;
+use enum_derive::*;
+use custom_derive::*;
 
 /// A slice type which can be shared between threads, but must be fully managed by the caller.
 /// Any synchronization must be ensured by the caller, which is why all access is `unsafe`.
@@ -130,4 +133,40 @@ impl RingBuf {
         // Safety: safe because we are holding &mut self
         unsafe { self.slice_mut().chunks_exact_mut(self.slot_size) }
     }
+}
+
+const P2_GROUP_SIZE: usize = 8;
+
+pub fn env_lock_p2_cores() -> usize {
+    std::env::var("FIL_PROOFS_P2_BOUND_CORES")
+        .and_then(|v| match v.parse() {
+            Ok(val) => Ok(val),
+            Err(_) => {
+                error!("Invalid FIL_PROOFS_P2_BOUND_CORES! Defaulting to {}", P2_GROUP_SIZE);
+                Ok(P2_GROUP_SIZE)
+            }
+        })
+        .unwrap_or(P2_GROUP_SIZE) as usize
+}
+
+custom_derive! {
+    #[derive(Debug, PartialEq, EnumFromStr)]
+    pub enum P2BoundPolicy
+    {
+        NoBinding,
+        Strict,
+        Weak,
+    }
+}
+
+pub fn p2_binding_policy() -> P2BoundPolicy {
+    std::env::var("FIL_PROOFS_P2_BINDING_POLICY")
+    .and_then(|v| match v.parse() {
+        Ok(val) => Ok(val),
+        Err(_) => {
+            error!("Invalid FIL_PROOFS_P2_BINDING_POLICY! Defaulting to {:?}", P2BoundPolicy::NoBinding);
+            Ok(P2BoundPolicy::NoBinding)
+        }
+    })
+    .unwrap_or(P2BoundPolicy::NoBinding)
 }

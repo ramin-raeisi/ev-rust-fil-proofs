@@ -2,7 +2,7 @@ use bellperson::{
     bls::Engine,
     gadgets::{
         boolean::{AllocatedBit, Boolean},
-        multipack::pack_into_inputs,
+        multipack::{pack_into_inputs, pack_into_inputs_with_align},
     },
     ConstraintSystem, SynthesisError,
 };
@@ -47,6 +47,14 @@ impl UInt64 {
             CS: ConstraintSystem<E>,
     {
         pack_into_inputs(cs, &self.bits)
+    }
+
+    pub fn pack_into_input_with_align<E, CS>(&self, cs: CS, shift: usize) -> Result<(), SynthesisError>
+        where
+            E: Engine,
+            CS: ConstraintSystem<E>,
+    {
+        pack_into_inputs_with_align(cs, &self.bits, shift)
     }
 
     /// Allocate a `UInt64` in the constraint system

@@ -1,18 +1,20 @@
 use std::marker::PhantomData;
-
+use log::*;
 use anyhow::ensure;
+use std::time::Instant;
 use bellperson::{
     bls::{Bls12, Fr},
-    gadgets::num::AllocatedNum,
-    Circuit, ConstraintSystem, SynthesisError,
+    gadgets::{num::AllocatedNum, uint32::UInt32},
+    Circuit, ConstraintSystem, SynthesisError, groth16::prover::ProvingAssignment,
 };
 use filecoin_hashers::{HashFunction, Hasher};
 use fr32::u64_into_fr;
+use rayon::prelude::*;
 use storage_proofs_core::{
     compound_proof::{CircuitComponent, CompoundProof},
     drgraph::Graph,
     error::Result,
-    gadgets::{constraint, por::PoRCompound},
+    gadgets::{constraint, encode::encode, por::PoRCompound, uint64::UInt64},
     merkle::{BinaryMerkleTree, MerkleTreeTrait},
     parameter_cache::{CacheableParameters, ParameterSetMetadata},
     por::{self, PoR},
@@ -20,7 +22,7 @@ use storage_proofs_core::{
     util::reverse_bit_numbering,
 };
 
-use crate::stacked::{circuit::params::Proof, StackedDrg};
+use crate::stacked::{circuit::{params::{Proof, enforce_inclusion}, create_label_circuit, hash::hash_single_column, column::AllocatedColumn}, StackedDrg};
 
 /// Stacked DRG based Proof of Replication.
 ///
@@ -168,15 +170,24 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
             );
         }
 
-        for (i, proof) in proofs.into_iter().enumerate() {
+        let len = proofs.len();
+        let mut gen_cs = cs.make_vector_copy(len)?;
+        let mut unit = cs.make_copy()?;
+
+        
+        proofs.into_par_iter().enumerate().zip(gen_cs.par_iter_mut())
+        .for_each( |((i, proof), other_cs) | {
             proof.synthesize(
-                &mut cs.namespace(|| format!("challenge_{}", i)),
+                &mut other_cs.namespace(|| format!("challenge_{}", i)),
                 public_params.layer_challenges.layers(),
                 &comm_d_num,
                 &comm_c_num,
                 &comm_r_last_num,
                 &replica_id_bits,
-            )?;
+            ).unwrap();
+        });
+        for other_cs in gen_cs {
+            cs.part_aggregate_element(other_cs, &unit);
         }
 
         Ok(())
