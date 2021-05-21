@@ -338,7 +338,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         config: StoreConfig,
         layers_bound: usize,
     ) -> Result<(Labels<Tree>, Vec<LayerState>)> {
-        let mut parent_cache = graph.parent_cache()?;
+        let parent_cache = graph.parent_cache()?;
 
         ensure!(layers_bound <= layer_challenges.layers(), "layers bound must be less or equal than the number of layers");
 

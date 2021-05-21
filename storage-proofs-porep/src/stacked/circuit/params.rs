@@ -1,12 +1,9 @@
 use std::marker::PhantomData;
-use log::*;
-use std::time::Instant;
-use std::sync::{Arc, RwLock};
 
 use bellperson::{
-    bls::{Bls12, Fr, Engine},
+    bls::{Bls12, Fr},
     gadgets::{boolean::Boolean, num::AllocatedNum, uint32::UInt32},
-    ConstraintSystem, SynthesisError, Index, Variable,
+    ConstraintSystem, SynthesisError,
 };
 use filecoin_hashers::{Hasher, PoseidonArity};
 use generic_array::typenum::{U0, U2};
@@ -17,10 +14,9 @@ use storage_proofs_core::{
     merkle::{DiskStore, MerkleProofTrait, MerkleTreeTrait, MerkleTreeWrapper},
     util::reverse_bit_numbering,
 };
-use rayon::prelude::*;
 
 use crate::stacked::{
-    circuit::{column_proof::ColumnProof, column::AllocatedColumn, create_label_circuit, hash::hash_single_column},
+    circuit::{column_proof::ColumnProof, create_label_circuit, hash::hash_single_column},
     vanilla::{
         Proof as VanillaProof, PublicParams, ReplicaColumnProof as VanillaReplicaColumnProof,},
 };
