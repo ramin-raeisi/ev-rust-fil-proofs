@@ -1,7 +1,7 @@
 use bellperson::{
     bls::{Bls12, Fr},
     gadgets::num::AllocatedNum,
-    ConstraintSystem, SynthesisError, Variable, Index,
+    ConstraintSystem, SynthesisError,
 };
 use filecoin_hashers::Hasher;
 use storage_proofs_core::merkle::MerkleTreeTrait;

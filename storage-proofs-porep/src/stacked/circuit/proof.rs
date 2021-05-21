@@ -1,11 +1,9 @@
 use std::marker::PhantomData;
-use log::*;
 use anyhow::ensure;
-use std::time::Instant;
 use bellperson::{
     bls::{Bls12, Fr},
-    gadgets::{num::AllocatedNum, uint32::UInt32},
-    Circuit, ConstraintSystem, SynthesisError, groth16::prover::ProvingAssignment,
+    gadgets::{num::AllocatedNum,},
+    Circuit, ConstraintSystem, SynthesisError,
 };
 use filecoin_hashers::{HashFunction, Hasher};
 use fr32::u64_into_fr;
@@ -14,7 +12,7 @@ use storage_proofs_core::{
     compound_proof::{CircuitComponent, CompoundProof},
     drgraph::Graph,
     error::Result,
-    gadgets::{constraint, encode::encode, por::PoRCompound, uint64::UInt64},
+    gadgets::{constraint, por::PoRCompound,},
     merkle::{BinaryMerkleTree, MerkleTreeTrait},
     parameter_cache::{CacheableParameters, ParameterSetMetadata},
     por::{self, PoR},
@@ -22,7 +20,7 @@ use storage_proofs_core::{
     util::reverse_bit_numbering,
 };
 
-use crate::stacked::{circuit::{params::{Proof, enforce_inclusion}, create_label_circuit, hash::hash_single_column, column::AllocatedColumn}, StackedDrg};
+use crate::stacked::{circuit::{params::Proof,}, StackedDrg};
 
 /// Stacked DRG based Proof of Replication.
 ///
@@ -172,7 +170,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
 
         let len = proofs.len();
         let mut gen_cs = cs.make_vector_copy(len)?;
-        let mut unit = cs.make_copy()?;
+        let unit = cs.make_copy()?;
 
         
         proofs.into_par_iter().enumerate().zip(gen_cs.par_iter_mut())

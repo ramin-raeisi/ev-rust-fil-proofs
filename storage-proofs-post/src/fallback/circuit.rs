@@ -168,7 +168,7 @@ impl<Tree: 'static + MerkleTreeTrait> Circuit<Bls12> for &Sector<Tree> {
 
         let len = leafs.len();
         let mut gen_cs = cs.make_vector_copy(len)?;
-        let mut unit = cs.make_copy()?;
+        let unit = cs.make_copy()?;
         // 2. Verify Inclusion Paths
         leafs.into_par_iter().zip(paths.into_par_iter()
         .zip(gen_cs.par_iter_mut())).enumerate()
