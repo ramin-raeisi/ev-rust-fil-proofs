@@ -1,7 +1,7 @@
 use bellperson::{
     bls::{Bls12, Fr},
     gadgets::num::AllocatedNum,
-    ConstraintSystem, SynthesisError,
+    ConstraintSystem, SynthesisError, Variable, Index,
 };
 use filecoin_hashers::Hasher;
 use storage_proofs_core::merkle::MerkleTreeTrait;
@@ -79,5 +79,22 @@ impl AllocatedColumn {
             self.rows.len()
         );
         &self.rows[layer - 1]
+    }
+
+    pub fn get_mut_value(&mut self, layer: usize) -> &mut AllocatedNum<Bls12> {
+        assert!(layer > 0, "layers are 1 indexed");
+        assert!(
+            layer <= self.rows.len(),
+            "layer {} out of range: 1..={}",
+            layer,
+            self.rows.len()
+        );
+        &mut self.rows[layer - 1]
+    }
+
+    pub fn empty(layers : usize) -> Self {
+        AllocatedColumn {
+            rows: vec![AllocatedNum::empty(); layers],
+        }
     }
 }

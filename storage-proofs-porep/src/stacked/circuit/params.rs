@@ -1,9 +1,12 @@
 use std::marker::PhantomData;
+use log::*;
+use std::time::Instant;
+use std::sync::{Arc, RwLock};
 
 use bellperson::{
-    bls::{Bls12, Fr},
+    bls::{Bls12, Fr, Engine},
     gadgets::{boolean::Boolean, num::AllocatedNum, uint32::UInt32},
-    ConstraintSystem, SynthesisError,
+    ConstraintSystem, SynthesisError, Index, Variable,
 };
 use filecoin_hashers::{Hasher, PoseidonArity};
 use generic_array::typenum::{U0, U2};
@@ -14,12 +17,12 @@ use storage_proofs_core::{
     merkle::{DiskStore, MerkleProofTrait, MerkleTreeTrait, MerkleTreeWrapper},
     util::reverse_bit_numbering,
 };
+use rayon::prelude::*;
 
 use crate::stacked::{
-    circuit::{column_proof::ColumnProof, create_label_circuit, hash::hash_single_column},
+    circuit::{column_proof::ColumnProof, column::AllocatedColumn, create_label_circuit, hash::hash_single_column},
     vanilla::{
-        Proof as VanillaProof, PublicParams, ReplicaColumnProof as VanillaReplicaColumnProof,
-    },
+        Proof as VanillaProof, PublicParams, ReplicaColumnProof as VanillaReplicaColumnProof,},
 };
 
 type TreeAuthPath<T> = AuthPath<
@@ -92,7 +95,6 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             _t: PhantomData,
         }
     }
-
     /// Circuit synthesis.
     #[allow(clippy::too_many_arguments)]
     pub fn synthesize<CS: ConstraintSystem<Bls12>>(
@@ -275,6 +277,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
 
         Ok(())
     }
+
 }
 
 impl<Tree: MerkleTreeTrait, G: Hasher> From<VanillaProof<Tree, G>> for Proof<Tree, G>
@@ -311,7 +314,7 @@ impl<Tree: MerkleTreeTrait, G: Hasher> From<VanillaProof<Tree, G>> for Proof<Tre
 }
 
 /// Enforce the inclusion of the given path, to the given leaf and the root.
-fn enforce_inclusion<H, U, V, W, CS: ConstraintSystem<Bls12>>(
+pub fn enforce_inclusion<H, U, V, W, CS: ConstraintSystem<Bls12>>(
     cs: CS,
     path: AuthPath<H, U, V, W>,
     root: &AllocatedNum<Bls12>,
