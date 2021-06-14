@@ -2,7 +2,12 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::type_repetition_in_bounds)]
+#![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::redundant_slicing)]
+#![allow(clippy::unnecessary_wraps)]
 #![warn(clippy::unwrap_used)]
+#![warn(clippy::ptr_arg)]
+#![warn(clippy::unnecessary_lazy_evaluations)]
 
 use std::convert::TryInto;
 
