@@ -125,7 +125,7 @@ fn test_extract_all<Tree: 'static + MerkleTreeTrait>() {
         (mmapped_data.as_mut()).into(),
         None,
         config.clone(),
-        replica_path.clone(),
+        replica_path,
     )
     .expect("replication failed");
 
@@ -166,7 +166,7 @@ fn test_extract_all<Tree: 'static + MerkleTreeTrait>() {
 
     assert_ne!(data, &mmapped_data[..], "replication did not change data");
 
-    let decoded_data = StackedDrg::<Tree, Blake2sHasher>::extract_all(
+    StackedDrg::<Tree, Blake2sHasher>::extract_all(
         &pp,
         &replica_id,
         mmapped_data.as_mut(),
@@ -174,7 +174,7 @@ fn test_extract_all<Tree: 'static + MerkleTreeTrait>() {
     )
     .expect("failed to extract data");
 
-    assert_eq!(data, decoded_data);
+    assert_eq!(data, mmapped_data.as_ref());
 
     cache_dir.close().expect("Failed to remove cache dir");
 }
@@ -245,7 +245,7 @@ fn test_stacked_porep_resume_seal() {
         (mmapped_data1.as_mut()).into(),
         None,
         config.clone(),
-        replica_path1.clone(),
+        replica_path1,
     )
     .expect("replication failed 1");
     clear_temp();
@@ -257,7 +257,7 @@ fn test_stacked_porep_resume_seal() {
         (mmapped_data2.as_mut()).into(),
         None,
         config.clone(),
-        replica_path2.clone(),
+        replica_path2,
     )
     .expect("replication failed 2");
     clear_temp();
@@ -284,7 +284,7 @@ fn test_stacked_porep_resume_seal() {
         (mmapped_data3.as_mut()).into(),
         None,
         config.clone(),
-        replica_path3.clone(),
+        replica_path3,
     )
     .expect("replication failed 3");
     clear_temp();
@@ -294,7 +294,7 @@ fn test_stacked_porep_resume_seal() {
     assert_eq!(&mmapped_data1[..], &mmapped_data2[..]);
     assert_eq!(&mmapped_data2[..], &mmapped_data3[..]);
 
-    let decoded_data = StackedDrg::<Tree, Blake2sHasher>::extract_all(
+    StackedDrg::<Tree, Blake2sHasher>::extract_all(
         &pp,
         &replica_id,
         mmapped_data1.as_mut(),
@@ -302,7 +302,7 @@ fn test_stacked_porep_resume_seal() {
     )
     .expect("failed to extract data");
 
-    assert_eq!(data, decoded_data);
+    assert_eq!(data, mmapped_data1.as_ref());
 
     cache_dir.close().expect("Failed to remove cache dir");
 }
