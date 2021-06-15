@@ -51,10 +51,12 @@ impl<H: Hasher> ProverAux<H> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicInputs<T: Domain> {
+    #[serde(bound = "")]
     pub replica_id: Option<T>,
     pub challenges: Vec<usize>,
+    #[serde(bound = "")]
     pub tau: Option<Tau<T>>,
 }
 
@@ -468,7 +470,7 @@ impl<'a, H, G> PoRep<'a, H, H> for DrgPoRep<'a, H, G>
             let end = start + NODE_SIZE;
 
             let node_data = <H as Hasher>::Domain::try_from_bytes(&data.as_ref()[start..end])?;
-            let encoded: H::Domain = sloth_encode::<H>(key.as_ref(), &node_data)?;
+            let encoded: H::Domain = sloth_encode::<H>(key.as_ref(), &node_data);
 
             encoded.write_bytes(&mut data.as_mut()[start..end])?;
         }
@@ -496,36 +498,42 @@ impl<'a, H, G> PoRep<'a, H, H> for DrgPoRep<'a, H, G>
     fn extract_all<'b>(
         pp: &'b Self::PublicParams,
         replica_id: &'b <H as Hasher>::Domain,
-        data: &'b [u8],
+        data: &'b mut [u8],
         _config: Option<StoreConfig>,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<()> {
         decode(&pp.graph, replica_id, data, None)
     }
 
     fn extract(
         pp: &Self::PublicParams,
         replica_id: &<H as Hasher>::Domain,
-        data: &[u8],
+        data: &mut [u8],
         node: usize,
         _config: Option<StoreConfig>,
-    ) -> Result<Vec<u8>> {
-        Ok(decode_block(&pp.graph, replica_id, data, None, node)?.into_bytes())
+    ) -> Result<()> {
+        let block = decode_block(&pp.graph, replica_id, &data, None, node)?;
+        let start = node * NODE_SIZE;
+        let end = start + NODE_SIZE;
+        let dest = &mut data[start..end];
+        dest.copy_from_slice(AsRef::<[u8]>::as_ref(&block));
+
+        Ok(())
     }
 }
 
 pub fn decode<'a, H, G>(
     graph: &'a G,
     replica_id: &'a <H as Hasher>::Domain,
-    data: &'a [u8],
+    data: &'a mut [u8],
     exp_parents_data: Option<&'a [u8]>,
-) -> Result<Vec<u8>>
-    where
-        H: Hasher,
-        G::Key: AsRef<H::Domain>,
-        G: Graph<H> + Sync,
+) -> Result<()>
+where
+    H: Hasher,
+    G::Key: AsRef<H::Domain>,
+    G: Graph<H> + Sync,
 {
     // TODO: proper error handling
-    let result = (0..graph.size())
+    let result: Vec<u8> = (0..graph.size())
         .into_par_iter()
         .flat_map(|i| {
             decode_block::<H, G>(graph, replica_id, data, exp_parents_data, i)
@@ -534,7 +542,8 @@ pub fn decode<'a, H, G>(
         })
         .collect();
 
-    Ok(result)
+    data.copy_from_slice(&result);
+    Ok(())
 }
 
 pub fn decode_block<'a, H, G>(
@@ -605,10 +614,10 @@ pub fn replica_id<H: Hasher>(prover_id: [u8; 32], sector_id: [u8; 32]) -> H::Dom
     H::Function::hash_leaf(&to_hash)
 }
 
-fn sloth_encode<H: Hasher>(key: &H::Domain, ciphertext: &H::Domain) -> Result<H::Domain> {
+fn sloth_encode<H: Hasher>(key: &H::Domain, ciphertext: &H::Domain) -> H::Domain {
     // TODO: validate this is how sloth should work in this case
     let k = (*key).into();
     let c = (*ciphertext).into();
 
-    Ok(sloth::encode(&k, &c).into())
+    sloth::encode(&k, &c).into()
 }

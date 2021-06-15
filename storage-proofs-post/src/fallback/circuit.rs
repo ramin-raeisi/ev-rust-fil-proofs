@@ -132,19 +132,19 @@ impl<Tree: 'static + MerkleTreeTrait> Circuit<Bls12> for &Sector<Tree> {
         let comm_r_last_num = AllocatedNum::alloc(cs.namespace(|| "comm_r_last"), || {
             comm_r_last
                 .map(Into::into)
-                .ok_or_else(|| SynthesisError::AssignmentMissing)
+                .ok_or(SynthesisError::AssignmentMissing)
         })?;
 
         let comm_c_num = AllocatedNum::alloc(cs.namespace(|| "comm_c"), || {
             comm_c
                 .map(Into::into)
-                .ok_or_else(|| SynthesisError::AssignmentMissing)
+                .ok_or(SynthesisError::AssignmentMissing)
         })?;
 
         let comm_r_num = AllocatedNum::alloc(cs.namespace(|| "comm_r"), || {
             comm_r
                 .map(Into::into)
-                .ok_or_else(|| SynthesisError::AssignmentMissing)
+                .ok_or(SynthesisError::AssignmentMissing)
         })?;
 
         comm_r_num.inputize(cs.namespace(|| "comm_r_input"))?;
@@ -168,7 +168,7 @@ impl<Tree: 'static + MerkleTreeTrait> Circuit<Bls12> for &Sector<Tree> {
 
         let len = leafs.len();
         let mut gen_cs = cs.make_vector_copy(len)?;
-        let mut unit = cs.make_copy()?;
+        let unit = cs.make_copy()?;
         // 2. Verify Inclusion Paths
         leafs.into_par_iter().zip(paths.into_par_iter()
         .zip(gen_cs.par_iter_mut())).enumerate()

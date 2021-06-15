@@ -1,5 +1,6 @@
 use std::fmt::{self, Debug, Formatter};
 use std::hash::Hasher as StdHasher;
+use std::panic::panic_any;
 
 use anyhow::ensure;
 use bellperson::{
@@ -125,7 +126,7 @@ impl Element for Blake2sDomain {
     fn from_slice(bytes: &[u8]) -> Self {
         match Blake2sDomain::try_from_bytes(bytes) {
             Ok(res) => res,
-            Err(err) => panic!(err),
+            Err(err) => panic_any(err),
         }
     }
 
@@ -171,6 +172,7 @@ impl Domain for Blake2sDomain {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<Blake2sDomain> for Blake2sHash {
     fn into(self) -> Blake2sDomain {
         let mut res = Blake2sDomain::default();
@@ -244,7 +246,7 @@ impl HashFunction<Blake2sDomain> for Blake2sFunction {
         bits: &[Boolean],
     ) -> Result<AllocatedNum<Bls12>, SynthesisError> {
         let personalization = vec![0u8; 8];
-        let alloc_bits = blake2s_circuit(cs.namespace(|| "hash"), &bits[..], &personalization)?;
+        let alloc_bits = blake2s_circuit(cs.namespace(|| "hash"), bits, &personalization)?;
 
         multipack::pack_bits(cs.namespace(|| "pack"), &alloc_bits)
     }

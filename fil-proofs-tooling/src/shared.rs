@@ -176,7 +176,7 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
             .zip(sector_ids.par_iter())
             .zip(piece_infos.par_iter())
             .map(
-                |((((cache_dir, staged_file), sealed_file), sector_id), piece_infos)| {
+                |((((cache_dir, staged_file), sealed_file), sector_id), _piece_infos)| {
                     seal_pre_commit_phase1(
                         porep_config,
                         cache_dir,
@@ -185,7 +185,7 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
                         PROVER_ID,
                         *sector_id,
                         TICKET_BYTES,
-                        piece_infos,
+                        //piece_infos,
                     )
                 },
             )
@@ -218,15 +218,13 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
                 seal_pre_commit_output.comm_r,
                 cache_dir.into_path(),
             )
-                .expect("failed to create PrivateReplicaInfo")
-        })
-        .collect::<Vec<_>>();
+            .expect("failed to create PrivateReplicaInfo")
+        });
 
     let pub_infos = seal_pre_commit_outputs
         .return_value
         .iter()
-        .map(|sp| PublicReplicaInfo::new(sp.comm_r).expect("failed to create PublicReplicaInfo"))
-        .collect::<Vec<_>>();
+        .map(|sp| PublicReplicaInfo::new(sp.comm_r).expect("failed to create PublicReplicaInfo"));
 
     for (((sector_id, piece_info), priv_info), pub_info) in sector_ids
         .into_iter()
