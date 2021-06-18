@@ -170,6 +170,73 @@ impl<Tree: 'static + MerkleTreeTrait> Circuit<Bls12> for &Sector<Tree> {
         let mut gen_cs = cs.make_vector_copy(len)?;
         let unit = cs.make_copy()?;
         // 2. Verify Inclusion Paths
+        for (i, (leaf, path)) in leafs.iter().zip(paths.iter()).enumerate() {
+            PoRCircuit::<Tree>::synthesize(
+                cs.namespace(|| format!("challenge_inclusion_{}", i)),
+                Root::Val(*leaf),
+                path.clone(),
+                Root::from_allocated::<CS>(comm_r_last_num.clone()),
+                true,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn custom_synthesize<CS: ConstraintSystem<Bls12>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
+        let Sector {
+            comm_r,
+            comm_c,
+            comm_r_last,
+            leafs,
+            paths,
+            ..
+        } = self;
+
+        assert_eq!(paths.len(), leafs.len());
+
+        // 1. Verify comm_r
+        let comm_r_last_num = AllocatedNum::alloc(cs.namespace(|| "comm_r_last"), || {
+            comm_r_last
+                .map(Into::into)
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
+
+        let comm_c_num = AllocatedNum::alloc(cs.namespace(|| "comm_c"), || {
+            comm_c
+                .map(Into::into)
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
+
+        let comm_r_num = AllocatedNum::alloc(cs.namespace(|| "comm_r"), || {
+            comm_r
+                .map(Into::into)
+                .ok_or(SynthesisError::AssignmentMissing)
+        })?;
+
+        comm_r_num.inputize(cs.namespace(|| "comm_r_input"))?;
+
+        // 1. Verify H(Comm_C || comm_r_last) == comm_r
+        {
+            let hash_num = <Tree::Hasher as Hasher>::Function::hash2_circuit(
+                cs.namespace(|| "H_comm_c_comm_r_last"),
+                &comm_c_num,
+                &comm_r_last_num,
+            )?;
+
+            // Check actual equality
+            constraint::equal(
+                cs,
+                || "enforce_comm_c_comm_r_last_hash_comm_r",
+                &comm_r_num,
+                &hash_num,
+            );
+        } 
+
+        let len = leafs.len();
+        let mut gen_cs = cs.make_vector_copy(len)?;
+        let unit = cs.make_copy()?;
+        // 2. Verify Inclusion Paths
         leafs.into_par_iter().zip(paths.into_par_iter()
         .zip(gen_cs.par_iter_mut())).enumerate()
         .for_each( | (i, (leaf, (path, other_cs))) | {
@@ -261,13 +328,12 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let FallbackPoStCircuit { sectors, .. } = self;
-
         let css = sectors
             .into_par_iter()
             .map(|sector| {
                 let mut cs = CS::new();
                 cs.alloc_input(|| "temp ONE", || Ok(Fr::one()))?;
-                sector.synthesize(&mut cs)?;
+                sector.custom_synthesize(&mut cs)?;
                 Ok(cs)
             })
             .collect::<Result<Vec<_>, SynthesisError>>()?;
@@ -284,7 +350,6 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let FallbackPoStCircuit { sectors, .. } = self;
-
         let num_chunks = SETTINGS.window_post_synthesis_num_cpus as usize;
 
         let chunk_size = (sectors.len() / num_chunks).max(1);
@@ -300,7 +365,7 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
                 .zip(gen_cs.par_iter_mut())
                 .for_each( |((i, sector), sector_cs)| {
                     let mut sector_cs = sector_cs.namespace(|| format!("sector_{}", i));
-                    sector.synthesize(&mut sector_cs).unwrap();
+                    sector.custom_synthesize(&mut sector_cs).unwrap();
                 });
                 for other_cs in gen_cs {
                     cs.aggregate_element(other_cs);
