@@ -280,7 +280,7 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
             .map(|sector| {
                 let mut cs = CS::new();
                 cs.alloc_input(|| "temp ONE", || Ok(Fr::one()))?;
-                sector.custom_synthesize(&mut cs)?;
+                sector.synthesize(&mut cs)?;
                 Ok(cs)
             })
             .collect::<Result<Vec<_>, SynthesisError>>()?;
@@ -312,7 +312,7 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
                 .zip(gen_cs.par_iter_mut())
                 .for_each( |((i, sector), sector_cs)| {
                     let mut sector_cs = sector_cs.namespace(|| format!("sector_{}", i));
-                    sector.custom_synthesize(&mut sector_cs).unwrap();
+                    sector.synthesize(&mut sector_cs).unwrap();
                 });
                 for other_cs in gen_cs {
                     cs.aggregate_element(other_cs);
