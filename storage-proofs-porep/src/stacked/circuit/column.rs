@@ -1,7 +1,7 @@
 use bellperson::{
     bls::{Bls12, Fr},
     gadgets::num::AllocatedNum,
-    ConstraintSystem, SynthesisError, Variable, Index,
+    ConstraintSystem, SynthesisError,
 };
 use filecoin_hashers::Hasher;
 use storage_proofs_core::merkle::MerkleTreeTrait;
@@ -48,7 +48,7 @@ impl Column {
             .enumerate()
             .map(|(i, val)| {
                 AllocatedNum::alloc(cs.namespace(|| format!("column_num_row_{}", i)), || {
-                    val.ok_or_else(|| SynthesisError::AssignmentMissing)
+                    val.ok_or(SynthesisError::AssignmentMissing)
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;

@@ -1,6 +1,6 @@
 [package]
 name = "storage-proofs-porep"
-version = "6.0.0"
+version = "8.0.1"
 authors = ["dignifiedquire <me@dignifiedquire.com>"]
 description = "Proofs of replication"
 license = "MIT OR Apache-2.0"
@@ -11,9 +11,9 @@ readme = "README.md"
 [dependencies]
 crossbeam = "0.8"
 digest = "0.9"
-storage-proofs-core = { path = "../storage-proofs-core", version = "^6.0.0", default-features = false}
-sha2raw = { path = "../sha2raw", version = "^2.0.0"}
-filecoin-hashers = { path = "../filecoin-hashers", version = "1.0.0", default-features = false, features = ["poseidon", "sha256"]}
+storage-proofs-core = { path = "../storage-proofs-core", version = "^8.0.0", default-features = false}
+sha2raw = { path = "../sha2raw", version = "^3.0.0"}
+filecoin-hashers = { path = "../filecoin-hashers", version = "^3.0.0", default-features = false, features = ["poseidon", "sha256"]}
 rand = "0.7"
 merkletree = { git = "ssh://git@github.com/NilFoundation/merkletree", branch = "master"}
 mapr = "0.8.0"
@@ -26,7 +26,7 @@ rayon-futures = "0.1.1"
 serde = { version = "1.0", features = ["derive"] }
 bellperson = { package = "bellperson", path = "../../fil-zk", default-features = false }
 serde_json = "1.0"
-ff = { version = "0.2.3", package = "fff" }
+ff = { version = "0.3.1", package = "fff" }
 log = "0.4.7"
 pretty_assertions = "0.6.1"
 generic-array = "0.14.4"
@@ -47,13 +47,18 @@ thread_binder = {git = "ssh://git@github.com/NilFoundation/thread_binder", branc
 enum_derive = "0.1.7"
 custom_derive = "0.1.7"
 
+[target."cfg(target_arch = \"aarch64\")".dependencies]
+sha2 = { version = "0.9.3", features = ["compress", "asm"] }
+[target."cfg(not(target_arch = \"aarch64\"))".dependencies]
+sha2 = { version = "0.9.3", features = ["compress"] }
+
 [dev-dependencies]
 tempfile = "3"
 rand_xorshift = "0.2.0"
 criterion = "0.3.0"
 glob = "0.3.0"
 pretty_env_logger = "0.4.0"
-filecoin-hashers = { path = "../filecoin-hashers", version = "1.0.0", default-features = false, features = ["poseidon", "sha256", "blake2s"]}
+filecoin-hashers = { path = "../filecoin-hashers", version = "^3.0.0", default-features = false, features = ["poseidon", "sha256", "blake2s"]}
 
 [features]
 default = ["blst", "gpu"]

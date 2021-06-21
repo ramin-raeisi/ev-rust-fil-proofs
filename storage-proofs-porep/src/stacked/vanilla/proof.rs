@@ -1,5 +1,6 @@
 use std::fs;
 use std::marker::PhantomData;
+use std::panic::panic_any;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex};
 
@@ -108,9 +109,12 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let mut parents = vec![0; base_degree];
             graph.base_parents(x, &mut parents)?;
 
-            for parent in &parents {
-                columns.push(t_aux.column(*parent)?);
-            }
+            columns.extend(
+                parents
+                    .into_par_iter()
+                    .map(|parent| t_aux.column(parent))
+                    .collect::<Result<Vec<Column<Tree::Hasher>>>>()?,
+            );
 
             debug_assert!(columns.len() == base_degree);
 
@@ -121,7 +125,10 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let mut parents = vec![0; graph.expansion_degree()];
             graph.expanded_parents(x, &mut parents)?;
 
-            parents.iter().map(|parent| t_aux.column(*parent)).collect()
+            parents
+                .into_par_iter()
+                .map(|parent| t_aux.column(parent))
+                .collect()
         };
 
         (0..partition_count)
@@ -199,7 +206,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 graph.base_parents(challenge, &mut parents)?;
 
                                 parents
-                                    .into_iter()
+                                    .into_par_iter()
                                     .map(|parent| t_aux.domain_node_at_layer(layer, parent))
                                     .collect::<Result<_>>()?
                             } else {
@@ -208,7 +215,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 let base_parents_count = graph.base_graph().degree();
 
                                 parents
-                                    .into_iter()
+                                    .into_par_iter()
                                     .enumerate()
                                     .map(|(i, parent)| {
                                         if i < base_parents_count {
@@ -238,7 +245,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 let labeled_node = rcp.c_x.get_node_at_layer(layer)?;
                                 assert!(
                                     proof.verify(&pub_inputs.replica_id, &labeled_node),
-                                    format!("Invalid encoding proof generated at layer {}", layer)
+                                    "Invalid encoding proof generated at layer {}",
+                                    layer,
                                 );
                                 trace!("Valid encoding proof generated at layer {}", layer);
                             }
@@ -338,7 +346,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         config: StoreConfig,
         layers_bound: usize,
     ) -> Result<(Labels<Tree>, Vec<LayerState>)> {
-        let mut parent_cache = graph.parent_cache()?;
+        let parent_cache = graph.parent_cache()?;
 
         ensure!(layers_bound <= layer_challenges.layers(), "layers bound must be less or equal than the number of layers");
 
@@ -364,24 +372,26 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     ) -> Result<LabelsCache<Tree>> {
         let mut parent_cache = graph.parent_cache()?;
 
-        if SETTINGS.use_multicore_sdr {
-            info!("multi core replication");
-            create_label::multi::create_labels_for_decoding(
-                graph,
-                &parent_cache,
-                layer_challenges.layers(),
-                replica_id,
-                config,
-            )
-        } else {
-            info!("single core replication");
-            create_label::single::create_labels_for_decoding(
-                graph,
-                &mut parent_cache,
-                layer_challenges.layers(),
-                replica_id,
-                config,
-            )
+        {
+            if SETTINGS.use_multicore_sdr {
+                info!("multi core replication");
+                create_label::multi::create_labels_for_decoding(
+                    graph,
+                    &parent_cache,
+                    layer_challenges.layers(),
+                    replica_id,
+                    config,
+                )
+            } else {
+                info!("single core replication");
+                create_label::single::create_labels_for_decoding(
+                    graph,
+                    &mut parent_cache,
+                    layer_challenges.layers(),
+                    replica_id,
+                    config,
+                )
+            }
         }
     }
 
@@ -624,7 +634,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 )?;
                 tree_c.root()
             }
-            _ => panic!("Unsupported column arity"),
+            _ => panic_any("Unsupported column arity"),
         };
         info!("tree_c done");
 
@@ -790,7 +800,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             info!("generating tree r last using the GPU");
             let max_gpu_tree_batch_size = SETTINGS.max_gpu_tree_batch_size as usize;
 
-            let _gpu_lock = GPU_LOCK.lock().unwrap();
+            let _gpu_lock = GPU_LOCK.lock().expect("failed to get gpu lock");
             let mut tree_builder = TreeBuilder::<Tree::Arity>::new(
                 Some(BatcherType::OpenCL),
                 nodes_count,
@@ -887,7 +897,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     // Assumes data is all zeros.
     // Replica path is used to create configs, but is not read.
     // Instead new zeros are provided (hence the need for replica to be all zeros).
-    #[cfg(not(feature = "gpu"))]
+    #[cfg(not(any(feature = "gpu")))]
     fn generate_fake_tree_r_last<TreeArity>(
         nodes_count: usize,
         tree_count: usize,

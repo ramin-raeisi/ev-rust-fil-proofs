@@ -1,10 +1,11 @@
 use std::cell::UnsafeCell;
 use std::fs::File;
+use std::hint::spin_loop;
 use std::marker::{PhantomData, Sync};
 use std::mem::size_of;
-use std::path::PathBuf;
+use std::path::Path;
 use std::slice;
-use std::sync::atomic::{spin_loop_hint, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use anyhow::Result;
 use byte_slice_cast::{AsSliceOf, FromByteSlice};
@@ -29,6 +30,16 @@ struct IncrementingCursor {
     cur_safe: AtomicUsize,
 }
 
+fn compare_and_swap(atomic: &AtomicUsize, before: usize, after: usize) -> usize {
+    match atomic.compare_exchange_weak(before, after, Ordering::SeqCst, Ordering::SeqCst) {
+        Ok(x) => {
+            assert_eq!(x, before);
+            before
+        }
+        _ => after,
+    }
+}
+
 /// IncrementingCursor provides an atomic variable which can be incremented such that only one thread attempting the
 /// increment is selected to perform actions required to effect the transition. Unselected threads wait until the
 /// transition has completed. Transition and wait condition are both specified by closures supplied by the caller.
@@ -39,15 +50,17 @@ impl IncrementingCursor {
             cur_safe: AtomicUsize::new(val),
         }
     }
+
     fn store(&self, val: usize) {
         self.cur.store(val, Ordering::SeqCst);
         self.cur_safe.store(val, Ordering::SeqCst);
     }
+
     fn compare_and_swap(&self, before: usize, after: usize) {
-        self.cur.compare_and_swap(before, after, Ordering::SeqCst);
-        self.cur_safe
-            .compare_and_swap(before, after, Ordering::SeqCst);
+        compare_and_swap(&self.cur, before, after);
+        compare_and_swap(&self.cur_safe, before, after);
     }
+
     fn increment<F: Fn() -> bool, G: Fn()>(&self, target: usize, wait_fn: F, advance_fn: G) {
         // Check using `cur_safe`, to ensure we wait until the current cursor value is safe to use.
         // If we were to instead check `cur`, it could have been incremented but not yet safe.
@@ -55,13 +68,12 @@ impl IncrementingCursor {
         if target > cur {
             // Only one producer will successfully increment `cur`. We need this second atomic because we cannot
             // increment `cur_safe` until after the underlying resource has been advanced.
-            let instant_cur = self.cur.compare_and_swap(cur, cur + 1, Ordering::SeqCst);
-
+            let instant_cur = compare_and_swap(&self.cur, cur, cur + 1);
             if instant_cur == cur {
                 // We successfully incremented `self.cur`, so we are responsible for advancing the resource.
                 {
                     while wait_fn() {
-                        spin_loop_hint()
+                        spin_loop()
                     }
                 }
 
@@ -73,7 +85,7 @@ impl IncrementingCursor {
                 // We failed to increment `self.cur_window`, so we must wait for the window to be advanced before
                 // continuing. Wait until it is safe to use the new current window.
                 while self.cur_safe.load(Ordering::SeqCst) != cur + 1 {
-                    spin_loop_hint()
+                    spin_loop()
                 }
             }
         }
@@ -81,7 +93,7 @@ impl IncrementingCursor {
 }
 
 impl<T: FromByteSlice> CacheReader<T> {
-    pub fn new(filename: &PathBuf, window_size: Option<usize>, degree: usize) -> Result<Self> {
+    pub fn new(filename: &Path, window_size: Option<usize>, degree: usize) -> Result<Self> {
         info!("initializing cache");
         let file = File::open(filename)?;
         let size = File::metadata(&file)?.len() as usize;
@@ -132,11 +144,11 @@ impl<T: FromByteSlice> CacheReader<T> {
     pub unsafe fn increment_consumer(&self) {
         self.consumer.fetch_add(1, Ordering::SeqCst);
     }
-    #[inline(always)]
+
     pub fn store_consumer(&self, val: u64) {
         self.consumer.store(val, Ordering::SeqCst);
     }
-    #[inline(always)]
+
     pub fn get_consumer(&self) -> u64 {
         self.consumer.load(Ordering::SeqCst)
     }
@@ -166,6 +178,7 @@ impl<T: FromByteSlice> CacheReader<T> {
         bufs[0] = buf0;
         Ok(())
     }
+
     pub fn finish_reset(&self) -> Result<()> {
         let buf1 = Self::map_buf(self.window_size as u64, self.window_size, &self.file)?;
         let bufs = unsafe { self.get_mut_bufs() };
@@ -208,7 +221,7 @@ impl<T: FromByteSlice> CacheReader<T> {
         let pos = pos % self.window_element_count();
         let targeted_buf = &self.get_bufs()[window % 2];
 
-        &targeted_buf.as_slice_of::<T>().unwrap()[pos..]
+        &targeted_buf.as_slice_of::<T>().expect("as_slice_of failed")[pos..]
     }
 
     /// `pos` is in units of `T`.
@@ -241,7 +254,7 @@ impl<T: FromByteSlice> CacheReader<T> {
 
         let targeted_buf = &self.get_bufs()[window % 2];
 
-        &targeted_buf.as_slice_of::<T>().unwrap()[pos..]
+        &targeted_buf.as_slice_of::<T>().expect("as_slice_of failed")[pos..]
     }
 
     fn advance_rear_window(&self, new_window: usize) {
@@ -254,7 +267,7 @@ impl<T: FromByteSlice> CacheReader<T> {
             self.window_size as usize,
             &self.file,
         )
-            .unwrap();
+        .expect("map_buf failed");
 
         unsafe {
             self.get_mut_bufs()[replace_idx] = new_buf;
@@ -287,7 +300,7 @@ pub fn setup_create_label_memory(
     sector_size: usize,
     degree: usize,
     window_size: Option<usize>,
-    cache_path: &PathBuf,
+    cache_path: &Path,
 ) -> Result<(CacheReader<u32>, MmapMut, MmapMut)> {
     let parents_cache = CacheReader::new(cache_path, window_size, degree)?;
     let layer_labels = allocate_layer(sector_size)?;
