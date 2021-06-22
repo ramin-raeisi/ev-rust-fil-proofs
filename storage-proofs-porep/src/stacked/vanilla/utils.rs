@@ -159,12 +159,25 @@ custom_derive! {
 
 pub fn p2_binding_policy() -> P2BoundPolicy {
     std::env::var("FIL_PROOFS_P2_BINDING_POLICY")
-    .and_then(|v| match v.parse() {
-        Ok(val) => Ok(val),
-        Err(_) => {
-            error!("Invalid FIL_PROOFS_P2_BINDING_POLICY! Defaulting to {:?}", P2BoundPolicy::NoBinding);
-            Ok(P2BoundPolicy::NoBinding)
-        }
-    })
-    .unwrap_or(P2BoundPolicy::NoBinding)
+        .and_then(|v| match v.parse() {
+            Ok(val) => Ok(val),
+            Err(_) => {
+                error!("Invalid FIL_PROOFS_P2_BINDING_POLICY! Defaulting to {:?}", P2BoundPolicy::NoBinding);
+                Ok(P2BoundPolicy::NoBinding)
+            }
+        })
+        .unwrap_or(P2BoundPolicy::NoBinding)
+}
+
+pub fn p2_binding_use_same_set() -> bool {
+    let res: usize = std::env::var("FIL_PROOFS_P2_BINDING_USE_SAME_SET")
+        .and_then(|v| match v.parse() {
+            Ok(val) => Ok(val),
+            Err(_) => {
+                error!("Invalid FIL_PROOFS_P2_BINDING_USE_SAME_SET! Defaulting to {:?}", 1);
+                Ok(1)
+            }
+        })
+        .unwrap_or(1);
+    res != 0
 }

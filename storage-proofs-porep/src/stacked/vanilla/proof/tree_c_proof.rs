@@ -27,7 +27,7 @@ use super::super::{
     },
     proof::StackedDrg,
     cores::{get_p2_core_group, CoreIndex, Cleanup, bind_core_set},
-    utils::{P2BoundPolicy, p2_binding_policy}
+    utils::{P2BoundPolicy, p2_binding_policy, p2_binding_use_same_set}
 };
 
 use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r, get_p2_pool};
@@ -540,56 +540,96 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     {
         info!("generating tree c using the CPU");
         measure_op(GenerateTreeC, || {
-            info!("Building column hashes");
+            // ================= CPU POOL ===============
+            let groups = get_p2_core_group();
+            let mut core_group: Vec<CoreIndex> = vec![];
+            let mut core_group_usize: Vec<usize> = vec![];
 
-            let mut trees = Vec::with_capacity(tree_count);
-            for (i, config) in configs.iter().enumerate() {
-                let mut hashes: Vec<<Tree::Hasher as Hasher>::Domain> =
-                    vec![<Tree::Hasher as Hasher>::Domain::default(); nodes_count];
-
-                rayon::scope(|s| {
-                    let n = num_cpus::get();
-
-                    // only split if we have at least two elements per thread
-                    let num_chunks = if n > nodes_count * 2 { 1 } else { n };
-
-                    // chunk into n chunks
-                    let chunk_size = (nodes_count as f64 / num_chunks as f64).ceil() as usize;
-
-                    // calculate all n chunks in parallel
-                    for (chunk, hashes_chunk) in hashes.chunks_mut(chunk_size).enumerate() {
-                        let labels = &labels;
-
-                        s.spawn(move |_| {
-                            for (j, hash) in hashes_chunk.iter_mut().enumerate() {
-                                let data: Vec<_> = (1..=layers)
-                                    .map(|layer| {
-                                        let store = labels.labels_for_layer(layer);
-                                        let el: <Tree::Hasher as Hasher>::Domain = store
-                                            .read_at((i * nodes_count) + j + chunk * chunk_size)
-                                            .expect("store read_at failure");
-                                        el.into()
-                                    })
-                                    .collect();
-
-                                *hash = hash_single_column(&data).into();
+            let use_same_set = p2_binding_use_same_set();
+            if use_same_set {
+                if let Some(groups) = groups {
+                    for cg in groups {
+                        for core_id in 0..cg.len() {
+                            let core_index = cg.get(core_id);
+                            if let Some(core_index) = core_index {
+                                core_group.push(core_index.clone());
+                                core_group_usize.push(core_index.0)
                             }
-                        });
+                        }
                     }
-                });
-
-                info!("building base tree_c {}/{}", i + 1, tree_count);
-                trees.push(DiskTree::<
-                    Tree::Hasher,
-                    Tree::Arity,
-                    typenum::U0,
-                    typenum::U0,
-                >::from_par_iter_with_config(
-                    hashes.into_par_iter(), config.clone()
-                ));
+                }
+            } else {
+                if let Some(ref groups) = groups {
+                    for cg in groups {
+                        for core_id in 0..cg.len() {
+                            let core_index = cg.get(core_id);
+                            if let Some(core_index) = core_index {
+                                core_group.push(core_index.clone());
+                                core_group_usize.push(core_index.0)
+                            }
+                        }
+                    }
+                }
             }
 
-            assert_eq!(tree_count, trees.len());
+            let core_group_usize = Arc::new(core_group_usize);
+            // =====
+            
+            info!("Building column hashes");
+
+            let pool = get_p2_pool(core_group_usize.clone());
+            pool.install(|| {
+
+                let mut trees = Vec::with_capacity(tree_count);
+                for (i, config) in configs.iter().enumerate() {
+                    let mut hashes: Vec<<Tree::Hasher as Hasher>::Domain> =
+                        vec![<Tree::Hasher as Hasher>::Domain::default(); nodes_count];
+
+                    rayon::scope(|s| {
+                        let n = num_cpus::get();
+
+                        // only split if we have at least two elements per thread
+                        let num_chunks = if n > nodes_count * 2 { 1 } else { n };
+
+                        // chunk into n chunks
+                        let chunk_size = (nodes_count as f64 / num_chunks as f64).ceil() as usize;
+
+                        // calculate all n chunks in parallel
+                        for (chunk, hashes_chunk) in hashes.chunks_mut(chunk_size).enumerate() {
+                            let labels = &labels;
+
+                            s.spawn(move |_| {
+                                for (j, hash) in hashes_chunk.iter_mut().enumerate() {
+                                    let data: Vec<_> = (1..=layers)
+                                        .map(|layer| {
+                                            let store = labels.labels_for_layer(layer);
+                                            let el: <Tree::Hasher as Hasher>::Domain = store
+                                                .read_at((i * nodes_count) + j + chunk * chunk_size)
+                                                .expect("store read_at failure");
+                                            el.into()
+                                        })
+                                        .collect();
+
+                                    *hash = hash_single_column(&data).into();
+                                }
+                            });
+                        }
+                    });
+
+                    info!("building base tree_c {}/{}", i + 1, tree_count);
+                    trees.push(DiskTree::<
+                        Tree::Hasher,
+                        Tree::Arity,
+                        typenum::U0,
+                        typenum::U0,
+                    >::from_par_iter_with_config(
+                        hashes.into_par_iter(), config.clone()
+                    ));
+                }
+
+                assert_eq!(tree_count, trees.len());
+            });
+
             create_disk_tree::<
                 DiskTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>,
             >(configs[0].size.expect("config size failure"), &configs)
