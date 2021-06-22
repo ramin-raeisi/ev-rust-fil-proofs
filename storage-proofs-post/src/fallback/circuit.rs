@@ -167,22 +167,36 @@ impl<Tree: 'static + MerkleTreeTrait> Circuit<Bls12> for &Sector<Tree> {
         } 
 
         let len = leafs.len();
-        let mut gen_cs = cs.make_vector_copy(len)?;
-        let unit = cs.make_copy()?;
+        let algo_type = get_algorithm_type();
         // 2. Verify Inclusion Paths
-        leafs.into_par_iter().zip(paths.into_par_iter()
-        .zip(gen_cs.par_iter_mut())).enumerate()
-        .for_each( | (i, (leaf, (path, other_cs))) | {
-            PoRCircuit::<Tree>::synthesize(
-                other_cs.namespace(|| format!("challenge_inclusion_{}", i)),
-                Root::Val(*leaf),
-                path.clone(),
-                Root::from_allocated::<CS>(comm_r_last_num.clone()),
-                true,
-            ).unwrap();
-        });
-        for other_cs in gen_cs {
-            cs.part_aggregate_element(other_cs, &unit);
+        if algo_type == 1 {
+            for (i, (leaf, path)) in leafs.iter().zip(paths.iter()).enumerate() {
+                PoRCircuit::<Tree>::synthesize(
+                    cs.namespace(|| format!("challenge_inclusion_{}", i)),
+                    Root::Val(*leaf),
+                    path.clone(),
+                    Root::from_allocated::<CS>(comm_r_last_num.clone()),
+                    true,
+                )?;
+            }
+        }
+        else {
+            let mut gen_cs = cs.make_vector_copy(len)?;
+            let unit = cs.make_copy()?;
+            leafs.into_par_iter().zip(paths.into_par_iter()
+            .zip(gen_cs.par_iter_mut())).enumerate()
+            .for_each( | (i, (leaf, (path, other_cs))) | {
+                PoRCircuit::<Tree>::synthesize(
+                    other_cs.namespace(|| format!("challenge_inclusion_{}", i)),
+                    Root::Val(*leaf),
+                    path.clone(),
+                    Root::from_allocated::<CS>(comm_r_last_num.clone()),
+                    true,
+                ).unwrap();
+            });
+            for other_cs in gen_cs {
+                cs.part_aggregate_element(other_cs, &unit);
+            }
         }
 
         Ok(())
@@ -261,7 +275,6 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let FallbackPoStCircuit { sectors, .. } = self;
-
         let css = sectors
             .into_par_iter()
             .map(|sector| {
@@ -284,7 +297,6 @@ impl<Tree: 'static + MerkleTreeTrait> FallbackPoStCircuit<Tree> {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let FallbackPoStCircuit { sectors, .. } = self;
-
         let num_chunks = SETTINGS.window_post_synthesis_num_cpus as usize;
 
         let chunk_size = (sectors.len() / num_chunks).max(1);
