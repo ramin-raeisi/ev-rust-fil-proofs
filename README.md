@@ -384,7 +384,18 @@ The optimized rust-fil-proofs provide settings for P2 core binding.
   // Example
   env::set_var("FIL_PROOFS_P2_BOUND_CORES", "15");
   ```
-  __Important note__: Currently, CPU cores are allocated in groups of `x` where `x` is equal to the amount of multicore SDR producers + 1 (see `FIL_PROOFS_MULTICORE_SDR_PRODUCERS`).  
+  __Important note__: Currently, CPU cores are allocated in groups of `x` where `x` is equal to the amount of multicore SDR producers + 1 (see `FIL_PROOFS_MULTICORE_SDR_PRODUCERS`).
+
+* `FIL_PROOFS_P2_BINDING_USE_SAME_SET`
+  * Possible values: `{0, 1}`. 
+  * Default value: `1`
+
+  For `1`, all P2 instances use the same bound set of cores. For `0`, each P2 instance binds its own core set.
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_P2_BINDING_USE_SAME_SET", "0");
+  ```
 
 ### Memory
 
