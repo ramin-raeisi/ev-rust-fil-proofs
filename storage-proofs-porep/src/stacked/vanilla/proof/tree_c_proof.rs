@@ -117,13 +117,28 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let groups = get_p2_core_group();
             let mut core_group: Vec<CoreIndex> = vec![];
             let mut core_group_usize: Vec<usize> = vec![];
-            if let Some(groups) = groups {
-                for cg in groups {
-                    for core_id in 0..cg.len() {
-                        let core_index = cg.get(core_id);
-                        if let Some(core_index) = core_index {
-                            core_group.push(core_index.clone());
-                            core_group_usize.push(core_index.0)
+            let use_same_set = p2_binding_use_same_set();
+            if use_same_set {
+                if let Some(groups) = groups {
+                    for cg in groups {
+                        for core_id in 0..cg.len() {
+                            let core_index = cg.get(core_id);
+                            if let Some(core_index) = core_index {
+                                core_group.push(core_index.clone());
+                                core_group_usize.push(core_index.0)
+                            }
+                        }
+                    }
+                }
+            } else {
+                if let Some(ref groups) = groups {
+                    for cg in groups {
+                        for core_id in 0..cg.len() {
+                            let core_index = cg.get(core_id);
+                            if let Some(core_index) = core_index {
+                                core_group.push(core_index.clone());
+                                core_group_usize.push(core_index.0)
+                            }
                         }
                     }
                 }
