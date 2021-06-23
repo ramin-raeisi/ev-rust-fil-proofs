@@ -30,7 +30,7 @@ use super::super::{
     },
     proof::StackedDrg,
     cores::{bind_core_set, get_p2_core_group, CoreIndex, Cleanup},
-    utils::{P2BoundPolicy, p2_binding_policy}
+    utils::{P2BoundPolicy, p2_binding_policy, p2_binding_use_same_set}
 };
 
 use neptune::batch_hasher::BatcherType;
@@ -115,13 +115,29 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let groups = get_p2_core_group();
         let mut core_group: Vec<CoreIndex> = vec![];
         let mut core_group_usize: Vec<usize> = vec![];
-        if let Some(groups) = groups {
-            for cg in groups {
-                for core_id in 0..cg.len() {
-                    let core_index = cg.get(core_id);
-                    if let Some(core_index) = core_index {
-                        core_group.push(core_index.clone());
-                        core_group_usize.push(core_index.0)
+        
+        let use_same_set = p2_binding_use_same_set();
+        if use_same_set {
+            if let Some(groups) = groups {
+                for cg in groups {
+                    for core_id in 0..cg.len() {
+                        let core_index = cg.get(core_id);
+                        if let Some(core_index) = core_index {
+                            core_group.push(core_index.clone());
+                            core_group_usize.push(core_index.0)
+                        }
+                    }
+                }
+            }
+        } else {
+            if let Some(ref groups) = groups {
+                for cg in groups {
+                    for core_id in 0..cg.len() {
+                        let core_index = cg.get(core_id);
+                        if let Some(core_index) = core_index {
+                            core_group.push(core_index.clone());
+                            core_group_usize.push(core_index.0)
+                        }
                     }
                 }
             }
@@ -507,55 +523,94 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     {
         info!("generating tree r last using the CPU");
 
-        let (configs, replica_config) = split_config_and_replica(
-            tree_r_last_config.clone(),
-            replica_path,
-            nodes_count,
-            tree_count,
-        )?;
-
-        data.ensure_data()?;
-        let last_layer_labels = labels.labels_for_last_layer()?;
-
-        let size = Store::len(last_layer_labels);
-
-        let mut start = 0;
-        let mut end = size / tree_count;
-
-        for (i, config) in configs.iter().enumerate() {
-            let encoded_data = last_layer_labels
-                .read_range(start..end)?
-                .into_par_iter()
-                .zip(
-                    data.as_mut()[(start * NODE_SIZE)..(end * NODE_SIZE)]
-                        .par_chunks_mut(NODE_SIZE),
-                )
-                .map(|(key, data_node_bytes)| {
-                    let data_node =
-                        <Tree::Hasher as Hasher>::Domain::try_from_bytes(data_node_bytes)
-                            .expect("try from bytes failed");
-                    let encoded_node =
-                        encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
-                    data_node_bytes.copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
-
-                    encoded_node
-                });
-
-            info!(
-                "building base tree_r_last with CPU {}/{}",
-                i + 1,
-                tree_count
-            );
-            LCTree::<Tree::Hasher, Tree::Arity, typenum::U0, typenum::U0>::from_par_iter_with_config(encoded_data, config.clone()).with_context(|| format!("failed tree_r_last CPU {}/{}", i + 1, tree_count))?;
-
-            start = end;
-            end += size / tree_count;
+        // ================= CPU POOL ===============
+        let groups = get_p2_core_group();
+        let mut core_group: Vec<CoreIndex> = vec![];
+        let mut core_group_usize: Vec<usize> = vec![];
+        
+        let use_same_set = p2_binding_use_same_set();
+        if use_same_set {
+            if let Some(groups) = groups {
+                for cg in groups {
+                    for core_id in 0..cg.len() {
+                        let core_index = cg.get(core_id);
+                        if let Some(core_index) = core_index {
+                            core_group.push(core_index.clone());
+                            core_group_usize.push(core_index.0)
+                        }
+                    }
+                }
+            }
+        } else {
+            if let Some(ref groups) = groups {
+                for cg in groups {
+                    for core_id in 0..cg.len() {
+                        let core_index = cg.get(core_id);
+                        if let Some(core_index) = core_index {
+                            core_group.push(core_index.clone());
+                            core_group_usize.push(core_index.0)
+                        }
+                    }
+                }
+            }
         }
 
-        create_lc_tree::<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>(
-            tree_r_last_config.size.expect("config size failure"),
-            &configs,
-            &replica_config,
-        )
+        let core_group_usize = Arc::new(core_group_usize);
+        // =====
+
+        let pool = get_p2_pool(core_group_usize.clone());
+        pool.install(|| {
+
+            let (configs, replica_config) = split_config_and_replica(
+                tree_r_last_config.clone(),
+                replica_path,
+                nodes_count,
+                tree_count,
+            )?;
+
+            data.ensure_data()?;
+            let last_layer_labels = labels.labels_for_last_layer()?;
+
+            let size = Store::len(last_layer_labels);
+
+            let mut start = 0;
+            let mut end = size / tree_count;
+
+            for (i, config) in configs.iter().enumerate() {
+                let encoded_data = last_layer_labels
+                    .read_range(start..end)?
+                    .into_par_iter()
+                    .zip(
+                        data.as_mut()[(start * NODE_SIZE)..(end * NODE_SIZE)]
+                            .par_chunks_mut(NODE_SIZE),
+                    )
+                    .map(|(key, data_node_bytes)| {
+                        let data_node =
+                            <Tree::Hasher as Hasher>::Domain::try_from_bytes(data_node_bytes)
+                                .expect("try from bytes failed");
+                        let encoded_node =
+                            encode::<<Tree::Hasher as Hasher>::Domain>(key, data_node);
+                        data_node_bytes.copy_from_slice(AsRef::<[u8]>::as_ref(&encoded_node));
+
+                        encoded_node
+                    });
+
+                info!(
+                    "building base tree_r_last with CPU {}/{}",
+                    i + 1,
+                    tree_count
+                );
+                LCTree::<Tree::Hasher, Tree::Arity, typenum::U0, typenum::U0>::from_par_iter_with_config(encoded_data, config.clone()).with_context(|| format!("failed tree_r_last CPU {}/{}", i + 1, tree_count))?;
+
+                start = end;
+                end += size / tree_count;
+            }
+
+            create_lc_tree::<LCTree<Tree::Hasher, Tree::Arity, Tree::SubTreeArity, Tree::TopTreeArity>>(
+                tree_r_last_config.size.expect("config size failure"),
+                &configs,
+                &replica_config,
+            )
+        })
     }
 }
