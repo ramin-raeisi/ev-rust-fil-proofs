@@ -39,7 +39,7 @@ use crate::{
         SINGLE_PARTITION_PROOF_LEN,
     },
     parameters::setup_params,
-    pieces::{self, verify_pieces},
+    pieces::{self},
     types::{
         Commitment, PaddedBytesAmount, PieceInfo, PoRepConfig, PoRepProofPartitions, ProverId,
         SealCommitOutput, SealCommitPhase1Output, SealPreCommitOutput, SealPreCommitPhase1Output,

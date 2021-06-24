@@ -1208,7 +1208,7 @@ fn generate_proof<Tree: 'static + MerkleTreeTrait>(
         ticket,
         seed,
         pre_commit_output.clone(),
-        &piece_infos,
+        //&piece_infos,
     )?;
 
     clear_cache::<Tree>(cache_dir_path)?;

@@ -176,7 +176,7 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
             .zip(sector_ids.par_iter())
             .zip(piece_infos.par_iter())
             .map(
-                |((((cache_dir, staged_file), sealed_file), sector_id), piece_infos)| {
+                |((((cache_dir, staged_file), sealed_file), sector_id), _piece_infos)| {
                     seal_pre_commit_phase1(
                         porep_config,
                         cache_dir,
@@ -185,7 +185,7 @@ pub fn create_replicas<Tree: 'static + MerkleTreeTrait>(
                         PROVER_ID,
                         *sector_id,
                         TICKET_BYTES,
-                        piece_infos,
+                        //piece_infos,
                     )
                 },
             )
