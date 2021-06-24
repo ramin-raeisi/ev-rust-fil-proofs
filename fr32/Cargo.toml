@@ -1,6 +1,6 @@
 [package]
 name = "fr32"
-version = "0.1.0"
+version = "1.0.1"
 authors = ["dignifiedquire <me@dignifiedquire.com>"]
 description = "Filecoin proofs Fr/32-byte conversion tooling"
 license = "MIT OR Apache-2.0"
@@ -12,7 +12,7 @@ anyhow = "1.0.23"
 bellperson = { git = "ssh://git@github.com/nilfoundation/eliovp-fil-zk.git", branch = "master", default-features = false }
 byte-slice-cast = "1.0.0"
 byteorder = "1"
-ff = { version = "0.2.3", package = "fff" }
+ff = { version = "0.3.1", package = "fff" }
 thiserror = "1.0.6"
 
 [dev-dependencies]

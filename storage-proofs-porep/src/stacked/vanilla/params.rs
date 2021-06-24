@@ -112,10 +112,12 @@ impl<'a, Tree> From<&'a PublicParams<Tree>> for PublicParams<Tree>
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PublicInputs<T: Domain, S: Domain> {
+    #[serde(bound = "")]
     pub replica_id: T,
     pub seed: [u8; 32],
+    #[serde(bound = "")]
     pub tau: Option<Tau<T, S>>,
     /// Partition index
     pub k: Option<usize>,
@@ -329,9 +331,11 @@ pub type TransformedLayers<Tree, G> = (
 );
 
 /// Tau for a single parition.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tau<D: Domain, E: Domain> {
+    #[serde(bound = "")]
     pub comm_d: E,
+    #[serde(bound = "")]
     pub comm_r: D,
 }
 
@@ -391,7 +395,7 @@ impl<Tree: MerkleTreeTrait, G: Hasher> TemporaryAux<Tree, G> {
         layer: usize,
         node_index: u32,
     ) -> Result<<Tree::Hasher as Hasher>::Domain> {
-        Ok(self.labels_for_layer(layer)?.read_at(node_index as usize)?)
+        self.labels_for_layer(layer)?.read_at(node_index as usize)
     }
 
     pub fn column(&self, column_index: u32) -> Result<Column<Tree::Hasher>> {
@@ -572,7 +576,7 @@ impl<Tree: MerkleTreeTrait, G: Hasher> TemporaryAuxCache<Tree, G> {
         layer: usize,
         node_index: u32,
     ) -> Result<<Tree::Hasher as Hasher>::Domain> {
-        Ok(self.labels_for_layer(layer).read_at(node_index as usize)?)
+        self.labels_for_layer(layer).read_at(node_index as usize)
     }
 
     pub fn column(&self, column_index: u32) -> Result<Column<Tree::Hasher>> {
@@ -617,7 +621,7 @@ impl<Tree: MerkleTreeTrait> Labels<Tree> {
         self.labels.is_empty()
     }
 
-    pub fn verify_stores(&self, callback: VerifyCallback, cache_dir: &PathBuf) -> Result<()> {
+    pub fn verify_stores(&self, callback: VerifyCallback, cache_dir: &Path) -> Result<()> {
         let updated_path_labels = self.labels.clone();
         let required_configs = get_base_tree_count::<Tree>();
         for mut label in updated_path_labels {

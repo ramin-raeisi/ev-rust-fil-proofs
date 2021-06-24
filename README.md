@@ -57,13 +57,37 @@ The instructions below assume you have independently installed `rust-fil-proofs`
 
 Before building you will need OpenCL to be installed. On Ubuntu, this can be achieved with `apt install ocl-icd-opencl-dev`.  Other system dependencies such as 'gcc/clang', 'wall' and 'cmake' are also required.
 
-You will also need to install the hwloc library. On Ubuntu, this can be achieved with `apt install hwloc libhwloc-dev`. For other platforms, please see the [hwloc-rs Prerequisites section](https://github.com/daschl/hwloc-rs).
+For the `multicore sdr` feature (enabled by default), you will also need to install the `hwloc` library. On Ubuntu, this can be achieved with `apt install hwloc libhwloc-dev`. For other platforms, please see the [hwloc-rs Prerequisites section](https://github.com/daschl/hwloc-rs).
 
 
 ```
 > cargo update
 
 > cargo build --release --all
+```
+
+The `hwloc` dependency is optional and may be disabled.  Disabling it will not allow the `multicore sdr` feature to be used.  The fallback is single core replication, which is the default unless specified otherwise.
+
+To disable `multicore sdr` so that `hwloc` is not required, you can build proofs like this:
+
+```
+> cargo build --release --all --no-default-features --features pairing,gpu
+```
+
+Note that the `multicore-sdr` feature is omitted from the specified feature list, which removes it from being used by default.
+
+
+## Building for Arm64
+
+In order to build for arm64 the current requirements are
+
+- nightly rust compiler
+
+Example for building `filecoin-proofs`
+
+```
+$ rustup +nightly target add aarch64-unknown-linux-gnu
+$ cargo +nightly build -p filecoin-proofs --release --target aarch64-unknown-linux-gnu
 ```
 
 ## Test
@@ -82,6 +106,37 @@ The main benchmarking tool is called `benchy`.  `benchy` has several subcommands
 > cargo run --release --bin benchy -- window-post --size 2
 > cargo run --release --bin benchy -- prodbench
 ```
+
+### Window PoSt Bench usages
+
+The Window PoSt bench can be used a number of ways, some of which are detailed here.
+
+First, you can run the benchmark and preserve the working directory like this:
+```
+cargo run --release --bin benchy -- window-post --size 2KiB --cache window-post-2KiB-dir --preserve-cache
+```
+
+Then if you want to run the benchmark again to test commit-phase2, you can quickly run it like this:
+```
+cargo run --release --bin benchy -- window-post --size 2KiB --skip-precommit-phase1 --skip-precommit-phase2 --skip-commit-phase1 --cache window-post-2KiB-dir
+```
+
+Alternatively, if you want to test just GPU tree building, you can run it like this:
+```
+cargo run --release --bin benchy -- window-post --size 2KiB --skip-precommit-phase1 --skip-commit-phase1 --skip-commit-phase2 --cache window-post-2KiB-dir
+```
+
+Note that some combinations of arguments will cause destructive changes to your cached directory.  For larger benchmark sector sizes, it is recommended that once you create an initial cache, that it be saved to an alternate location in the case that it is corrupted by a test run.  For example, the following run sequence will be guaranteed to corrupt your cache:
+
+```
+# Do NOT run this sequence.  For illustrative purposes only:
+# Generate clean cache
+cargo run --release --bin benchy -- window-post --size 2KiB --cache window-post-2KiB-dir --preserve-cache
+# Skip all stages except the first
+cargo run --release --bin benchy -- window-post --size 2KiB --skip-precommit-phase2 --skip-commit-phase1 --skip-commit-phase2 --cache broken-cache-dir
+```
+
+The reason this fails is because new random piece data is generated (rather than loaded from disk from a previous run) in the first step, and then we attempt to use it in later sealing steps using data from previously preserved run.  This cannot work.
 
 There is also a bench called `gpu-cpu-test`:
 
@@ -193,8 +248,8 @@ assemble each nodes parents and perform some prehashing. This setting is not ena
 setting `FIL_PROOFS_USE_MULTICORE_SDR=1`.
 
 Best performance will also be achieved when it is possible to lock pages which have been memory-mapped. This can be
-accomplished either by running the process as root, or by increasing the system limit for max locked memory with `ulimit
--l`. Two sector size's worth of data (for current and previous layers) must be locked -- along with 56 *
+accomplished by running the process as a non-root user, and increasing the system limit for max locked memory with `ulimit
+-l`. Alternatively, the process can be run as root, if its total locked pages will fit inside physical memory. Otherwise, the OOM-killer may be invoked. Two sector size's worth of data (for current and previous layers) must be locked -- along with 56 *
 `FIL_PROOFS_PARENT_CACHE_SIZE` bytes for the parent cache.
 
 Default parameters have been tuned to provide good performance on the AMD Ryzen Threadripper 3970x. It may be useful to
@@ -329,7 +384,18 @@ The optimized rust-fil-proofs provide settings for P2 core binding.
   // Example
   env::set_var("FIL_PROOFS_P2_BOUND_CORES", "15");
   ```
-  __Important note__: Currently, CPU cores are allocated in groups of `x` where `x` is equal to the amount of multicore SDR producers + 1 (see `FIL_PROOFS_MULTICORE_SDR_PRODUCERS`).  
+  __Important note__: Currently, CPU cores are allocated in groups of `x` where `x` is equal to the amount of multicore SDR producers + 1 (see `FIL_PROOFS_MULTICORE_SDR_PRODUCERS`).
+
+* `FIL_PROOFS_P2_BINDING_USE_SAME_SET`
+  * Possible values: `{0, 1}`. 
+  * Default value: `1`
+
+  For `1`, all P2 instances use the same bound set of cores. For `0`, each P2 instance binds its own core set.
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_P2_BINDING_USE_SAME_SET", "0");
+  ```
 
 ### Memory
 
@@ -385,19 +451,6 @@ To generate the API documentation locally, follow the instructions to generate d
 
 - [Go implementation of filecoin-proofs sectorbuilder API](https://github.com/filecoin-project/go-sectorbuilder/blob/master/sectorbuilder.go) and [associated interface structures](https://github.com/filecoin-project/go-sectorbuilder/blob/master/interface.go).
 
-
-## Building for Arm64
-
-In order to build for arm64 the current requirements are
-
-- nightly rust compiler
-
-Example for building `filecoin-proofs`
-
-```
-$ rustup +nightly target add aarch64-unknown-linux-gnu
-$ cargo +nightly build -p filecoin-proofs --release --target aarch64-unknown-linux-gnu
-```
 
 ## Contributing
 

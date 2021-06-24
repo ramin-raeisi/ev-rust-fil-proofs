@@ -1,5 +1,7 @@
 #![deny(clippy::all, clippy::perf, clippy::correctness, rust_2018_idioms)]
 #![warn(clippy::unwrap_used)]
+#![warn(clippy::unnecessary_wraps)]
+#![allow(clippy::upper_case_acronyms)]
 
 pub mod constants;
 pub mod param;

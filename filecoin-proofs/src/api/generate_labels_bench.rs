@@ -23,7 +23,6 @@ use crate::{
     parameters::setup_params,
     types::{
         PaddedBytesAmount, PieceInfo, PoRepConfig, PoRepProofPartitions, ProverId,
-        SealPreCommitPhase1Output,
         Ticket, BINARY_ARITY,
     },
 };

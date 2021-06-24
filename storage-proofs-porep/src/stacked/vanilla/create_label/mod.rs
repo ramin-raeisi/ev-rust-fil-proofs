@@ -13,7 +13,6 @@ use crate::stacked::vanilla::{proof::LayerState, StackedBucketGraph};
 
 pub mod multi;
 pub mod single;
-pub mod multi_without_bind;
 
 /// Prepares the necessary `StoreConfig`s with which the layers are stored.
 /// Also checks for already existing layers and marks them as such.

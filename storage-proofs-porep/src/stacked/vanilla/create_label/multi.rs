@@ -45,7 +45,7 @@ const SHA_BLOCK_SIZE: usize = 64;
 const SHA256_INITIAL_DIGEST: [u32; 8] = [
     0x6a09_e667,
     0xbb67_ae85,
-    0x3c6_ef372,
+    0x3c6e_f372,
     0xa54f_f53a,
     0x510e_527f,
     0x9b05_688c,
@@ -149,7 +149,7 @@ fn create_label_runner(
     lookahead: u64,
     ring_buf: &RingBuf,
     base_parent_missing: &UnsafeSlice<'_, BitMask>,
-) -> Result<()> {
+) {
     info!("created label runner");
     // Label data bytes per node
     loop {
@@ -198,7 +198,6 @@ fn create_label_runner(
         // Mark our work as done
         cur_producer.fetch_add(count, SeqCst);
     }
-    Ok(())
 }
 
 fn create_layer_labels(
@@ -209,7 +208,7 @@ fn create_layer_labels(
     num_nodes: u64,
     cur_layer: u32,
     core_group: Arc<Option<MutexGuard<'_, Vec<CoreIndex>>>>,
-) -> Result<()> {
+) {
     info!("Creating labels for layer {}", cur_layer);
     // num_producers is the number of producer threads
     let (lookahead, num_producers, producer_stride) = {
@@ -241,9 +240,14 @@ fn create_layer_labels(
     let cur_awaiting = AtomicU64::new(1);
 
     // These UnsafeSlices are managed through the 3 Atomics above, to minimize any locking overhead.
-    let layer_labels = UnsafeSlice::from_slice(layer_labels.as_mut_slice_of::<u32>().unwrap());
-    let exp_labels =
-        exp_labels.map(|m| UnsafeSlice::from_slice(m.as_mut_slice_of::<u32>().unwrap()));
+    let layer_labels = UnsafeSlice::from_slice(
+        layer_labels
+            .as_mut_slice_of::<u32>()
+            .expect("failed as mut slice of"),
+    );
+    let exp_labels = exp_labels.map(|m| {
+        UnsafeSlice::from_slice(m.as_mut_slice_of::<u32>().expect("failed as mut slice of"))
+    });
     let base_parent_missing = UnsafeSlice::from_slice(&mut base_parent_missing);
 
     crossbeam::thread::scope(|s| {
@@ -382,8 +386,18 @@ fn create_layer_labels(
                         *GenericArray::<u8, U64>::from_slice(&buf[384..448]),
                         *GenericArray::<u8, U64>::from_slice(&buf[448..512]),
                     ];
-                    sha2::compress256((&mut cur_node_ptr[..8]).try_into().unwrap(), &blocks);
-                    sha2::compress256((&mut cur_node_ptr[..8]).try_into().unwrap(), &blocks);
+                    sha2::compress256(
+                        (&mut cur_node_ptr[..8])
+                            .try_into()
+                            .expect("compress failed"),
+                        &blocks,
+                    );
+                    sha2::compress256(
+                        (&mut cur_node_ptr[..8])
+                            .try_into()
+                            .expect("compress failed"),
+                        &blocks,
+                    );
 
                     // Final round is only nine parents
                     memset(&mut buf[352..384], 0); // Zero out upper half of last block
@@ -412,12 +426,10 @@ fn create_layer_labels(
         }
 
         for runner in runners {
-            runner.join().unwrap().unwrap();
+            runner.join().expect("join failed");
         }
     })
-        .unwrap();
-
-    Ok(())
+    .expect("crossbeam scope failure");
 }
 
 #[allow(clippy::type_complexity)]
@@ -486,7 +498,7 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
             node_count,
             layer as u32,
             core_group.clone(),
-        )?;
+        );
 
         // Cache reset happens in two parts.
         // The first part (the start) happens after each layer but the last.
@@ -584,7 +596,7 @@ pub fn create_labels_for_encoding_bench<Tree: 'static + MerkleTreeTrait, T: AsRe
             node_count,
             layer as u32,
             core_group.clone(),
-        )?;
+        );
 
         // Cache reset happens in two parts.
         // The first part (the start) happens after each layer but the last.
@@ -677,7 +689,7 @@ pub fn create_labels_for_decoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
             node_count,
             layer as u32,
             core_group.clone(),
-        )?;
+        );
 
         // Cache reset happens in two parts.
         // The first part (the start) happens after each layer but the last.
@@ -753,7 +765,7 @@ mod tests {
                 0xe3d51b9afa5ac2b3,
                 0x0462f4f4f1a68d37,
             ]))
-                .unwrap(),
+            .expect("create_labels_aux failed"),
         );
         test_create_labels_aux(
             nodes_4k,
@@ -767,7 +779,7 @@ mod tests {
                 0xce239f3b88a894b8,
                 0x234c00d1dc1d53be,
             ]))
-                .unwrap(),
+            .expect("create_labels_aux failed"),
         );
 
         test_create_labels_aux(
@@ -782,7 +794,7 @@ mod tests {
                 0x3448959d495490bc,
                 0x06021188c7a71cb5,
             ]))
-                .unwrap(),
+            .expect("create_labels_aux failed"),
         );
 
         test_create_labels_aux(
@@ -797,7 +809,7 @@ mod tests {
                 0xc6c03d32c1e42d23,
                 0x0f777c18cc2c55bd,
             ]))
-                .unwrap(),
+            .expect("create_labels_aux failed"),
         );
     }
 
@@ -826,16 +838,20 @@ mod tests {
             porep_id,
             api_version,
         )
-            .unwrap();
-        let cache = graph.parent_cache().unwrap();
+        .expect("stacked bucket graph new failed");
+        let cache = graph.parent_cache().expect("parent_cache failed");
 
         let labels = create_labels_for_decoding::<LCTree<PoseidonHasher, U8, U0, U2>, _>(
             &graph, &cache, layers, replica_id, config,
         )
-            .unwrap();
+        .expect("create_labels_for_decoding failed");
 
-        let final_labels = labels.labels_for_last_layer().unwrap();
-        let last_label = final_labels.read_at(final_labels.len() - 1).unwrap();
+        let final_labels = labels
+            .labels_for_last_layer()
+            .expect("labels_for_last_layer failed");
+        let last_label = final_labels
+            .read_at(final_labels.len() - 1)
+            .expect("read_at");
         dbg!(&last_label);
         assert_eq!(expected_last_label.into_repr(), last_label.0);
     }
