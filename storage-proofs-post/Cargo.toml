@@ -1,6 +1,6 @@
 [package]
 name = "storage-proofs-post"
-version = "8.0.1"
+version = "8.0.2"
 authors = ["dignifiedquire <me@dignifiedquire.com>"]
 license = "MIT OR Apache-2.0"
 description = "Proofs of Space Time"
@@ -28,7 +28,7 @@ log = "0.4.7"
 hex = "0.4.0"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune.git", branch = "master", default-features = false, features = ["opencl"] }
+neptune = { git = "ssh://git@github.com/nilfoundation/crusty3-neptune", branch = "master", default-features = false, features = ["opencl"] }
 num_cpus = "1.10.1"
 fr32 = { path = "../fr32", version = "^1.0.0", default-features = false }
 
