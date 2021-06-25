@@ -114,6 +114,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             }
 
             // ================= CPU POOL ===============
+            let mut cpu_label = String::new();
             let groups = get_p2_core_group();
             let mut core_group: Vec<CoreIndex> = vec![];
             let mut core_group_usize: Vec<usize> = vec![];
@@ -125,7 +126,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             let core_index = cg.get(core_id);
                             if let Some(core_index) = core_index {
                                 core_group.push(core_index.clone());
-                                core_group_usize.push(core_index.0)
+                                core_group_usize.push(core_index.0);
+                                cpu_label.push_str(&core_index.0.to_string());
                             }
                         }
                     }
@@ -137,7 +139,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             let core_index = cg.get(core_id);
                             if let Some(core_index) = core_index {
                                 core_group.push(core_index.clone());
-                                core_group_usize.push(core_index.0)
+                                core_group_usize.push(core_index.0);
+                                cpu_label.push_str(&core_index.0.to_string());
                             }
                         }
                     }
@@ -301,19 +304,21 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                 //Parallel tuning GPU computing
                 main_threads.push(s.spawn(move |_| {
+
                     let _cleanup_handle_gpu = bind_thread();
+                    let cpu_label = Arc::new(cpu_label);
 
                     crossbeam::scope(|s2| {
                         let mut gpu_threads = Vec::new();
-
-                        let writers_tx = Arc::new(writers_tx);
 
                         for (&gpu_index, builders_rx) in gpu_indexes.iter()
                             .zip(builders_rx_by_gpu.into_iter())
                             {
                                 let writers_tx = writers_tx.clone();
+                                let cpu_label = cpu_label.clone();
 
                                 gpu_threads.push(s2.spawn(move |_| {
+                                    let cpu_label = cpu_label.clone();
                                     let _cleanup_handle_gpu_i = bind_thread();
                                     let mut locked_gpu: i32 = -1;
                                     let lock = loop {
@@ -376,6 +381,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
                                         let writers_tx = Arc::new(writers_tx);
                                         let mem_used = Arc::new(mem_used);
+                                        let writers_tx = Arc::new(writers_tx);
                                         for (&i, builder_rx) in config_ids.iter()
                                             .zip(builders_rx.into_iter())
                                             {
@@ -384,6 +390,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             }
                                             let writers_tx  = writers_tx.clone();
                                             let mem_used = mem_used.clone();
+                                            let cpu_label = cpu_label.clone();
                                             config_threads.push(s3.spawn(move |_| {
                                                 let _cleanup_handle_gpu_inner = bind_thread();
                                                 let mut printed = false;
@@ -396,6 +403,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                     thread::sleep(Duration::from_secs(1));
                                                     mem_used_val = mem_used.load(SeqCst);
                                                 }
+                                                info!("run tree {} (cpuset: {})", i, cpu_label.clone());
                                                 mem_used.fetch_add(mem_column_add, SeqCst);
                                                 if printed {
                                                     info!("continue on {} ({})", locked_gpu, i);
