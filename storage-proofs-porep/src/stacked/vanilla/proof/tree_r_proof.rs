@@ -319,8 +319,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             let _cleanup_handle_gpu_i = bind_thread();
                             let mut locked_gpu: i32 = -1;
                             let lock = loop {
-                                let lock_inner = scheduler::get_next_device_second_pool().lock().unwrap();
-                                let target_bus_id = lock_inner.device().bus_id().unwrap();
+                                let (guard, device) = scheduler::get_next_device_second_pool();
+                                let lock_inner = guard.lock().unwrap();
+                                let target_bus_id = device.device().bus_id().unwrap();
                                 
                                 for idx in 0..batchertype_gpus.len() {
                                     match &batchertype_gpus[idx] {

@@ -140,6 +140,7 @@ impl<T: FromByteSlice> CacheReader<T> {
 
     /// Safety: incrementing the consumer at the end of a window will unblock the producer waiting to remap the
     /// consumer's previous buffer. The buffer must not be accessed once this has happened.
+    #[inline(always)]
     pub unsafe fn increment_consumer(&self) {
         self.consumer.fetch_add(1, Ordering::SeqCst);
     }
@@ -203,7 +204,7 @@ impl<T: FromByteSlice> CacheReader<T> {
     }
 
     /// `pos` is in units of `T`.
-    #[inline]
+    #[inline(always)]
     /// Safety: A returned slice must not be accessed once the buffer from which it has been derived is remapped. A
     /// buffer will never be remapped until the `consumer` atomic contained in `self` has been advanced past the end of
     /// the window. NOTE: each time `consumer` is incremented, `self.degrees` elements of the cache are invalidated.
@@ -224,7 +225,7 @@ impl<T: FromByteSlice> CacheReader<T> {
     }
 
     /// `pos` is in units of `T`.
-    #[inline]
+    #[inline(always)]
     /// Safety: This call may advance the rear buffer, making it unsafe to access slices derived from that buffer again.
     /// It is the callers responsibility to ensure such illegal access is not attempted. This can be prevented if users
     /// never access values past which the cache's `consumer` atomic has been incremented. NOTE: each time `consumer` is
