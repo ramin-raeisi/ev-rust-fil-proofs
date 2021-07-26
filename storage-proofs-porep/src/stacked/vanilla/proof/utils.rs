@@ -33,7 +33,7 @@ pub fn get_gpu_for_parallel_tree_r() -> usize {
                 .unwrap_or(SETTINGS.gpu_for_parallel_tree_r) as usize
 }
 
-pub fn get_p2_pool(core_group: Arc<Vec<usize>>) -> rayon::ThreadPool {
+pub fn get_core_pool(core_group: Arc<Vec<usize>>) -> rayon::ThreadPool {
     let pool;
     let binding_policy = p2_binding_policy();
     if binding_policy == P2BoundPolicy::Weak || (binding_policy == P2BoundPolicy::Strict && core_group.len() >= env_lock_p2_cores()) {

@@ -42,7 +42,7 @@ use rust_gpu_tools::opencl;
 use crate::encode::{encode};
 
 use bellperson::gpu::{scheduler};
-use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r, get_p2_pool};
+use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r, get_core_pool};
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tree, G> { 
     pub fn generate_tree_r_last_gpu<TreeArity>(
@@ -242,7 +242,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                             .expect("failed to read layer bytes");
                                     }
 
-                                    let pool = get_p2_pool(core_group_usize.clone());
+                                    let pool = get_core_pool(core_group_usize.clone());
                                     pool.install(|| {
                                         let res = layer_bytes
                                             .into_par_iter() // TODO CROSSBEAM
@@ -559,7 +559,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let core_group_usize = Arc::new(core_group_usize);
         // =====
 
-        let pool = get_p2_pool(core_group_usize.clone());
+        let pool = get_core_pool(core_group_usize.clone());
         pool.install(|| {
 
             let (configs, replica_config) = split_config_and_replica(

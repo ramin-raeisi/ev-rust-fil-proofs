@@ -56,6 +56,8 @@ mod tree_r_proof;
 mod tree_building_parallel;
 mod utils;
 
+pub use utils::get_core_pool;
+
 pub const TOTAL_PARENTS: usize = 37;
 
 lazy_static! {

@@ -7,6 +7,7 @@ use fr32::{bytes_into_fr, fr_into_bytes};
 use merkletree::merkle::{get_merkle_tree_leafs, get_merkle_tree_len};
 use storage_proofs_core::merkle::{get_base_tree_count, MerkleTreeTrait};
 use typenum::Unsigned;
+use log::error;
 
 use crate::types::{Commitment, SectorSize};
 
@@ -37,4 +38,17 @@ pub fn get_base_tree_size<Tree: MerkleTreeTrait>(sector_size: SectorSize) -> Res
 
 pub fn get_base_tree_leafs<Tree: MerkleTreeTrait>(base_tree_size: usize) -> Result<usize> {
     get_merkle_tree_leafs(base_tree_size, Tree::Arity::to_usize())
+}
+
+pub fn bind_p1_tree() -> bool {
+    let res: usize = std::env::var("FIL_PROOFS_BIND_P1_TREE")
+        .and_then(|v| match v.parse() {
+            Ok(val) => Ok(val),
+            Err(_) => {
+                error!("Invalid FIL_PROOFS_BIND_P1_TREE! Defaulting to {:?}", 1);
+                Ok(1)
+            }
+        })
+        .unwrap_or(1);
+    res != 0
 }
