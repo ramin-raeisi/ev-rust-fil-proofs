@@ -183,3 +183,16 @@ pub fn p2_binding_use_same_set() -> bool {
         .unwrap_or(1);
     res != 0
 }
+
+pub fn binding_use_locality() -> bool {
+    let res: usize = std::env::var("FIL_PROOFS_BINDING_USE_LOCALITY")
+        .and_then(|v| match v.parse() {
+            Ok(val) => Ok(val),
+            Err(_) => {
+                error!("Invalid FIL_PROOFS_BINDING_USE_LOCALITY! Defaulting to {:?}", 0);
+                Ok(0)
+            }
+        })
+        .unwrap_or(0);
+    res != 0
+}

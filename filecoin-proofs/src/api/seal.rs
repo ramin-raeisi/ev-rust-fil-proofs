@@ -28,7 +28,7 @@ use storage_proofs_core::{
 };
 use storage_proofs_porep::stacked::{
     self, generate_replica_id, ChallengeRequirements, StackedCompound, StackedDrg, Tau,
-    TemporaryAux, TemporaryAuxCache, checkout_core_group, get_core_pool,
+    TemporaryAux, TemporaryAuxCache, get_p1_core_group, get_core_pool,
 };
 
 use crate::{
@@ -130,20 +130,19 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
     info!("building merkle tree for the original data");
     let bind_tree = bind_p1_tree();
     let mut core_group: Vec<usize> = vec![];
-    let _cleanup_handle = if bind_tree {
-        let cg = checkout_core_group();
-        match cg {
-            Some(cg) => {
+    let guard = if bind_tree {
+        let group_set = get_p1_core_group();
+        if let Some(ref group_set) = group_set {
+            for cg in group_set {
                 for core_id in 0..cg.len() {
                     let core_index = cg.get(core_id);
                     if let Some(core_index) = core_index {
-                        core_group.push(core_index.0)
+                        core_group.push(core_index.0);
                     }
                 }
-                Some(cg)
             }
-            None => None
         }
+        Some(group_set)
     } else {
         None
     };
@@ -179,6 +178,8 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
             ).unwrap()
         });
         drop(data);
+        drop(pool);
+        drop(guard);
 
         config.size = Some(data_tree.len());
         let comm_d_root: Fr = data_tree.root().into();
