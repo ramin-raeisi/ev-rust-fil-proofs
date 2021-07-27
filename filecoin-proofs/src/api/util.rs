@@ -45,10 +45,10 @@ pub fn bind_p1_tree() -> bool {
         .and_then(|v| match v.parse() {
             Ok(val) => Ok(val),
             Err(_) => {
-                error!("Invalid FIL_PROOFS_BIND_P1_TREE! Defaulting to {:?}", 1);
-                Ok(1)
+                error!("Invalid FIL_PROOFS_BIND_P1_TREE! Defaulting to {:?}", 0);
+                Ok(0)
             }
         })
-        .unwrap_or(1);
+        .unwrap_or(0);
     res != 0
 }
