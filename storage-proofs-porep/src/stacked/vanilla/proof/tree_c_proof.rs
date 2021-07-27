@@ -30,7 +30,7 @@ use super::super::{
     utils::{P2BoundPolicy, p2_binding_policy, p2_binding_use_same_set}
 };
 
-use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r, get_p2_pool};
+use super::utils::{get_memory_padding, get_gpu_for_parallel_tree_r, get_core_pool};
 
 use generic_array::{GenericArray};
 use neptune::batch_hasher::BatcherType;
@@ -253,7 +253,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                                 .expect("failed to read store range");
                                         }
 
-                                        let pool = get_p2_pool(core_group_usize.clone());
+                                        let pool = get_core_pool(core_group_usize.clone());
                                         pool.install(|| {
                                             let res = (0..chunked_nodes_count)
                                                 .into_par_iter()
@@ -593,7 +593,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             
             info!("Building column hashes");
 
-            let pool = get_p2_pool(core_group_usize.clone());
+            let pool = get_core_pool(core_group_usize.clone());
             pool.install(|| {
 
                 let mut trees = Vec::with_capacity(tree_count);

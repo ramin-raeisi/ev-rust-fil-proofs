@@ -26,4 +26,5 @@ pub use encoding_proof::EncodingProof;
 pub use graph::{StackedBucketGraph, StackedGraph, EXP_DEGREE};
 pub use labeling_proof::LabelingProof;
 pub use params::*;
-pub use proof::{StackedDrg, TOTAL_PARENTS};
+pub use proof::{StackedDrg, TOTAL_PARENTS, get_core_pool};
+pub use cores::{checkout_core_group, get_p1_core_group};

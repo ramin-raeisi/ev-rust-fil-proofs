@@ -397,6 +397,28 @@ The optimized rust-fil-proofs provide settings for P2 core binding.
   env::set_var("FIL_PROOFS_P2_BINDING_USE_SAME_SET", "0");
   ```
 
+* `FIL_PROOFS_BINDING_USE_LOCALITY`
+  * Possible values: `{0, 1}`. 
+  * Default value: `0`
+
+  For `1`, CPU cores are grouped (and used) by sets with the shared cache. It is the default option for the original Lotus. For some hardware, it may decrease P1 time, but each P1 instance blocks more cores. 
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_BINDING_USE_LOCALITY", "1");
+  ```
+
+* `FIL_PROOFS_BIND_P1_TREE`
+  * Possible values: `{0, 1}`. 
+  * Default value: `0`
+
+  For `1`, P1 uses thread binding during the tree_d building phase.
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_BIND_P1_TREE", "1");
+  ```
+
 ### Memory
 
 At the moment the default configuration is set to reduce memory consumption as much as possible so there's not much to do from the user side. We are now storing Merkle trees on disk, which were the main source of memory consumption.  You should expect a maximum RSS between 1-2 sector sizes, if you experience peaks beyond that range please report an issue (you can check the max RSS with the `/usr/bin/time -v` command).

@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::mem::{self, size_of};
 use std::sync::{
     atomic::{AtomicU64, Ordering::SeqCst},
-    Arc, MutexGuard,
+    Arc, MutexGuard, Mutex,
 };
 use std::thread;
 use std::time::{Instant, Duration};
@@ -28,7 +28,7 @@ use storage_proofs_core::{
 
 use crate::stacked::vanilla::{
     cache::ParentCache,
-    cores::{bind_core, checkout_core_group, CoreIndex},
+    cores::{bind_core, checkout_core_group, get_p1_core_group, CoreIndex, CoreGroup},
     create_label::{prepare_layers, read_layer, write_layer},
     graph::{StackedBucketGraph, DEGREE, EXP_DEGREE},
     memory_handling::{setup_create_label_memory, CacheReader},
@@ -450,7 +450,27 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    let core_group = Arc::new(checkout_core_group());
+    //let core_group = Arc::new(checkout_core_group());
+    let core_guard = get_p1_core_group();
+    let mut core_group: CoreGroup = CoreGroup::new();
+    if let Some(ref core_guard) = core_guard {
+        for cg in core_guard {
+            for core_id in 0..cg.len() {
+                let core_index = cg.get(core_id);
+                if let Some(core_index) = core_index {
+                    core_group.push(*core_index);
+                }
+            }
+        }
+    }
+    let core_group = Mutex::new(core_group);
+    let core_group = core_group.lock().unwrap();
+    let core_group = if core_group.len() > 0 {
+        Some(core_group)
+    } else {
+        None
+    };
+    let core_group = Arc::new(core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
     let _cleanup_handle = (*core_group).as_ref().map(|group| {
