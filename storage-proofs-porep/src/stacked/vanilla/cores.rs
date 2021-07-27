@@ -126,9 +126,6 @@ pub fn bind_core(core_index: CoreIndex) -> Result<Cleanup> {
     debug!("allowed cpuset: {:?}", cpuset);
     let mut bind_to = cpuset;
 
-    // Get only one logical processor (in case the core is SMT/hyper-threaded).
-    bind_to.singlify();
-
     // Thread binding before explicit set.
     let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);
 
@@ -192,7 +189,7 @@ pub fn bind_core_set(core_set: Arc<Vec<CoreIndex>>) -> Result<Cleanup> {
 fn get_core_by_index(topo: &Topology, index: CoreIndex) -> Result<&TopologyObject> {
     let idx = index.0;
 
-    match topo.objects_with_type(&ObjectType::Core) {
+    match topo.objects_with_type(&ObjectType::PU) {
         Ok(all_cores) if idx < all_cores.len() => Ok(all_cores[idx]),
         Ok(all_cores) => Err(format_err!(
             "idx ({}) out of range for {} cores",
@@ -206,12 +203,12 @@ fn get_core_by_index(topo: &Topology, index: CoreIndex) -> Result<&TopologyObjec
 fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
     let topo = TOPOLOGY.lock().expect("poisoned lock");
 
-    let core_depth = match topo.depth_or_below_for_type(&ObjectType::Core) {
+    let core_depth = match topo.depth_or_below_for_type(&ObjectType::PU) {
         Ok(depth) => depth,
         Err(_) => return None,
     };
     let all_cores = topo
-        .objects_with_type(&ObjectType::Core)
+        .objects_with_type(&ObjectType::PU)
         .expect("objects_with_type failed");
     let core_count = all_cores.len();
 
