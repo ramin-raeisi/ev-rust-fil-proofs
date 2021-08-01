@@ -5,7 +5,7 @@ use hwloc2::{Bitmap, ObjectType, Topology, TopologyObject, CpuBindFlags, CpuSet}
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
-use super::utils::{env_lock_p2_cores, p2_binding_policy, binding_use_locality, P2BoundPolicy};
+use super::utils::{env_lock_p2_cores, p1_binding_policy, p2_binding_policy, binding_use_locality, P2BoundPolicy, P1BoundPolicy};
 
 pub type CoreGroup = Vec<CoreIndex>;
 
@@ -17,6 +17,7 @@ lazy_static! {
 
         core_groups(cores_per_unit)
     };
+    pub static ref PU_PER_CORE: Mutex<usize> = Mutex::new(1);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -46,6 +47,12 @@ pub fn get_p1_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
     match &*CORE_GROUPS {
         Some(groups) => {
             let total_size = &SETTINGS.multicore_sdr_producers + 1;
+            let policy = p1_binding_policy();
+            let mut total_size_multiplier = 1;
+            if policy == P1BoundPolicy::Default || policy == P1BoundPolicy::Core {
+                total_size_multiplier = *PU_PER_CORE.lock().unwrap();
+            }
+
             let mut current_size: usize = 0;
             let mut res = vec![];
             for (i, group) in groups.iter().enumerate() {
@@ -54,7 +61,7 @@ pub fn get_p1_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
                         let n = guard.len();
                         res.push(guard);
                         current_size += n;
-                        if current_size >= total_size {
+                        if current_size >= total_size * total_size_multiplier {
                             return Some(res);
                         }
                     }
@@ -153,7 +160,11 @@ pub fn bind_core(core_index: CoreIndex) -> Result<Cleanup> {
         .cpuset()
         .ok_or_else(|| format_err!("no allowed cpuset for core at index {}", core_index.0,))?;
     debug!("allowed cpuset: {:?}", cpuset);
-    let bind_to = cpuset;
+    let mut bind_to = cpuset;
+
+    if p1_binding_policy() == P1BoundPolicy::Default {
+        bind_to.singlify();
+    }
 
     // Thread binding before explicit set.
     let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);
@@ -246,7 +257,8 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
         .expect("objects_with_type failed");
     let pu_count = all_pu.len();
 
-    let pu_per_core = pu_count / core_count;
+    let mut pu_per_core = PU_PER_CORE.lock().unwrap();
+    *pu_per_core = pu_count / core_count;
 
     let mut cache_depth = core_depth;
     let mut cache_count = 1;
@@ -263,7 +275,7 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
     }
 
     assert_eq!(0, core_count % cache_count);
-    let mut group_size = (core_count / cache_count) * pu_per_core;
+    let mut group_size = (core_count / cache_count) * (*pu_per_core);
     let mut group_count = cache_count;
 
     if !binding_use_locality() {
