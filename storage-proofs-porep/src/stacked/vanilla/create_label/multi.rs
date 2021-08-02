@@ -207,7 +207,7 @@ fn create_layer_labels(
     exp_labels: Option<&mut MmapMut>,
     num_nodes: u64,
     cur_layer: u32,
-    core_group: Arc<Option<MutexGuard<'_, Vec<CoreIndex>>>>,
+    core_group: Arc<Option<Vec<CoreIndex>>>,
 ) {
     info!("Creating labels for layer {}", cur_layer);
     // num_producers is the number of producer threads
@@ -450,26 +450,9 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    let core_guard = get_p1_core_group();
-    let mut core_group: CoreGroup = CoreGroup::new();
-    if let Some(ref core_guard) = core_guard {
-        for cg in core_guard {
-            for core_id in 0..cg.len() {
-                let core_index = cg.get(core_id);
-                if let Some(core_index) = core_index {
-                    core_group.push(*core_index);
-                }
-            }
-        }
-    }
-    let core_group = Mutex::new(core_group);
-    let core_group = core_group.lock().unwrap();
-    let core_group = if core_group.len() > 0 {
-        Some(core_group)
-    } else {
-        None
-    };
+    let (_core_guard, core_group) = get_p1_core_group();
     let core_group = Arc::new(core_group);
+    info!("{:?}", core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
     let _cleanup_handle = (*core_group).as_ref().map(|group| {
@@ -567,25 +550,7 @@ pub fn create_labels_for_encoding_bench<Tree: 'static + MerkleTreeTrait, T: AsRe
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    let core_guard = get_p1_core_group();
-    let mut core_group: CoreGroup = CoreGroup::new();
-    if let Some(ref core_guard) = core_guard {
-        for cg in core_guard {
-            for core_id in 0..cg.len() {
-                let core_index = cg.get(core_id);
-                if let Some(core_index) = core_index {
-                    core_group.push(*core_index);
-                }
-            }
-        }
-    }
-    let core_group = Mutex::new(core_group);
-    let core_group = core_group.lock().unwrap();
-    let core_group = if core_group.len() > 0 {
-        Some(core_group)
-    } else {
-        None
-    };
+    let (_core_guard, core_group) = get_p1_core_group();
     let core_group = Arc::new(core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
@@ -687,25 +652,7 @@ pub fn create_labels_for_decoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    let core_guard = get_p1_core_group();
-    let mut core_group: CoreGroup = CoreGroup::new();
-    if let Some(ref core_guard) = core_guard {
-        for cg in core_guard {
-            for core_id in 0..cg.len() {
-                let core_index = cg.get(core_id);
-                if let Some(core_index) = core_index {
-                    core_group.push(*core_index);
-                }
-            }
-        }
-    }
-    let core_group = Mutex::new(core_group);
-    let core_group = core_group.lock().unwrap();
-    let core_group = if core_group.len() > 0 {
-        Some(core_group)
-    } else {
-        None
-    };
+    let (_core_guard, core_group) = get_p1_core_group();
     let core_group = Arc::new(core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.

@@ -43,7 +43,7 @@ pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
     }
 }
 
-pub fn get_p1_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
+pub fn get_p1_core_group() -> (Option<Vec<MutexGuard<'static, CoreGroup>>>, Option<CoreGroup>) {
     match &*CORE_GROUPS {
         Some(groups) => {
             let total_size = &SETTINGS.multicore_sdr_producers + 1;
@@ -54,15 +54,23 @@ pub fn get_p1_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
             }
 
             let mut current_size: usize = 0;
-            let mut res = vec![];
+            let mut res: CoreGroup = CoreGroup::new();
+            let mut res_guard = vec![];
             for (i, group) in groups.iter().enumerate() {
                 match group.try_lock() {
                     Ok(guard) => {
                         let n = guard.len();
-                        res.push(guard);
+                        for core_id in (0..guard.len()).step_by(total_size_multiplier) {
+                            let core_index = guard.get(core_id);                        
+                            if let Some(core_index) = core_index {
+                                res.push(*core_index);
+                            }
+                        }
+
                         current_size += n;
+                        res_guard.push(guard);
                         if current_size >= total_size * total_size_multiplier {
-                            return Some(res);
+                            return (Some(res_guard), Some(res));
                         }
                     }
                     Err(_) => debug!("core group {} locked, could not checkout", i),
@@ -70,11 +78,11 @@ pub fn get_p1_core_group() -> Option<Vec<MutexGuard<'static, CoreGroup>>> {
             }
             if res.len() > 0 {
                 info!("not enough free cores, P1 uses only {}", current_size);
-                return Some(res);
+                return (Some(res_guard), Some(res));
             }
-            None
+            (None, None)
         }
-        None => None,
+        None => (None, None),
     }
 }
 
@@ -153,7 +161,9 @@ pub fn bind_core(core_index: CoreIndex) -> Result<Cleanup> {
     let child_topo = &TOPOLOGY;
     let tid = get_thread_id();
     let mut locked_topo = child_topo.lock().expect("poisoned lock");
-    let core = get_core_by_index(&locked_topo, core_index)
+    let use_pu = !(p1_binding_policy() == P1BoundPolicy::Default
+        || p1_binding_policy() == P1BoundPolicy::Core);
+    let core = get_core_by_index(&locked_topo, core_index, use_pu)
         .map_err(|err| format_err!("failed to get core at index {}: {:?}", core_index.0, err))?;
 
     let cpuset = core
@@ -193,7 +203,7 @@ pub fn bind_core_set(core_set: Arc<Vec<CoreIndex>>) -> Result<Cleanup> {
     let mut cpu_sets = Vec::new();
     for i in 0..core_set.len() {
         let core_index = core_set[i].clone();
-        let core = get_core_by_index(&locked_topo, core_index)
+        let core = get_core_by_index(&locked_topo, core_index, true)
             .map_err(|err| format_err!("failed to get core at index {}: {:?}", core_index.0, err))?;
         let cpuset = core
             .cpuset()
@@ -226,10 +236,15 @@ pub fn bind_core_set(core_set: Arc<Vec<CoreIndex>>) -> Result<Cleanup> {
     })
 }
 
-fn get_core_by_index(topo: &Topology, index: CoreIndex) -> Result<&TopologyObject> {
+fn get_core_by_index(topo: &Topology, index: CoreIndex, get_pu: bool) -> Result<&TopologyObject> {
     let idx = index.0;
 
-    match topo.objects_with_type(&ObjectType::PU) {
+    let all_cores = if get_pu {
+        topo.objects_with_type(&ObjectType::PU)
+    } else {
+        topo.objects_with_type(&ObjectType::Core)
+    };
+    match all_cores {
         Ok(all_cores) if idx < all_cores.len() => Ok(all_cores[idx]),
         Ok(all_cores) => Err(format_err!(
             "idx ({}) out of range for {} cores",
