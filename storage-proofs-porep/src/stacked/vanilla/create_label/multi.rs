@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::mem::{self, size_of};
 use std::sync::{
     atomic::{AtomicU64, Ordering::SeqCst},
-    Arc, MutexGuard, Mutex,
+    Arc,
 };
 use std::thread;
 use std::time::{Instant, Duration};
@@ -28,7 +28,7 @@ use storage_proofs_core::{
 
 use crate::stacked::vanilla::{
     cache::ParentCache,
-    cores::{bind_core, get_p1_core_group, CoreIndex, CoreGroup},
+    cores::{bind_core, get_p1_core_group, CoreIndex},
     create_label::{prepare_layers, read_layer, write_layer},
     graph::{StackedBucketGraph, DEGREE, EXP_DEGREE},
     memory_handling::{setup_create_label_memory, CacheReader},
