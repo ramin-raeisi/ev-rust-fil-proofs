@@ -69,7 +69,7 @@ pub fn get_p1_core_group() -> (Option<Vec<MutexGuard<'static, CoreGroup>>>, Opti
 
                         current_size += n;
                         res_guard.push(guard);
-                        if current_size >= total_size * total_size_multiplier {
+                        if current_size >= total_size {
                             return (Some(res_guard), Some(res));
                         }
                     }
