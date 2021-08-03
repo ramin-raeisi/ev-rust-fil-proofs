@@ -129,22 +129,19 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
 
     info!("building merkle tree for the original data");
     let bind_tree = bind_p1_tree();
-    let mut core_group: Vec<usize> = vec![];
-    let guard = if bind_tree {
-        let group_set = get_p1_core_group();
-        if let Some(ref group_set) = group_set {
-            for cg in group_set {
-                for core_id in 0..cg.len() {
-                    let core_index = cg.get(core_id);
-                    if let Some(core_index) = core_index {
-                        core_group.push(core_index.0);
-                    }
-                }
-            }
-        }
-        Some(group_set)
+    let (guard, core_group) = if bind_tree {
+        get_p1_core_group()
     } else {
-        None
+        (None, None)
+    };
+
+    let core_group = if let Some(core_group) = core_group {
+        core_group.iter()
+            .map(|core_idx| {
+                core_idx.0
+            }).collect::<Vec<_>>()
+    } else {
+        vec![]
     };
 
     let core_group = Arc::new(core_group);
