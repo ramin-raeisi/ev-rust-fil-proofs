@@ -5,9 +5,9 @@ use hwloc2::{Bitmap, ObjectType, Topology, TopologyObject, CpuBindFlags, CpuSet}
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
-use super::utils::{env_lock_p2_cores, p2_binding_policy, P2BoundPolicy};
+use super::utils::{env_lock_p2_cores, p1_binding_policy, p2_binding_policy, binding_use_locality, P2BoundPolicy, P1BoundPolicy};
 
-type CoreGroup = Vec<CoreIndex>;
+pub type CoreGroup = Vec<CoreIndex>;
 
 lazy_static! {
     pub static ref TOPOLOGY: Mutex<Topology> = Mutex::new(Topology::new().unwrap());
@@ -17,6 +17,7 @@ lazy_static! {
 
         core_groups(cores_per_unit)
     };
+    pub static ref PU_PER_CORE: Mutex<usize> = Mutex::new(1);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -39,6 +40,49 @@ pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
             None
         }
         None => None,
+    }
+}
+
+pub fn get_p1_core_group() -> (Option<Vec<MutexGuard<'static, CoreGroup>>>, Option<CoreGroup>) {
+    match &*CORE_GROUPS {
+        Some(groups) => {
+            let total_size = &SETTINGS.multicore_sdr_producers + 1;
+            let policy = p1_binding_policy();
+            let mut total_size_multiplier = 1;
+            if policy == P1BoundPolicy::Default || policy == P1BoundPolicy::Core {
+                total_size_multiplier = *PU_PER_CORE.lock().unwrap();
+            }
+
+            let mut current_size: usize = 0;
+            let mut res: CoreGroup = CoreGroup::new();
+            let mut res_guard = vec![];
+            for (i, group) in groups.iter().enumerate() {
+                match group.try_lock() {
+                    Ok(guard) => {
+                        let n = guard.len();
+                        for core_id in (0..guard.len()).step_by(total_size_multiplier) {
+                            let core_index = guard.get(core_id);                        
+                            if let Some(core_index) = core_index {
+                                res.push(*core_index);
+                            }
+                        }
+
+                        current_size += n;
+                        res_guard.push(guard);
+                        if current_size >= total_size {
+                            return (Some(res_guard), Some(res));
+                        }
+                    }
+                    Err(_) => debug!("core group {} locked, could not checkout", i),
+                }
+            }
+            if res.len() > 0 {
+                info!("not enough free cores, P1 uses only {}", current_size);
+                return (Some(res_guard), Some(res));
+            }
+            (None, None)
+        }
+        None => (None, None),
     }
 }
 
@@ -117,7 +161,9 @@ pub fn bind_core(core_index: CoreIndex) -> Result<Cleanup> {
     let child_topo = &TOPOLOGY;
     let tid = get_thread_id();
     let mut locked_topo = child_topo.lock().expect("poisoned lock");
-    let core = get_core_by_index(&locked_topo, core_index)
+    let use_pu = !(p1_binding_policy() == P1BoundPolicy::Default
+        || p1_binding_policy() == P1BoundPolicy::Core);
+    let core = get_core_by_index(&locked_topo, core_index, use_pu)
         .map_err(|err| format_err!("failed to get core at index {}: {:?}", core_index.0, err))?;
 
     let cpuset = core
@@ -126,8 +172,9 @@ pub fn bind_core(core_index: CoreIndex) -> Result<Cleanup> {
     debug!("allowed cpuset: {:?}", cpuset);
     let mut bind_to = cpuset;
 
-    // Get only one logical processor (in case the core is SMT/hyper-threaded).
-    bind_to.singlify();
+    if p1_binding_policy() == P1BoundPolicy::Default {
+        bind_to.singlify();
+    }
 
     // Thread binding before explicit set.
     let before = locked_topo.get_cpubind_for_thread(tid, CpuBindFlags::CPUBIND_THREAD);
@@ -156,7 +203,7 @@ pub fn bind_core_set(core_set: Arc<Vec<CoreIndex>>) -> Result<Cleanup> {
     let mut cpu_sets = Vec::new();
     for i in 0..core_set.len() {
         let core_index = core_set[i].clone();
-        let core = get_core_by_index(&locked_topo, core_index)
+        let core = get_core_by_index(&locked_topo, core_index, true)
             .map_err(|err| format_err!("failed to get core at index {}: {:?}", core_index.0, err))?;
         let cpuset = core
             .cpuset()
@@ -189,10 +236,15 @@ pub fn bind_core_set(core_set: Arc<Vec<CoreIndex>>) -> Result<Cleanup> {
     })
 }
 
-fn get_core_by_index(topo: &Topology, index: CoreIndex) -> Result<&TopologyObject> {
+fn get_core_by_index(topo: &Topology, index: CoreIndex, get_pu: bool) -> Result<&TopologyObject> {
     let idx = index.0;
 
-    match topo.objects_with_type(&ObjectType::Core) {
+    let all_cores = if get_pu {
+        topo.objects_with_type(&ObjectType::PU)
+    } else {
+        topo.objects_with_type(&ObjectType::Core)
+    };
+    match all_cores {
         Ok(all_cores) if idx < all_cores.len() => Ok(all_cores[idx]),
         Ok(all_cores) => Err(format_err!(
             "idx ({}) out of range for {} cores",
@@ -215,6 +267,14 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
         .expect("objects_with_type failed");
     let core_count = all_cores.len();
 
+    let all_pu = topo
+        .objects_with_type(&ObjectType::PU)
+        .expect("objects_with_type failed");
+    let pu_count = all_pu.len();
+
+    let mut pu_per_core = PU_PER_CORE.lock().unwrap();
+    *pu_per_core = pu_count / core_count;
+
     let mut cache_depth = core_depth;
     let mut cache_count = 1;
 
@@ -230,25 +290,34 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
     }
 
     assert_eq!(0, core_count % cache_count);
-    let mut group_size = core_count / cache_count;
+    let mut group_size = (core_count / cache_count) * (*pu_per_core);
     let mut group_count = cache_count;
 
-    if cache_count <= 1 {
-        // If there are not more than one shared caches, there is no benefit in trying to group cores by cache.
-        // In that case, prefer more groups so we can still bind cores and also get some parallelism.
-        // Create as many full groups as possible. The last group may not be full.
-        group_count = core_count / cores_per_unit;
-        group_size = cores_per_unit;
-
-        info!(
-            "found only {} shared cache(s), heuristically grouping cores into {} groups",
-            cache_count, group_count
+    if !binding_use_locality() {
+        group_size = 1;
+        group_count = pu_count;
+        debug!(
+            "Cores: {}, cores are not grouped per cache.",
+            pu_count,
         );
     } else {
-        debug!(
-            "Cores: {}, Shared Caches: {}, cores per cache (group_size): {}",
-            core_count, cache_count, group_size
-        );
+        if cache_count <= 1 {
+            // If there are not more than one shared caches, there is no benefit in trying to group cores by cache.
+            // In that case, prefer more groups so we can still bind cores and also get some parallelism.
+            // Create as many full groups as possible. The last group may not be full.
+            group_count = pu_count / cores_per_unit;
+            group_size = cores_per_unit;
+    
+            info!(
+                "found only {} shared cache(s), heuristically grouping cores into {} groups",
+                cache_count, group_count
+            );
+        } else {
+            debug!(
+                "Cores: {}, Shared Caches: {}, cores per cache (group_size): {}",
+                pu_count, cache_count, group_size
+            );
+        }
     }
 
     let core_groups = (0..group_count)
@@ -256,7 +325,7 @@ fn core_groups(cores_per_unit: usize) -> Option<Vec<Mutex<Vec<CoreIndex>>>> {
             (0..group_size)
                 .map(|j| {
                     let core_index = i * group_size + j;
-                    assert!(core_index < core_count);
+                    assert!(core_index < pu_count);
                     CoreIndex(core_index)
                 })
                 .collect::<Vec<_>>()

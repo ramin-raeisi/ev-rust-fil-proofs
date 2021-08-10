@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::mem::{self, size_of};
 use std::sync::{
     atomic::{AtomicU64, Ordering::SeqCst},
-    Arc, MutexGuard,
+    Arc,
 };
 use std::thread;
 use std::time::{Instant, Duration};
@@ -28,7 +28,7 @@ use storage_proofs_core::{
 
 use crate::stacked::vanilla::{
     cache::ParentCache,
-    cores::{bind_core, checkout_core_group, CoreIndex},
+    cores::{bind_core, get_p1_core_group, CoreIndex},
     create_label::{prepare_layers, read_layer, write_layer},
     graph::{StackedBucketGraph, DEGREE, EXP_DEGREE},
     memory_handling::{setup_create_label_memory, CacheReader},
@@ -207,7 +207,7 @@ fn create_layer_labels(
     exp_labels: Option<&mut MmapMut>,
     num_nodes: u64,
     cur_layer: u32,
-    core_group: Arc<Option<MutexGuard<'_, Vec<CoreIndex>>>>,
+    core_group: Arc<Option<Vec<CoreIndex>>>,
 ) {
     info!("Creating labels for layer {}", cur_layer);
     // num_producers is the number of producer threads
@@ -450,8 +450,8 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    info!("core groups");
-    let core_group = Arc::new(checkout_core_group());
+    let (_core_guard, core_group) = get_p1_core_group();
+    let core_group = Arc::new(core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
     let _cleanup_handle = (*core_group).as_ref().map(|group| {
@@ -549,7 +549,8 @@ pub fn create_labels_for_encoding_bench<Tree: 'static + MerkleTreeTrait, T: AsRe
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    let core_group = Arc::new(checkout_core_group());
+    let (_core_guard, core_group) = get_p1_core_group();
+    let core_group = Arc::new(core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
     let _cleanup_handle = (*core_group).as_ref().map(|group| {
@@ -650,7 +651,8 @@ pub fn create_labels_for_decoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    let core_group = Arc::new(checkout_core_group());
+    let (_core_guard, core_group) = get_p1_core_group();
+    let core_group = Arc::new(core_group);
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
     let _cleanup_handle = (*core_group).as_ref().map(|group| {

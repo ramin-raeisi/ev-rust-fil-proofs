@@ -1,6 +1,7 @@
 use std::fs::{self, metadata, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc};
 
 use anyhow::{ensure, Context, Result};
 use bellperson::bls::{Bls12, Fr};
@@ -27,11 +28,11 @@ use storage_proofs_core::{
 };
 use storage_proofs_porep::stacked::{
     self, generate_replica_id, ChallengeRequirements, StackedCompound, StackedDrg, Tau,
-    TemporaryAux, TemporaryAuxCache,
+    TemporaryAux, TemporaryAuxCache, get_p1_core_group, get_core_pool,
 };
 
 use crate::{
-    api::{as_safe_commitment, commitment_from_fr, get_base_tree_leafs, get_base_tree_size, calibrate_filsettings},
+    api::{as_safe_commitment, commitment_from_fr, get_base_tree_leafs, get_base_tree_size, calibrate_filsettings, bind_p1_tree},
     caches::{get_stacked_params, get_stacked_verifying_key, 
         get_stacked_srs_key, get_stacked_srs_verifier_key},
     constants::{
@@ -126,6 +127,24 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
     >>::setup(&compound_setup_params)?;
 
     info!("building merkle tree for the original data");
+    let bind_tree = bind_p1_tree();
+    let (guard, core_group) = if bind_tree {
+        get_p1_core_group()
+    } else {
+        (None, None)
+    };
+
+    let core_group = if let Some(core_group) = core_group {
+        core_group.iter()
+            .map(|core_idx| {
+                core_idx.0
+            }).collect::<Vec<_>>()
+    } else {
+        vec![]
+    };
+
+    let core_group = Arc::new(core_group);
+    let pool = get_core_pool(core_group.clone());
     let (config, comm_d) = measure_op(Operation::CommD, || -> Result<_> {
         let base_tree_size = get_base_tree_size::<DefaultBinaryTree>(porep_config.sector_size)?;
         let base_tree_leafs = get_base_tree_leafs::<DefaultBinaryTree>(base_tree_size)?;
@@ -147,12 +166,16 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
             default_rows_to_discard(base_tree_leafs, BINARY_ARITY),
         );
 
-        let data_tree = create_base_merkle_tree::<BinaryMerkleTree<DefaultPieceHasher>>(
-            Some(config.clone()),
-            base_tree_leafs,
-            &data,
-        )?;
+        let data_tree = pool.install(|| {
+            create_base_merkle_tree::<BinaryMerkleTree<DefaultPieceHasher>>(
+                Some(config.clone()),
+                base_tree_leafs,
+                &data,
+            ).unwrap()
+        });
         drop(data);
+        drop(pool);
+        drop(guard);
 
         config.size = Some(data_tree.len());
         let comm_d_root: Fr = data_tree.root().into();
@@ -161,7 +184,7 @@ pub fn seal_pre_commit_phase1<R, S, T, Tree: 'static + MerkleTreeTrait>(
         drop(data_tree);
 
         Ok((config, comm_d))
-    })?;
+    }).unwrap();
 
     /*info!("verifying pieces");
 
