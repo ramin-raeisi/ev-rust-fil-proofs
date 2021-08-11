@@ -354,7 +354,35 @@ The optimized rust-fil-proofs version contains new GPU settings.
   env::set_var("FIL_PROOFS_GPU_MEMORY_PADDING", "0.6");
   ```
 ### Advanced CPU Usage
-The optimized rust-fil-proofs provide settings for P2 core binding.
+The optimized rust-fil-proofs provide settings for P1-P2 core binding.
+
+* `FIL_PROOFS_P1_BINDING_POLICY`
+  * Possible values: `[Default, Core, ProcessingUnit]`
+  * Default value: `Default`
+
+  Defines core binding strategy for P1 phase.
+  This variable is important only for multi-thread CPUs.
+  * `Default`: The same as the P1 binding from the original Lotus: each P1 thread locks one physical core and uses one thread of the core;
+  * `Core`: Each P1 thread locks one physical core and uses all threads of the core;
+  * `ProcessingUnit`: Each P1 thread lock one thread (logical core). 
+
+  __Example__:
+  Let CPU be AMD EPYC™ 7542. It has 32 physical cores which maintain up to 64 threads (2 thread per physical core).
+  For clarity, let's refer to these 64 threads as logical cores and P1 producer's threads as threads.
+
+  First CCX contains 4 physical cores and 8 logical cores which is numbered as `[<1, 33>, <2, 34>, <3, 35>, <4, 36>]` (angle brackets means physical core here).  
+  Each P1 instance uses 4 threads with default settings. Let's see which logical cores will be used with each policy (parentheses means one thread here):
+  * `Default`: `[(1), (2), (3), (4)]`. However `33, 34, 35, 36` will not be avaiable for other P1 instances;
+  * `Core`: `[(1, 33), (2, 34), (3, 35), (4, 36)]`;
+  * `ProcessingUnit`: `[(1), (33), (2), (34)]`. 
+
+  __Important Note__: `ProcessingUnit` allows running more P1 instances on the same CPU but may lead to the worse P1 timings. 
+
+  ```rust
+  // Example
+  env::set_var("FIL_PROOFS_P1_BINDING_POLICY", "Core");
+  ```
+
 * `FIL_PROOFS_P2_BINDING_POLICY`
 
   * Possible values: `[NoBinding, Weak, Strict]`
