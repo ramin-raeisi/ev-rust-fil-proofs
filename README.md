@@ -427,7 +427,7 @@ The optimized rust-fil-proofs provide settings for P1-P2 core binding.
 
 * `FIL_PROOFS_BINDING_USE_LOCALITY`
   * Possible values: `{0, 1}`. 
-  * Default value: `0`
+  * Default value: `1`
 
   For `1`, CPU cores are grouped (and used) by sets with the shared cache. It is the default option for the original Lotus. For some hardware, it may decrease P1 time, but each P1 instance blocks more cores. 
 
