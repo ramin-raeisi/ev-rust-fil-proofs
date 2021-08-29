@@ -1,6 +1,6 @@
 [package]
 name = "storage-proofs-porep"
-version = "8.0.2"
+version = "9.0.1"
 authors = ["dignifiedquire <me@dignifiedquire.com>"]
 description = "Proofs of replication"
 license = "MIT OR Apache-2.0"
@@ -11,9 +11,9 @@ readme = "README.md"
 [dependencies]
 crossbeam = "0.8"
 digest = "0.9"
-storage-proofs-core = { path = "../storage-proofs-core", version = "^8.0.0", default-features = false}
-sha2raw = { path = "../sha2raw", version = "^3.0.0"}
-filecoin-hashers = { path = "../filecoin-hashers", version = "^3.0.0", default-features = false, features = ["poseidon", "sha256"]}
+storage-proofs-core = { path = "../storage-proofs-core", version = "^9.0.0", default-features = false}
+sha2raw = { path = "../sha2raw", version = "^4.0.0"}
+filecoin-hashers = { path = "../filecoin-hashers", version = "^4.0.0", default-features = false, features = ["poseidon", "sha256"]}
 rand = "0.7"
 merkletree = { git = "ssh://git@github.com/NilFoundation/merkletree", branch = "master"}
 mapr = "0.8.0"
@@ -46,6 +46,8 @@ fr32 = { path = "../fr32", default-features = false }
 thread_binder = {git = "ssh://git@github.com/NilFoundation/thread_binder", branch = "develop"}
 enum_derive = "0.1.7"
 custom_derive = "0.1.7"
+yastl = "0.1.2"
+fil_logger = "0.1"
 
 [target."cfg(target_arch = \"aarch64\")".dependencies]
 sha2 = { version = "0.9.3", features = ["compress", "asm"] }
@@ -58,7 +60,7 @@ rand_xorshift = "0.2.0"
 criterion = "0.3.0"
 glob = "0.3.0"
 pretty_env_logger = "0.4.0"
-filecoin-hashers = { path = "../filecoin-hashers", version = "^3.0.0", default-features = false, features = ["poseidon", "sha256", "blake2s"]}
+filecoin-hashers = { path = "../filecoin-hashers", version = "^4.0.0", default-features = false, features = ["poseidon", "sha256", "blake2s"]}
 
 [features]
 default = ["blst", "gpu"]
@@ -66,6 +68,7 @@ gpu = ["storage-proofs-core/gpu", "filecoin-hashers/gpu", "neptune/opencl", "bel
 pairing = ["storage-proofs-core/pairing", "bellperson/pairing", "neptune/pairing", "filecoin-hashers/pairing", "fr32/pairing"]
 blst = ["storage-proofs-core/blst", "bellperson/blst", "neptune/blst", "filecoin-hashers/blst", "fr32/blst"]
 single-threaded = []
+isolated-testing = []
 
 [[bench]]
 name = "encode"
