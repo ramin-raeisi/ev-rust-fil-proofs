@@ -140,7 +140,9 @@ jobs:
             ulimit -u 20000
             ulimit -n 20000
             cargo +<< pipeline.parameters.nightly-toolchain >> test --all --verbose --release lifecycle -- --ignored --nocapture
-            cargo +<< pipeline.parameters.nightly-toolchain >> test -p storage-proofs-porep --features single-threaded --release checkout_cores -- --test-threads=1
+            cargo +<< pipeline.parameters.nightly-toolchain >> test -p storage-proofs-porep --features isolated-testing --release checkout_cores -- --test-threads=1
+            cargo +<< pipeline.parameters.nightly-toolchain >> test -p storage-proofs-porep --features isolated-testing --release test_parallel_generation_and_read_partial_range_v1_0
+            cargo +<< pipeline.parameters.nightly-toolchain >> test -p storage-proofs-porep --features isolated-testing --release test_parallel_generation_and_read_partial_range_v1_1
           no_output_timeout: 30m
           environment:
             RUST_TEST_THREADS: 1
@@ -328,7 +330,7 @@ jobs:
           command: cargo +$(cat rust-toolchain) clippy --all-targets --workspace -- -D warnings
   test_darwin:
     macos:
-      xcode: "10.0.0"
+      xcode: "12.5.0"
     working_directory: ~/crate
     resource_class: large
     environment: *setup-env

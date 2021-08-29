@@ -220,7 +220,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 *tree_r_last_root = tree_r_last.root();
                 drop(tree_r_last);
 
-                data.drop_data(); 
+                data.drop_data().unwrap(); 
             });
         });
 
