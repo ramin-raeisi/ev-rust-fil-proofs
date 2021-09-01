@@ -33,6 +33,7 @@ use storage_proofs_core::{
     settings::SETTINGS,
     util::{default_rows_to_discard, NODE_SIZE},
 };
+use yastl::Pool;
 
 use crate::{
     encode::{decode},
@@ -66,6 +67,8 @@ lazy_static! {
     /// It might be possible relax this constraint, but in that case, only one builder
     /// should actually be active at any given time, so the mutex should still be used.
     static ref GPU_LOCK: Mutex<()> = Mutex::new(());
+
+    static ref THREAD_POOL: Pool = Pool::new(num_cpus::get());
 }
 
 #[derive(Debug)]
@@ -682,7 +685,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let tree_r_last_root = tree_r_last.root();
         drop(tree_r_last);
 
-        data.drop_data();
+        data.drop_data()?;
 
         // comm_r = H(comm_c || comm_r_last)
         let comm_r: <Tree::Hasher as Hasher>::Domain =
@@ -727,7 +730,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     #[allow(clippy::type_complexity)]
     pub fn replicate_phase2(
         pp: &'a PublicParams<Tree>,
-        labels: Labels<Tree>,
+        label_configs: Labels<Tree>,
         data: Data<'a>,
         data_tree: BinaryMerkleTree<G>,
         config: StoreConfig,
@@ -745,7 +748,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             Some(data_tree),
             config,
             replica_path,
-            labels,
+            label_configs,
         )?;
 
         Ok((tau, (paux, taux)))

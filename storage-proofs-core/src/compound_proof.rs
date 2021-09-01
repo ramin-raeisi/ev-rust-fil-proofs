@@ -271,14 +271,18 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
     }
 
     /// Given a prover_srs key, a list of groth16 proofs, and an ordered list of seeds
-    /// (used to derive the PoRep challenges) hashed using FIXME, aggregate them all into
+    /// (used to derive the PoRep challenges) hashed pair-wise with the comm_rs using sha256, aggregate them all into
     /// an AggregateProof type.
     fn aggregate_proofs(
         prover_srs: &ProverSRS<Bls12>,
-        hashed_seeds: &[u8],
+        hashed_seeds_and_comm_rs: &[u8],
         proofs: &[groth16::Proof<Bls12>],
     ) -> Result<AggregateProof<Bls12>> {
-        Ok(aggregate_proofs::<Bls12>(prover_srs, hashed_seeds, proofs)?)
+        Ok(aggregate_proofs::<Bls12>(
+            prover_srs,
+            hashed_seeds_and_comm_rs,
+            proofs,
+        )?)
     }
 
     /// Verifies the aggregate proof, with respect to the flattened input list.
@@ -291,7 +295,7 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
     fn verify_aggregate_proofs(
         ip_verifier_srs: &VerifierSRS<Bls12>,
         pvk: &PreparedVerifyingKey<Bls12>,
-        hashed_seeds: &[u8],
+        hashed_seeds_and_comm_rs: &[u8],
         public_inputs: &[Vec<Fr>],
         aggregate_proof: &groth16::aggregate::AggregateProof<Bls12>,
     ) -> Result<bool> {
@@ -303,7 +307,7 @@ pub trait CompoundProof<'a, S: ProofScheme<'a>, C: Circuit<Bls12> + CircuitCompo
             &mut rng,
             public_inputs,
             aggregate_proof,
-            hashed_seeds,
+            hashed_seeds_and_comm_rs,
         )?)
     }
 
