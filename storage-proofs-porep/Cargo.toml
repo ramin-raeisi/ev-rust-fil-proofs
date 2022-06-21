@@ -15,7 +15,7 @@ storage-proofs-core = { path = "../storage-proofs-core", version = "^9.0.0", def
 sha2raw = { path = "../sha2raw", version = "^4.0.0"}
 filecoin-hashers = { path = "../filecoin-hashers", version = "^4.0.0", default-features = false, features = ["poseidon", "sha256"]}
 rand = "0.7"
-merkletree = { git = "ssh://git@github.com/nilfoundation/eliovp-merkletree.git", branch = "master" }
+merkletree = { git = "https://github.com/ramin-raeisi/ev-merkletree.git", branch = "master" }
 mapr = "0.8.0"
 num-bigint = "0.2"
 num-traits = "0.2"
@@ -24,14 +24,14 @@ rayon = "1.2.1"
 rayon-core = "1.6.1"
 rayon-futures = "0.1.1"
 serde = { version = "1.0", features = ["derive"] }
-bellperson = { git = "ssh://git@github.com/nilfoundation/eliovp-fil-zk.git", branch = "master", default-features = false }
+bellperson = { git = "https://github.com/ramin-raeisi/ev-fil-zk.git", branch = "master", default-features = false }
 serde_json = "1.0"
 ff = { version = "0.3.1", package = "fff" }
 log = "0.4.7"
 pretty_assertions = "0.6.1"
 generic-array = "0.14.4"
 anyhow = "1.0.23"
-neptune = { git = "ssh://git@github.com/nilfoundation/eliovp-neptune.git", branch = "master", default-features = false, features = ["opencl"] }
+neptune = { git = "https://github.com/ramin-raeisi/ev-neptune.git", branch = "master", default-features = false, features = ["opencl"] }
 num_cpus = "1.10.1"
 hex = "0.4.2"
 bincode = "1.1.2"
